@@ -26,6 +26,7 @@ namespace AgyPet.Tools
             string siteDir = args.Length > 1 ? args[1] : Path.GetFullPath(Path.Combine(outDir, "..", "site"));
             Directory.CreateDirectory(siteDir);
             RenderOgScreen(Path.Combine(siteDir, "og-screen.png"));
+            RenderRedditCover(Path.Combine(outDir, "reddit-cover.png"));
             RenderIconPng(Path.Combine(siteDir, "apple-touch-icon.png"), 180);
             RenderIconPng(Path.Combine(siteDir, "favicon-32x32.png"), 32);
 
@@ -300,6 +301,320 @@ namespace AgyPet.Tools
             };
         }
 
+        static Tuple<MascotMood, string, string, int>[] All16Moods()
+        {
+            return new[]
+            {
+                Tuple.Create(MascotMood.Typing, "Typing", "Agent or you typing", 6),
+                Tuple.Create(MascotMood.Thinking, "Thinking", "Planning steps", 12),
+                Tuple.Create(MascotMood.Working, "Working", "Editing code", 14),
+                Tuple.Create(MascotMood.Terminal, "Terminal", "Running commands", 10),
+                Tuple.Create(MascotMood.Browsing, "Browsing", "Live browser steps", 8),
+                Tuple.Create(MascotMood.Reading, "Reading", "Scanning files", 6),
+                Tuple.Create(MascotMood.Searching, "Searching", "Docs & web", 11),
+                Tuple.Create(MascotMood.Listening, "Listening", "Voice & dictation", 8),
+                Tuple.Create(MascotMood.Speaking, "Speaking", "Voice reply aloud", 9),
+                Tuple.Create(MascotMood.Multitasking, "Multitasking", "2+ active chats", 14),
+                Tuple.Create(MascotMood.Background, "Background", "Live server", 10),
+                Tuple.Create(MascotMood.Alert, "Alert", "Needs approval", 5),
+                Tuple.Create(MascotMood.Question, "Question", "Waiting choice", 7),
+                Tuple.Create(MascotMood.Done, "Done", "Task complete", 4),
+                Tuple.Create(MascotMood.Idle, "Idle", "Ready at rest", 4),
+                Tuple.Create(MascotMood.Sleeping, "Sleeping", "Extended quiet", 24),
+            };
+        }
+
+        static void RenderRedditCover(string outPath)
+        {
+            const int W = 1400, H = 880;
+            var bg = new LinearGradientBrush
+            {
+                StartPoint = new Point(0, 0),
+                EndPoint = new Point(1, 1),
+            };
+            bg.GradientStops.Add(new GradientStop(Color.FromRgb(0x0B, 0x0D, 0x12), 0.0));
+            bg.GradientStops.Add(new GradientStop(Color.FromRgb(0x0F, 0x15, 0x24), 0.55));
+            bg.GradientStops.Add(new GradientStop(Color.FromRgb(0x0B, 0x0D, 0x12), 1.0));
+
+            var root = new Border { Width = W, Height = H, Background = bg, Padding = new Thickness(34, 30, 34, 28) };
+            var page = new StackPanel();
+
+            // ---- Top Row: Brand / Headline / Skins (Left) + Simulated Antigravity Perch (Right) ----
+            var topGrid = new Grid { Margin = new Thickness(0, 0, 0, 24) };
+            topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(640) });
+            topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(28) });
+            topGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+            var left = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            left.Children.Add(new Border
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+                CornerRadius = new CornerRadius(14),
+                BorderThickness = new Thickness(1),
+                BorderBrush = BrushHex(0x25, 0x75, 0xFC),
+                Background = BrushHex(0x11, 0x1B, 0x33),
+                Padding = new Thickness(13, 5, 13, 5),
+                Margin = new Thickness(0, 0, 0, 14),
+                Child = new TextBlock
+                {
+                    Text = "AgyPet · Windows Companion for Google Antigravity",
+                    Foreground = BrushHex(0x60, 0xA5, 0xFA),
+                    FontSize = 12.5,
+                    FontWeight = FontWeights.SemiBold,
+                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                },
+            });
+
+            left.Children.Add(new TextBlock
+            {
+                Text = "Live pixel companion\ninside Antigravity.",
+                Foreground = BrushHex(0xF8, 0xFA, 0xFC),
+                FontSize = 40,
+                FontWeight = FontWeights.Bold,
+                LineHeight = 46,
+                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+            });
+
+            left.Children.Add(new TextBlock
+            {
+                Text = "Zero-dependency Windows overlay (~150 KB): 16 reactions, per-chat & voice sync, above-taskbar corner docking, and scrollable multi-session tracking.",
+                Foreground = BrushHex(0x94, 0xA3, 0xB8),
+                FontSize = 15.5,
+                LineHeight = 22,
+                TextWrapping = TextWrapping.Wrap,
+                Margin = new Thickness(0, 12, 0, 18),
+                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+            });
+
+            var skinsRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 16) };
+            var classicMini = new Mascot(3.6, Mascot.ClassicSkin) { Mood = MascotMood.Done };
+            classicMini.Snap(4);
+            var darkMini = new Mascot(3.6, Mascot.DarkSkin) { Mood = MascotMood.Thinking };
+            darkMini.Snap(12);
+            skinsRow.Children.Add(MakeOgChip("Classic Official Skin", classicMini));
+            var darkChip = MakeOgChip("Dark Remake Skin", darkMini);
+            darkChip.Margin = new Thickness(12, 0, 0, 0);
+            skinsRow.Children.Add(darkChip);
+            left.Children.Add(skinsRow);
+
+            left.Children.Add(new TextBlock
+            {
+                Text = "agypet.pages.dev   ·   github.com/yvs1n/agypet   ·   Open Source (MIT)",
+                Foreground = BrushHex(0xCB, 0xD5, 0xE1),
+                FontSize = 13.5,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+            });
+
+            Grid.SetColumn(left, 0);
+            topGrid.Children.Add(left);
+
+            // Right: Simulated Antigravity 2.0 Chat Stage
+            var cardFrame = new Border
+            {
+                Background = BrushHex(0x13, 0x16, 0x1E),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x28, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(18),
+                Padding = new Thickness(22),
+                Height = 382,
+            };
+
+            var stageGrid = new Grid();
+            stageGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            stageGrid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            var topStage = new StackPanel { VerticalAlignment = VerticalAlignment.Top };
+            var hover = BuildHoverCardPreviewTile(Mascot.ClassicSkin);
+            hover.HorizontalAlignment = HorizontalAlignment.Left;
+            hover.Margin = new Thickness(0, 0, 0, 12);
+            topStage.Children.Add(hover);
+
+            var userBubble = new Border
+            {
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Background = BrushHex(0x1E, 0x22, 0x2D),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(11),
+                Padding = new Thickness(13, 7, 13, 7),
+                Margin = new Thickness(0, 0, 0, 8),
+                Child = new TextBlock
+                {
+                    Text = "Track my active chats, typing, and voice mode.",
+                    Foreground = BrushHex(0xF8, 0xFA, 0xFC),
+                    FontSize = 12.5,
+                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                },
+            };
+            topStage.Children.Add(userBubble);
+
+            var agentBubble = new Border
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Background = BrushHex(0x15, 0x1A, 0x26),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(11),
+                Padding = new Thickness(13, 7, 13, 7),
+                Child = new TextBlock
+                {
+                    Text = "Perched cleanly above your composer with zero side-panel clutter.",
+                    Foreground = BrushHex(0xCB, 0xD5, 0xE1),
+                    FontSize = 12.5,
+                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                },
+            };
+            topStage.Children.Add(agentBubble);
+            Grid.SetRow(topStage, 0);
+            stageGrid.Children.Add(topStage);
+
+            var composerWrap = new Grid { VerticalAlignment = VerticalAlignment.Bottom };
+            var composer = new Border
+            {
+                Background = BrushHex(0x1B, 0x1F, 0x2A),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x32, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1.2),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(16, 13, 16, 11),
+                Margin = new Thickness(0, 34, 0, 0),
+            };
+            var compStack = new StackPanel();
+            compStack.Children.Add(new TextBlock
+            {
+                Text = "Ask anything, @ to mention, / for workflows...",
+                Foreground = BrushHex(0x94, 0xA3, 0xB8),
+                FontSize = 13.5,
+                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+            });
+            compStack.Children.Add(new TextBlock
+            {
+                Text = "Antigravity 2.0 · Live Chatbox Perch  (Small · Medium · Large)",
+                Foreground = BrushHex(0x64, 0x74, 0x8B),
+                FontSize = 11,
+                Margin = new Thickness(0, 12, 0, 0),
+                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+            });
+            composer.Child = compStack;
+            composerWrap.Children.Add(composer);
+
+            var perchMascot = new Mascot(5.2, Mascot.ClassicSkin) { Mood = MascotMood.Typing };
+            perchMascot.Snap(6);
+            perchMascot.HorizontalAlignment = HorizontalAlignment.Right;
+            perchMascot.VerticalAlignment = VerticalAlignment.Top;
+            perchMascot.Margin = new Thickness(0, -10, 20, 0);
+            composerWrap.Children.Add(perchMascot);
+
+            Grid.SetRow(composerWrap, 1);
+            stageGrid.Children.Add(composerWrap);
+            cardFrame.Child = stageGrid;
+            Grid.SetColumn(cardFrame, 2);
+            topGrid.Children.Add(cardFrame);
+            page.Children.Add(topGrid);
+
+            // ---- Bottom Band: All 16 Live Reactions (8 x 2) ----
+            var bandHdr = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+            bandHdr.Children.Add(new TextBlock
+            {
+                Text = "ALL 16 LIVE REACTIONS",
+                Foreground = BrushHex(0xE2, 0xE8, 0xF0),
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+            });
+            bandHdr.Children.Add(new TextBlock
+            {
+                Text = "Includes Typing · Terminal · Browsing · Voice Mode · Multitasking · Background Server",
+                Foreground = BrushHex(0x88, 0x92, 0xA6),
+                FontSize = 11.5,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+            });
+            page.Children.Add(bandHdr);
+
+            var moods = All16Moods();
+            var grid = new Grid();
+            for (int c = 0; c < 8; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (int r = 0; r < 2; r++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(148) });
+
+            for (int i = 0; i < moods.Length; i++)
+            {
+                var m = moods[i];
+                var mascot = new Mascot(3.8, Mascot.ClassicSkin) { Mood = m.Item1 };
+                mascot.Snap(m.Item4);
+
+                var host = new Grid { Height = 58, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+                host.Children.Add(mascot);
+
+                var tileStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+                tileStack.Children.Add(host);
+                tileStack.Children.Add(new TextBlock
+                {
+                    Text = m.Item2,
+                    Foreground = BrushHex(0xF8, 0xFA, 0xFC),
+                    FontSize = 13,
+                    FontWeight = FontWeights.SemiBold,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 8, 0, 1),
+                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                });
+                tileStack.Children.Add(new TextBlock
+                {
+                    Text = m.Item3,
+                    Foreground = BrushHex(0x88, 0x92, 0xA6),
+                    FontSize = 10.5,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                });
+
+                var tile = new Border
+                {
+                    Background = BrushHex(0x13, 0x16, 0x1E),
+                    BorderBrush = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(12),
+                    Margin = new Thickness(5),
+                    Child = tileStack,
+                };
+                Grid.SetRow(tile, i / 8);
+                Grid.SetColumn(tile, i % 8);
+                grid.Children.Add(tile);
+            }
+            page.Children.Add(grid);
+
+            var footerRow = new Grid { Margin = new Thickness(0, 12, 0, 0) };
+            footerRow.Children.Add(new TextBlock
+            {
+                Text = "Made by Yassin Ragab (yassinr.me) for Antigravity · Built with Antigravity",
+                Foreground = BrushHex(0x64, 0x74, 0x8B),
+                FontSize = 11.5,
+                HorizontalAlignment = HorizontalAlignment.Left,
+                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+            });
+            footerRow.Children.Add(new TextBlock
+            {
+                Text = "Interactive demo & Windows download: agypet.pages.dev",
+                Foreground = BrushHex(0x60, 0xA5, 0xFA),
+                FontSize = 11.5,
+                FontWeight = FontWeights.SemiBold,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+            });
+            page.Children.Add(footerRow);
+
+            root.Child = page;
+            root.Measure(new Size(W, H));
+            root.Arrange(new Rect(0, 0, W, H));
+            root.UpdateLayout();
+
+            var rtb = new RenderTargetBitmap(W, H, 96, 96, PixelFormats.Pbgra32);
+            rtb.Render(root);
+            var enc = new PngBitmapEncoder();
+            enc.Frames.Add(BitmapFrame.Create(rtb));
+            using (var fs = File.Create(outPath)) enc.Save(fs);
+        }
+
         static void RenderSheet(string outPath, string skin, string title, string subtitle)
         {
             const int W = 1200, H = 796;
@@ -357,25 +672,7 @@ namespace AgyPet.Tools
             for (int c = 0; c < 4; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             for (int r = 0; r < 4; r++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(166) });
 
-            var moods = new[]
-            {
-                Tuple.Create(MascotMood.Typing, "Typing", "Agent or you typing", 6),
-                Tuple.Create(MascotMood.Thinking, "Thinking", "Planning steps", 12),
-                Tuple.Create(MascotMood.Working, "Working", "Editing & writing code", 14),
-                Tuple.Create(MascotMood.Terminal, "Terminal", "Running commands", 10),
-                Tuple.Create(MascotMood.Browsing, "Browsing", "Live browser steps", 8),
-                Tuple.Create(MascotMood.Reading, "Reading", "Scanning files", 6),
-                Tuple.Create(MascotMood.Searching, "Searching", "Docs & web search", 11),
-                Tuple.Create(MascotMood.Listening, "Listening", "Voice & dictation", 8),
-                Tuple.Create(MascotMood.Speaking, "Speaking", "Voice reply aloud", 9),
-                Tuple.Create(MascotMood.Multitasking, "Multitasking", "2+ active sessions", 14),
-                Tuple.Create(MascotMood.Background, "Background", "Live server running", 10),
-                Tuple.Create(MascotMood.Alert, "Alert", "Needs approval", 5),
-                Tuple.Create(MascotMood.Question, "Question", "Waiting on choice", 7),
-                Tuple.Create(MascotMood.Done, "Done", "Task complete", 4),
-                Tuple.Create(MascotMood.Idle, "Idle", "Ready at rest", 4),
-                Tuple.Create(MascotMood.Sleeping, "Sleeping", "Extended quiet", 24),
-            };
+            var moods = All16Moods();
 
             for (int i = 0; i < moods.Length; i++)
             {
