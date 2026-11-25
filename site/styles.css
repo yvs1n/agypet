@@ -1013,7 +1013,46 @@ html.js .stage-hover-card.is-open {
   max-width: 56ch;
 }
 
-/* Edge-masked horizontal 16-reaction carousel (Rule 6) */
+/* Edge-masked horizontal 16-reaction carousel (Rule 6 + drag & step controls) */
+.carousel-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.carousel-hint {
+  font-size: 13px;
+  color: var(--ink-muted);
+  margin-right: 4px;
+}
+
+.carousel-btn {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--r-btn);
+  border: 1px solid var(--border-strong);
+  background: var(--bg-raised);
+  color: var(--ink-primary);
+  display: inline-grid;
+  place-items: center;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease-out,
+    transform 120ms ease-out,
+    opacity 150ms ease-out;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .carousel-btn:hover:not(:disabled) {
+    background: var(--bg-elevated);
+  }
+}
+
+.carousel-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
 .carousel-frame {
   border-radius: var(--r-card);
 }
@@ -1027,9 +1066,20 @@ html.js .stage-hover-card.is-open {
   padding-block: 8px 16px;
   padding-inline: 24px;
   touch-action: pan-y;
+  cursor: grab;
   scrollbar-width: thin;
   mask-image: linear-gradient(90deg, transparent, black 6% 94%, transparent);
   -webkit-mask-image: linear-gradient(90deg, transparent, black 6% 94%, transparent);
+}
+
+.mood-strip.is-dragging {
+  cursor: grabbing;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mood-strip.is-dragging .mood-tile {
+  cursor: grabbing;
 }
 
 .mood-tile {

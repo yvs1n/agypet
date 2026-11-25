@@ -135,7 +135,7 @@
         const fill = skin === 'dark'
           ? darkPixelColor(u, v, compact, !hasTop, !hasLeft || !hasRight, !hasBottom)
           : officialPixelColor(u, v, compact, !hasTop, innerArch);
-        cells.push({ x: 0.5 + c * 0.5, y: r * 0.5, w: 0.5 + (hasRight ? 0.04 : 0), h: 0.5 + (hasBottom ? 0.04 : 0), fill });
+        cells.push({ x: 0.5 + c * 0.5, y: r * 0.5, w: 0.5, h: 0.5, fill });
       }
     }
     return cells;
@@ -146,8 +146,22 @@
     dark: { normal: buildMaskCache('dark', false), compact: buildMaskCache('dark', true) },
   };
 
-  function drawMascot(ctx, w, h, px, skin, mood, tick, hurtTicks = 0) {
-    ctx.clearRect(0, 0, w, h);
+  function setupHiDpiCanvas(canvas) {
+    const logicalW = parseInt(canvas.getAttribute('width'), 10) || canvas.width;
+    const logicalH = parseInt(canvas.getAttribute('height'), 10) || canvas.height;
+    const dpr = Math.min(3, Math.max(1, window.devicePixelRatio || 1));
+    canvas.style.width = `${logicalW}px`;
+    canvas.style.height = `${logicalH}px`;
+    canvas.width = Math.round(logicalW * dpr);
+    canvas.height = Math.round(logicalH * dpr);
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    return { ctx, w: logicalW, h: logicalH, dpr };
+  }
+
+  function drawMascot(ctx, w, h, px, skin, mood, tick, hurtTicks = 0, dpr = 1) {
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, Math.round(w * dpr), Math.round(h * dpr));
     const isDark = skin === 'dark';
     const compact = mood === 'Thinking' || mood === 'Sleeping';
     const hurt = hurtTicks > 0;
@@ -165,11 +179,16 @@
     const wigX = hurt && hurtTicks >= 4 ? ((hurtTicks % 2 === 0 ? -0.3 : 0.3) * px)
       : (wiggles && tick % 12 < 4 ? (tick % 2 === 0 ? -px * 0.45 : px * 0.45) : 0);
 
+    // Edge-to-edge physical pixel rounding guarantees zero transparent 1px seams through any mascot!
     const dot = (fill, x, y, dw = 1, dh = 1, inSprite = true) => {
       ctx.fillStyle = fill;
       const bx = ox + (inSprite ? wigX : 0) + x * px;
       const by = oy + (inSprite ? bobY : 0) + y * px;
-      ctx.fillRect(Math.round(bx), Math.round(by), Math.max(1, Math.round(dw * px)), Math.max(1, Math.round(dh * px)));
+      const x1 = Math.round(bx * dpr);
+      const y1 = Math.round(by * dpr);
+      const x2 = Math.round((bx + dw * px) * dpr);
+      const y2 = Math.round((by + dh * px) * dpr);
+      ctx.fillRect(x1, y1, Math.max(1, x2 - x1), Math.max(1, y2 - y1));
     };
 
     const shape = (fill, x, y, rows, inSprite = false) => {
@@ -200,7 +219,7 @@
 
     ctx.save();
     if (hurt && hurtTicks >= 4) {
-      const cx = ox + 5.5 * px, cy = oy + 7.6 * px;
+      const cx = (ox + 5.5 * px) * dpr, cy = (oy + 7.6 * px) * dpr;
       ctx.translate(cx, cy);
       ctx.scale(1.05, 0.94);
       ctx.translate(-cx, -cy);
@@ -525,9 +544,13 @@
   const cycleMoodBtn = document.getElementById('cycle-mood');
   const dictationBtn = document.getElementById('dictation-btn');
 
-  // Build 16-reaction carousel
+  // Build 16-reaction carousel + mouse drag-to-scroll & prev/next controls
   const stripEl = document.getElementById('mood-strip');
+  const moodPrevBtn = document.getElementById('mood-prev');
+  const moodNextBtn = document.getElementById('mood-next');
   const moodTiles = [];
+  let suppressTileClickUntil = 0;
+
   MOODS.forEach((m) => {
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -537,6 +560,7 @@
     c.width = 90;
     c.height = 66;
     c.setAttribute('aria-hidden', 'true');
+    const setup = setupHiDpiCanvas(c);
     const name = document.createElement('span');
     name.className = 'mood-name';
     name.textContent = m.id;
@@ -545,21 +569,63 @@
     sub.textContent = m.sub;
     btn.append(c, name, sub);
     btn.addEventListener('click', () => {
+      if (performance.now() < suppressTileClickUntil) return;
       if (awayMode !== 'none') setAwayMode('none');
       if (activeChat === 'settings') selectChat('overlay');
       setHeroMood(m.id);
       document.getElementById('demo').scrollIntoView({ behavior: motionPaused ? 'auto' : 'smooth' });
     });
     stripEl.appendChild(btn);
-    moodTiles.push({ mood: m.id, canvas: c, ctx: c.getContext('2d'), btn });
+    moodTiles.push({ mood: m.id, canvas: c, ctx: setup.ctx, w: setup.w, h: setup.h, dpr: setup.dpr, btn });
   });
 
-  const skinSamples = Array.from(document.querySelectorAll('.skin-sample')).map((c) => ({
-    canvas: c,
-    ctx: c.getContext('2d'),
-    skin: c.dataset.skin,
-    mood: c.dataset.mood,
-  }));
+  // Mouse drag-to-scroll on 16-reaction strip
+  let stripDragging = false, stripDidMove = false, stripStartX = 0, stripStartScroll = 0;
+  stripEl.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
+    stripDragging = true;
+    stripDidMove = false;
+    stripStartX = e.clientX;
+    stripStartScroll = stripEl.scrollLeft;
+  });
+  window.addEventListener('pointermove', (e) => {
+    if (!stripDragging) return;
+    const dx = e.clientX - stripStartX;
+    if (!stripDidMove && Math.abs(dx) > 5) {
+      stripDidMove = true;
+      stripEl.classList.add('is-dragging');
+    }
+    if (stripDidMove) {
+      stripEl.scrollLeft = stripStartScroll - dx;
+    }
+  });
+  const endStripDrag = () => {
+    if (!stripDragging) return;
+    stripDragging = false;
+    stripEl.classList.remove('is-dragging');
+    if (stripDidMove) suppressTileClickUntil = performance.now() + 90;
+  };
+  window.addEventListener('pointerup', endStripDrag);
+  window.addEventListener('pointercancel', endStripDrag);
+
+  function syncCarouselArrows() {
+    if (!moodPrevBtn || !moodNextBtn) return;
+    const maxScroll = stripEl.scrollWidth - stripEl.clientWidth;
+    moodPrevBtn.disabled = stripEl.scrollLeft <= 4;
+    moodNextBtn.disabled = stripEl.scrollLeft >= maxScroll - 4;
+  }
+  if (moodPrevBtn && moodNextBtn) {
+    moodPrevBtn.addEventListener('click', () => stripEl.scrollBy({ left: -360, behavior: motionPaused ? 'auto' : 'smooth' }));
+    moodNextBtn.addEventListener('click', () => stripEl.scrollBy({ left: 360, behavior: motionPaused ? 'auto' : 'smooth' }));
+    stripEl.addEventListener('scroll', syncCarouselArrows, { passive: true });
+    window.addEventListener('resize', syncCarouselArrows);
+    requestAnimationFrame(syncCarouselArrows);
+  }
+
+  const skinSamples = Array.from(document.querySelectorAll('.skin-sample')).map((c) => {
+    const s = setupHiDpiCanvas(c);
+    return { canvas: c, ctx: s.ctx, w: s.w, h: s.h, dpr: s.dpr, skin: c.dataset.skin, mood: c.dataset.mood };
+  });
 
   function setHeroMood(m) {
     heroMood = m;
@@ -647,8 +713,8 @@
     const spriteW = 11 * heroPx;
     const spriteH = 9 * heroPx;
     const shiftLeftProp = (heroMood === 'Working' || heroMood === 'Terminal') ? 1.8 * heroPx : 0;
-    const canvasOffsetX = (heroCanvas.width - spriteW) * 0.5 + shiftLeftProp;
-    const canvasOffsetY = (heroCanvas.height - spriteH) * 0.5 + 1.3 * heroPx;
+    const canvasOffsetX = (heroMeta.w - spriteW) * 0.5 + shiftLeftProp;
+    const canvasOffsetY = (heroMeta.h - spriteH) * 0.5 + 1.3 * heroPx;
 
     if (isPerchedOnChatBox()) {
       const box = composerCard.getBoundingClientRect();
@@ -657,7 +723,7 @@
       targetX = (relRight - 14) - spriteW - canvasOffsetX - 8;
       targetY = (relTop + 1) - spriteH - canvasOffsetY - 8;
     } else {
-      targetX = vp.width - heroCanvas.width - 14;
+      targetX = vp.width - heroMeta.w - 14;
       targetY = 10;
     }
     if (!posReady) {
@@ -799,15 +865,15 @@
     syncMotionUi();
   });
 
-  const navCtx = navCanvas.getContext('2d');
-  const heroCtx = heroCanvas.getContext('2d');
+  const navMeta = setupHiDpiCanvas(navCanvas);
+  const heroMeta = setupHiDpiCanvas(heroCanvas);
   let lastTickAt = 0;
 
   function renderAllOnce() {
-    drawMascot(navCtx, navCanvas.width, navCanvas.height, 2.1, currentSkin, 'Idle', globalTick);
-    drawMascot(heroCtx, heroCanvas.width, heroCanvas.height, heroPx, currentSkin, heroMood, globalTick, hurtTicks);
-    moodTiles.forEach((t, i) => drawMascot(t.ctx, t.canvas.width, t.canvas.height, 3.6, currentSkin, t.mood, globalTick + i * 3));
-    skinSamples.forEach((s, i) => drawMascot(s.ctx, s.canvas.width, s.canvas.height, 4.2, s.skin, s.mood, globalTick + i * 5));
+    drawMascot(navMeta.ctx, navMeta.w, navMeta.h, 2.1, currentSkin, 'Idle', globalTick, 0, navMeta.dpr);
+    drawMascot(heroMeta.ctx, heroMeta.w, heroMeta.h, heroPx, currentSkin, heroMood, globalTick, hurtTicks, heroMeta.dpr);
+    moodTiles.forEach((t, i) => drawMascot(t.ctx, t.w, t.h, 3.6, currentSkin, t.mood, globalTick + i * 3, 0, t.dpr));
+    skinSamples.forEach((s, i) => drawMascot(s.ctx, s.w, s.h, 4.2, s.skin, s.mood, globalTick + i * 5, 0, s.dpr));
   }
 
   function frame(now) {
