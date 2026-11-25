@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 (2026-11-26)
+- **19 live reactions** (added `Delegating` for subagents/swarms/workflows, `Happy` rising pixel hearts on user praise, and `Error` with `X X` eyes and red `!` badge).
+- **Sustained Turn Sentiment Moods (`Angry` & `Sad`)**: Detects hostility/ALL-CAPS shouting (`Angry` crimson tint + `\ /` brows) and insults (`Sad` muted-blue tint + `/ \` brows) across active working steps until the turn ends, while cleanly ignoring code blocks, URLs, file paths, and SQL queries.
+- **Per-Model Quota Sleep & Instant Wakeup**: Enters `Sleeping` (`Quota limit · Sleeping`) when hitting 429 / quota limits and wakes immediately once you switch models or start a new turn.
+- **Bottom-Right & Bottom-Left Above-Taskbar Corners**: Added `Bottom-Right (Above Taskbar)` and `Bottom-Left (Above Taskbar)` options under **Corner When Away / Minimized** (available in both the right-click menu and system tray) with trimmed bottom hit-padding so taskbar and upper chatbox clicks aren't blocked.
+- **Instant `FileSystemWatcher` Wakeup & Anti-Flicker Dwell**: Watches Antigravity transcript/DB changes natively for sub-100ms reaction updates, with a `1.2s` minimum busy dwell so rapid tool sequences don't flicker.
+- **Double-Click Dance**: Double-click the mascot when calm (`Idle` / `Done` / `Happy`) for a joyful dance groove while keeping single-click above the chatbox as the subtle press wince.
+- **Browser False-Positive Fix**: Removed loose window-title fallback matching so web browsers viewing Antigravity pages (e.g., Reddit/docs) never trigger fake chatbox perching or typing.
+
 ## 0.1.0 (2026-11-25)
 - Initial public release of **AgyPet** — standalone floating pixel companion for Google Antigravity App, Antigravity IDE, and Antigravity CLI (`agy`).
 - **16 live reactions**: `Typing`, `Thinking`, `Working`, `Terminal`, `Browsing`, `Reading`, `Searching`, `Listening`, `Speaking`, `Multitasking`, `Background`, `Alert`, `Question`, `Done`, `Idle`, and `Sleeping`.
