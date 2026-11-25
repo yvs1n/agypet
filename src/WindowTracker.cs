@@ -59,20 +59,38 @@ namespace AgyPet
             }.Start();
         }
 
+        public static bool IsAntigravityProcessName(string processName)
+        {
+            if (string.IsNullOrWhiteSpace(processName)) return false;
+            string n = processName.Trim();
+            if (n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+                n = n.Substring(0, n.Length - 4);
+            return n.Equals("Antigravity", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("GoogleAntigravity", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("Google Antigravity", StringComparison.OrdinalIgnoreCase)
+                || n.StartsWith("Antigravity ", StringComparison.OrdinalIgnoreCase)
+                || n.StartsWith("Antigravity-", StringComparison.OrdinalIgnoreCase);
+        }
+
         public void Poll()
         {
-            if ((DateTime.Now - pidsRefreshed).TotalSeconds > 2.5)
+            if ((DateTime.Now - pidsRefreshed).TotalSeconds > 1.5)
             {
                 var pids = new HashSet<uint>();
-                foreach (var procName in new[] { "Antigravity", "antigravity", "Antigravity IDE", "antigravity-ide", "agy", "agent" })
+                try
                 {
-                    try
+                    foreach (var p in Process.GetProcesses())
                     {
-                        foreach (var p in Process.GetProcessesByName(procName))
-                            pids.Add((uint)p.Id);
+                        try
+                        {
+                            if (p.Id != selfPid && IsAntigravityProcessName(p.ProcessName))
+                                pids.Add((uint)p.Id);
+                        }
+                        catch { }
+                        finally { try { p.Dispose(); } catch { } }
                     }
-                    catch { }
                 }
+                catch { }
                 targetPids = pids;
                 pidsRefreshed = DateTime.Now;
             }
@@ -93,17 +111,8 @@ namespace AgyPet
                 GetWindowThreadProcessId(h, out pid);
                 if (pid == selfPid) return true;
 
-                bool matches = targetPids.Contains(pid);
-                if (!matches)
-                {
-                    var sb = new StringBuilder(256);
-                    GetWindowText(h, sb, sb.Capacity);
-                    string title = sb.ToString();
-                    if (title.IndexOf("Antigravity", StringComparison.OrdinalIgnoreCase) >= 0 &&
-                        title.IndexOf("AgyPet", StringComparison.OrdinalIgnoreCase) < 0)
-                        matches = true;
-                }
-                if (!matches) return true;
+                // Strictly match actual Antigravity App / IDE processes (never web browsers whose tab title mentions Antigravity).
+                if (!targetPids.Contains(pid)) return true;
 
                 if (IsIconic(h))
                 {

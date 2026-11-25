@@ -86,11 +86,19 @@ namespace AgyPet.Tests
                 AssertEq(MascotMood.Working, ActivityMonitor.MoodForTool("edit_file"));
             });
 
-            Run("Window title parser extracts active conversation title cleanly", () =>
+            Run("Window title parser and Antigravity process filter reject browsers and unrelated apps", () =>
             {
                 AssertEq("Build AgyPet", WindowTracker.ParseWindowTitle("Build AgyPet - AgyDock - Antigravity"));
                 AssertEq("Quick Fix", WindowTracker.ParseWindowTitle("Quick Fix - Antigravity"));
                 AssertEq((string)null, WindowTracker.ParseWindowTitle("Antigravity"));
+
+                AssertTrue(WindowTracker.IsAntigravityProcessName("Antigravity"), "Antigravity.exe must match");
+                AssertTrue(WindowTracker.IsAntigravityProcessName("Antigravity IDE"), "Antigravity IDE must match");
+                AssertTrue(!WindowTracker.IsAntigravityProcessName("chrome"), "Chrome must never match");
+                AssertTrue(!WindowTracker.IsAntigravityProcessName("msedge"), "Edge must never match");
+                AssertTrue(!WindowTracker.IsAntigravityProcessName("firefox"), "Firefox must never match");
+                AssertTrue(!WindowTracker.IsAntigravityProcessName("AgyPet"), "Self must never match");
+                AssertTrue(!WindowTracker.IsAntigravityProcessName("hp-one-agent-service"), "Unrelated agent service must never match");
             });
 
             Run("Chatbox placement adapts visual right & feet cleanly across Small, Medium, and Large", () =>
