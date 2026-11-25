@@ -54,8 +54,13 @@ namespace AgyPet
 
         bool previewMode;
         MascotMood previewMood = MascotMood.Idle;
+        TurnSentiment previewSentiment = TurnSentiment.Neutral;
+        MascotMood lastAppliedMood = MascotMood.Idle;
+        DateTime lastBusySwitchAt = DateTime.MinValue;
         double targetLeft = double.NaN, targetTop = double.NaN;
         DateTime lastAnimTime = DateTime.UtcNow;
+
+        const int MinBusyDwellMs = 1200;
 
         const double StagePadX = 32;
         const double StagePadY = 24;
@@ -186,6 +191,9 @@ namespace AgyPet
             stage.Children.Clear();
             mascot = new Mascot(settings.PixelSize, settings.Skin);
             mascot.Mood = previewMode ? previewMood : monitor.Latest.Mood;
+            mascot.Sentiment = previewMode ? previewSentiment : monitor.Latest.Sentiment;
+            lastAppliedMood = mascot.Mood;
+            lastBusySwitchAt = DateTime.UtcNow;
             stage.Width = mascot.Width;
             stage.Height = mascot.Height;
             stage.Children.Add(mascot);
@@ -232,12 +240,13 @@ namespace AgyPet
             {
                 previewMode = true;
                 previewMood = mood.Value;
-                if (mascot != null) mascot.Mood = previewMood;
+                ApplyResolvedMascotState();
                 RenderHoverContent();
             }
             else
             {
                 previewMode = false;
+                previewSentiment = TurnSentiment.Neutral;
                 SyncActivity();
             }
         }
@@ -292,10 +301,53 @@ namespace AgyPet
             return monitor.Latest.Mood;
         }
 
+        TurnSentiment ResolveCurrentSentiment()
+        {
+            if (previewMode) return previewSentiment;
+            if (tracker.IsInFront)
+            {
+                if (tracker.InVoiceMode || tracker.InDictation) return TurnSentiment.Neutral;
+                var focused = monitor.FocusedSession;
+                return focused != null ? focused.Sentiment : TurnSentiment.Neutral;
+            }
+            var actives = monitor.ActiveSessions;
+            if (actives != null && actives.Count == 1)
+                return actives[0].Sentiment;
+            return TurnSentiment.Neutral;
+        }
+
+        static bool IsBusyWorkMood(MascotMood mood)
+        {
+            return mood == MascotMood.Thinking || mood == MascotMood.Typing || mood == MascotMood.Working ||
+                   mood == MascotMood.Terminal || mood == MascotMood.Browsing || mood == MascotMood.Reading ||
+                   mood == MascotMood.Searching || mood == MascotMood.Delegating || mood == MascotMood.Multitasking;
+        }
+
+        void ApplyResolvedMascotState()
+        {
+            if (mascot == null) return;
+            MascotMood nextMood = ResolveCurrentMood();
+            TurnSentiment nextSentiment = ResolveCurrentSentiment();
+
+            if (!previewMode && IsBusyWorkMood(lastAppliedMood) && IsBusyWorkMood(nextMood) &&
+                nextMood != lastAppliedMood && !(tracker.IsInFront && tracker.IsUserTyping) &&
+                (DateTime.UtcNow - lastBusySwitchAt).TotalMilliseconds < MinBusyDwellMs)
+            {
+                nextMood = lastAppliedMood;
+            }
+
+            if (nextMood != lastAppliedMood)
+            {
+                lastAppliedMood = nextMood;
+                lastBusySwitchAt = DateTime.UtcNow;
+            }
+            mascot.Mood = nextMood;
+            mascot.Sentiment = nextSentiment;
+        }
+
         void SyncActivity()
         {
-            if (mascot != null)
-                mascot.Mood = ResolveCurrentMood();
+            ApplyResolvedMascotState();
 
             if (hoverPopup.IsOpen || !previewMode)
                 RenderHoverContent();
@@ -521,7 +573,10 @@ namespace AgyPet
             }
             switch (mood)
             {
-                case MascotMood.Done: return BrushHex(0x34, 0xA8, 0x53);
+                case MascotMood.Done:
+                case MascotMood.Happy: return BrushHex(0x34, 0xA8, 0x53);
+                case MascotMood.Error: return BrushHex(0xEF, 0x44, 0x44);
+                case MascotMood.Delegating: return BrushHex(0x8B, 0x5C, 0xF6);
                 case MascotMood.Alert: return BrushHex(0xF5, 0x9E, 0x0B);
                 case MascotMood.Question: return BrushHex(0x38, 0xBD, 0xF8);
                 case MascotMood.Idle:
@@ -538,8 +593,8 @@ namespace AgyPet
             tracker.Poll();
             monitor.PreferredChatTitle = tracker.ActiveChatTitle;
 
-            if (mascot != null && !previewMode)
-                mascot.Mood = ResolveCurrentMood();
+            if (!previewMode)
+                ApplyResolvedMascotState();
 
             bool nowInFront = tracker.IsInFront;
             bool nowOnChatScreen = nowInFront && !tracker.IsMinimized && !tracker.ChatBoxBoundsPx.IsEmpty;
@@ -712,8 +767,17 @@ namespace AgyPet
             dragStartLeft = Left;
             dragStartTop = Top;
 
-            // Subtle press reaction ONLY when the mascot is perched above the chatbox
-            if (mascot != null && IsPerchedOnChatBox) mascot.Poke();
+            // Double-click when calm triggers joyful dance; single click perched above chatbox gives subtle wince
+            if (mascot != null && e.ClickCount >= 2 &&
+                (mascot.Mood == MascotMood.Idle || mascot.Mood == MascotMood.Done || mascot.Mood == MascotMood.Happy))
+            {
+                mascot.CancelHurt();
+                mascot.Dance();
+            }
+            else if (mascot != null && IsPerchedOnChatBox)
+            {
+                mascot.Poke();
+            }
 
             petHitArea.CaptureMouse();
             e.Handled = true;
@@ -807,6 +871,17 @@ namespace AgyPet
             {
                 var captured = m;
                 previewSub.Items.Add(CheckItem(captured.ToString(), previewMode && previewMood == captured, () => SetPreviewMood(captured)));
+            }
+            previewSub.Items.Add(new Separator());
+            foreach (TurnSentiment s in Enum.GetValues(typeof(TurnSentiment)))
+            {
+                var capturedSent = s;
+                previewSub.Items.Add(CheckItem("Turn Mood: " + capturedSent, previewSentiment == capturedSent, () =>
+                {
+                    previewSentiment = capturedSent;
+                    if (!previewMode) previewMode = true;
+                    ApplyResolvedMascotState();
+                }));
             }
             contextMenu.Items.Add(previewSub);
 

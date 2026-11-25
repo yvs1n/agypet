@@ -84,6 +84,19 @@ namespace AgyPet.Tests
                 AssertEq(MascotMood.Searching, ActivityMonitor.MoodForTool("search_web"));
                 AssertEq(MascotMood.Question, ActivityMonitor.MoodForTool("ask_question"));
                 AssertEq(MascotMood.Working, ActivityMonitor.MoodForTool("edit_file"));
+                AssertEq(MascotMood.Delegating, ActivityMonitor.MoodForTool("invoke_subagent"));
+                AssertEq(MascotMood.Delegating, ActivityMonitor.MoodForTool("run_workflow"));
+            });
+
+            Run("Prompt sentiment detects angry, sad, and happy while ignoring code blocks and SQL", () =>
+            {
+                AssertEq(TurnSentiment.Angry, ActivityMonitor.DetectSentiment("why is this still broken again"));
+                AssertEq(TurnSentiment.Angry, ActivityMonitor.DetectSentiment("WHY IS THIS NOT WORKING AT ALL"));
+                AssertEq(TurnSentiment.Sad, ActivityMonitor.DetectSentiment("you're useless and this code is trash"));
+                AssertEq(TurnSentiment.Happy, ActivityMonitor.DetectSentiment("thanks! perfect!"));
+                AssertEq(TurnSentiment.Neutral, ActivityMonitor.DetectSentiment("Implement a garbage collector with `SELECT * FROM users`"));
+                AssertEq(TurnSentiment.Neutral, ActivityMonitor.DetectSentiment("make the landing page look amazing with sections"));
+                AssertTrue(ActivityMonitor.IsQuotaErrorText("You have reached the quota limit (429)"), "Quota error text should trigger quota sleep");
             });
 
             Run("Window title parser and Antigravity process filter reject browsers and unrelated apps", () =>

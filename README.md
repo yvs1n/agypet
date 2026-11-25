@@ -22,7 +22,9 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 
 ## Features
 
-- **Adaptive Chatbox Perch**: Floats cleanly right above the top-right corner of Antigravity's chat composer without occupying side-panel space. Automatically tracks attachments, multi-line prompts, and `Small` / `Medium` / `Large` sizes at 60fps.
+- **Adaptive Chatbox Perch**: Floats cleanly right above the top-right corner of Antigravity's chat composer without occupying side-panel space or requiring Electron patching/CDP debug flags. Automatically tracks attachments, multi-line prompts, and `Small` / `Medium` / `Large` sizes at 60fps.
+- **Turn Sentiment Moods & Quota Sleep**: Sustained **Angry** (crimson tint + `\ /` brows) and **Sad** (muted blue tint + `/ \` brows) moods react to your tone across active steps (while ignoring code blocks and SQL), **Happy** celebrates praise, and **Quota Sleep** naps when hitting 429/quota limits until you switch models.
+- **Anti-Flicker Dwell & Instant File Wakeup**: Uses native `FileSystemWatcher` for sub-100ms reaction to Antigravity writes plus a `1.2s` minimum busy-state dwell so fast tool chains never strobe.
 - **Context-Aware Per-Chat Tracking**: Matches whichever conversation you currently have open. Shows `Typing` when either the agent or you are typing, `Listening` during dictation, and flips between `Listening` and `Speaking` in Voice Mode.
 - **Alt+Tab & Minimize Corner Dock**: Leaves the chatbox the moment you switch apps or open Settings, gliding calmly to your chosen screen corner (`Top-Right`, `Top-Left`, `Bottom-Right`, or `Bottom-Left` right above the taskbar). Return to Antigravity and he snaps right back above the chatbox.
 - **Multitasking & Live Server States**: Juggles orbiting orbs when minimized with 2+ active sessions, follows a single session directly, and displays a calm pulsing server rack when a finished chat still has a live server running.
@@ -37,7 +39,7 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 
 ---
 
-## All 16 Live Reactions
+## All 19 Live Reactions
 
 | Reaction | Trigger in Antigravity |
 | :--- | :--- |
@@ -46,6 +48,7 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 | **Working** | `edit_file`, `write_file`, and file updates |
 | **Terminal** | `run_command` / shell execution |
 | **Browsing** | Browser automation & DevTools steps |
+| **Delegating** | `invoke_subagent`, `swarm`, and `run_workflow` multi-agent tasks |
 | **Reading** | `read_file`, `grep`, `glob`, `list` |
 | **Searching** | `search_web`, `search_marketplace`, `fetch` |
 | **Listening** | Dictation mic active, or user speaking in Voice Mode |
@@ -55,8 +58,10 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 | **Alert** | Permission or approval needed |
 | **Question** | `ask_question` waiting for your choice |
 | **Done** | Task finished celebration |
+| **Happy** | Rising pixel hearts on user praise ("thanks!", "perfect!") |
+| **Error** | Turn or tool failure (`X X` startled eyes & red badge) |
 | **Idle** | Ready at rest |
-| **Sleeping** | Quiet after extended idle |
+| **Sleeping** | Quiet after extended idle, or model quota limit reached |
 
 ---
 

@@ -50,6 +50,7 @@
     { id: "Working", sub: "Editing files" },
     { id: "Terminal", sub: "Running command" },
     { id: "Browsing", sub: "Live browser agent" },
+    { id: "Delegating", sub: "Subagents & swarms" },
     { id: "Reading", sub: "Scanning code" },
     { id: "Searching", sub: "Looking up" },
     { id: "Listening", sub: "Voice & dictation" },
@@ -59,8 +60,10 @@
     { id: "Alert", sub: "Needs approval" },
     { id: "Question", sub: "Asking a choice" },
     { id: "Done", sub: "Task complete" },
+    { id: "Happy", sub: "Praise celebration" },
+    { id: "Error", sub: "Step hit error" },
     { id: "Idle", sub: "At rest" },
-    { id: "Sleeping", sub: "Quiet" },
+    { id: "Sleeping", sub: "Quiet or quota limit" },
   ];
 
   function gauss(u, v, mu, mv, su, sv) {
@@ -436,6 +439,44 @@
           dot(isDark ? '#F4F4F5' : '#38BDF8', 6.0, 0.3, 0.9, 0.9, false);
         }
         break;
+      case 'Delegating': {
+        const dx = Math.round(Math.sin(tick * 0.2)) * 0.35;
+        if (!hurt) drawEyes(3.9 + dx, 3.1, 6.3 + dx, 3.1, false);
+        dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
+        const buds = isDark ? ['#F4F4F5', '#A1A1AA', '#F4F4F5'] : ['#F8C618', '#4EC446', '#7B61EC'];
+        for (let i = 0; i < 3; i++) {
+          const a = tick * 0.2 + i * ((Math.PI * 2) / 3);
+          const bx = 5.0 + Math.cos(a) * 5.4, by = 1.6 + Math.sin(a) * 2.2;
+          dot(buds[i], bx + 0.35, by, 1.1, 0.55, false);
+          dot(buds[i], bx, by + 0.55, 1.8, 0.75, false);
+          dot(buds[i], bx, by + 1.3, 0.55, 0.55, false);
+          dot(buds[i], bx + 1.25, by + 1.3, 0.55, 0.55, false);
+        }
+        break;
+      }
+      case 'Happy': {
+        if (!hurt) drawHappyEyes();
+        dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
+        const lift = -((Math.floor(tick / 3)) % 4) * 0.5;
+        const hc = isDark ? '#F4F4F5' : '#F43F5E';
+        shape(hc, -1.8, 0.2 + lift, ["#.#", "###", ".#."]);
+        shape(isDark ? '#A1A1AA' : '#FB7185', 10.6, -0.4 + lift, ["#.#", "###", ".#."]);
+        break;
+      }
+      case 'Error': {
+        if (!hurt) {
+          dot('#F8FAFC', 3.6, 2.9, 0.4, 0.4); dot('#F8FAFC', 4.4, 2.9, 0.4, 0.4); dot('#F8FAFC', 4.0, 3.3, 0.45, 0.45);
+          dot('#F8FAFC', 3.6, 3.75, 0.4, 0.4); dot('#F8FAFC', 4.4, 3.75, 0.4, 0.4);
+          dot('#F8FAFC', 6.1, 2.9, 0.4, 0.4); dot('#F8FAFC', 6.9, 2.9, 0.4, 0.4); dot('#F8FAFC', 6.5, 3.3, 0.45, 0.45);
+          dot('#F8FAFC', 6.1, 3.75, 0.4, 0.4); dot('#F8FAFC', 6.9, 3.75, 0.4, 0.4);
+        }
+        dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
+        if (tick % 8 >= 2) {
+          dot(isDark ? '#F4F4F5' : '#EF4444', 5.0, -2.8, 1, 2.2, false);
+          dot(isDark ? '#F4F4F5' : '#EF4444', 5.0, -0.2, 1, 0.8, false);
+        }
+        break;
+      }
       case 'Done': {
         if (!hurt) drawHappyEyes();
         dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);

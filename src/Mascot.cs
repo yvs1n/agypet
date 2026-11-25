@@ -7,6 +7,14 @@ using System.Windows.Threading;
 
 namespace AgyPet
 {
+    public enum TurnSentiment
+    {
+        Neutral,
+        Happy,
+        Sad,
+        Angry
+    }
+
     public enum MascotMood
     {
         Idle,
@@ -20,11 +28,14 @@ namespace AgyPet
         Working,
         Terminal,
         Browsing,
+        Delegating,
         Multitasking,
         Background,
         Alert,
         Question,
-        Done
+        Done,
+        Happy,
+        Error
     }
 
     // Pixel-art Antigravity companion supporting two official skins:
@@ -74,6 +85,11 @@ namespace AgyPet
         static readonly Brush AgyVioletBrush = Frozen(AgyViolet);
         static readonly Brush AgyOrbitDim = Frozen(Color.FromRgb(0x94, 0xA3, 0xB8));
         static readonly Brush AgyShadowBrush = Frozen(Color.FromArgb(0x88, 0x07, 0x07, 0x09));
+        static readonly Brush AngryTintBrush = Frozen(Color.FromArgb(0x96, 0xE1, 0x1D, 0x48));
+        static readonly Brush SadTintBrush = Frozen(Color.FromArgb(0x88, 0x33, 0x50, 0x7A));
+        static readonly Brush HeartBrush = Frozen(Color.FromRgb(0xF4, 0x3F, 0x5E));
+        static readonly Brush HeartGlowBrush = Frozen(Color.FromRgb(0xFB, 0x71, 0x85));
+        static readonly Brush ErrorRedBrush = Frozen(Color.FromRgb(0xEF, 0x44, 0x44));
 
         // Dark Monochrome Remake palette (sampled from the new dark Antigravity remake logo)
         static readonly Color DarkTop = Color.FromRgb(0x44, 0x44, 0x4A);
@@ -136,6 +152,8 @@ namespace AgyPet
         readonly Canvas sprite = new Canvas();
         readonly Canvas archNormalLayer = new Canvas();
         readonly Canvas archCompactLayer = new Canvas();
+        readonly Canvas tintNormalLayer = new Canvas();
+        readonly Canvas tintCompactLayer = new Canvas();
         readonly Canvas gear = new Canvas();
         readonly Canvas air = new Canvas();
         readonly DispatcherTimer timer;
@@ -144,10 +162,13 @@ namespace AgyPet
         readonly ScaleTransform recoilTransform = new ScaleTransform(1.0, 1.0);
         int tick, blinkAt, blinkLeft, glanceAt, glance;
         int hurtTicks;
+        int danceTicks;
 
         public MascotMood Mood { get; set; }
+        public TurnSentiment Sentiment { get; set; }
         public string SkinName { get; private set; }
         public bool IsHurt { get { return hurtTicks > 0; } }
+        public bool IsDancing { get { return danceTicks > 0; } }
 
         public Mascot(double pixelSize, string skin = ClassicSkin)
         {
@@ -212,6 +233,14 @@ namespace AgyPet
             recoilTransform.ScaleY = 1.0;
         }
 
+        // Playful dance groove on double-click when calm
+        public void Dance()
+        {
+            if (hurtTicks > 0 || Sentiment == TurnSentiment.Angry || Sentiment == TurnSentiment.Sad) return;
+            danceTicks = 22;
+            Step();
+        }
+
         internal void StepFrame()
         {
             Step();
@@ -227,18 +256,24 @@ namespace AgyPet
             sprite.Children.Clear();
             archNormalLayer.Children.Clear();
             archCompactLayer.Children.Clear();
+            tintNormalLayer.Children.Clear();
+            tintCompactLayer.Children.Clear();
             gear.Children.Clear();
             air.Children.Clear();
 
-            RenderPixelMask(archNormalLayer, AgyArchMask, false);
-            RenderPixelMask(archCompactLayer, AgyCompactMask, true);
+            RenderPixelMask(archNormalLayer, AgyArchMask, false, null);
+            RenderPixelMask(archCompactLayer, AgyCompactMask, true, null);
             archCompactLayer.Visibility = Visibility.Collapsed;
+            tintNormalLayer.Visibility = Visibility.Collapsed;
+            tintCompactLayer.Visibility = Visibility.Collapsed;
             sprite.Children.Add(archNormalLayer);
             sprite.Children.Add(archCompactLayer);
+            sprite.Children.Add(tintNormalLayer);
+            sprite.Children.Add(tintCompactLayer);
             sprite.Children.Add(gear);
         }
 
-        void RenderPixelMask(Canvas layer, string[] mask, bool compact)
+        void RenderPixelMask(Canvas layer, string[] mask, bool compact, Brush solidOverride)
         {
             for (int r = 0; r < mask.Length; r++)
             {
@@ -253,17 +288,37 @@ namespace AgyPet
                     bool hasTop = r > 0 && mask[r - 1][c] == '#';
                     bool hasBottom = r + 1 < mask.Length && mask[r + 1][c] == '#';
 
-                    double u = c / 19.0;
-                    double v = r / 17.0;
-                    Color col = IsDark
-                        ? DarkArchPixelColor(u, v, compact, !hasTop, !hasLeft || !hasRight, !hasBottom)
-                        : OfficialArchPixelColor(u, v, compact, !hasTop, !hasBottom && r >= 8 && r <= 12 && c >= 6 && c <= 13);
+                    Brush fill;
+                    if (solidOverride != null)
+                    {
+                        fill = solidOverride;
+                    }
+                    else
+                    {
+                        double u = c / 19.0;
+                        double v = r / 17.0;
+                        Color col = IsDark
+                            ? DarkArchPixelColor(u, v, compact, !hasTop, !hasLeft || !hasRight, !hasBottom)
+                            : OfficialArchPixelColor(u, v, compact, !hasTop, !hasBottom && r >= 8 && r <= 12 && c >= 6 && c <= 13);
+                        fill = Frozen(col);
+                    }
 
                     double bleedX = hasRight ? 0.03 : 0.0;
                     double bleedY = hasBottom ? 0.03 : 0.0;
-                    Dot(layer, Frozen(col), x, y, 0.5 + bleedX, 0.5 + bleedY);
+                    Dot(layer, fill, x, y, 0.5 + bleedX, 0.5 + bleedY);
                 }
             }
+        }
+
+        void EnsureTintMasksBuilt(TurnSentiment sentiment)
+        {
+            if (tintNormalLayer.Children.Count > 0 && (tintNormalLayer.Tag as TurnSentiment?) == sentiment) return;
+            tintNormalLayer.Children.Clear();
+            tintCompactLayer.Children.Clear();
+            Brush tint = sentiment == TurnSentiment.Angry ? AngryTintBrush : SadTintBrush;
+            RenderPixelMask(tintNormalLayer, AgyArchMask, false, tint);
+            RenderPixelMask(tintCompactLayer, AgyCompactMask, true, tint);
+            tintNormalLayer.Tag = sentiment;
         }
 
         // Spatial radial color model matching the official Antigravity logo:
@@ -381,19 +436,26 @@ namespace AgyPet
             var mood = Mood;
             bool hurt = hurtTicks > 0;
             if (hurtTicks > 0) hurtTicks--;
+            bool dancing = danceTicks > 0;
+            if (danceTicks > 0) danceTicks--;
 
-            bool hops = mood == MascotMood.Speaking || mood == MascotMood.Done;
-            bool wiggles = mood == MascotMood.Alert || mood == MascotMood.Question;
+            bool applyTurnTint = (Sentiment == TurnSentiment.Angry || Sentiment == TurnSentiment.Sad) &&
+                                 mood != MascotMood.Sleeping && mood != MascotMood.Done &&
+                                 mood != MascotMood.Happy && mood != MascotMood.Error;
 
-            double baseBob = hops ? -Math.Round(Math.Abs(Math.Sin(tick * 0.55)) * 1.5) * px
+            bool hops = dancing || mood == MascotMood.Speaking || mood == MascotMood.Done || mood == MascotMood.Happy;
+            bool wiggles = mood == MascotMood.Alert || mood == MascotMood.Question || mood == MascotMood.Error;
+
+            double baseBob = hops ? -Math.Round(Math.Abs(Math.Sin(tick * 0.55)) * 1.6) * px
                 : mood == MascotMood.Sleeping ? Math.Round(Math.Sin(tick * 0.04)) * px * 0.6
                 : Math.Round(Math.Sin(tick * 0.08)) * px * 0.8;
             double y = hurt && hurtTicks >= 4 ? baseBob + px * 0.45 : baseBob;
             SetTop(sprite, y);
 
             bool typing = mood == MascotMood.Working && tick % 90 < 72;
+            double danceSway = dancing ? Math.Sin(tick * 0.7) * 1.4 * px : 0;
             double x = hurt && hurtTicks >= 4 ? ((hurtTicks % 2 == 0 ? -0.3 : 0.3) * px)
-                : (wiggles && tick % 12 < 4 ? (tick % 2 == 0 ? -px * 0.5 : px * 0.5) : 0);
+                : (wiggles && tick % 12 < 4 ? (tick % 2 == 0 ? -px * 0.5 : px * 0.5) : danceSway);
             SetLeft(sprite, x);
 
             // Subtle tactile micro-squish on press (no exaggerated bounce or sparks)
@@ -421,6 +483,18 @@ namespace AgyPet
             archNormalLayer.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
             archCompactLayer.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
 
+            if (applyTurnTint)
+            {
+                EnsureTintMasksBuilt(Sentiment);
+                tintNormalLayer.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+                tintCompactLayer.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
+            }
+            else
+            {
+                tintNormalLayer.Visibility = Visibility.Collapsed;
+                tintCompactLayer.Visibility = Visibility.Collapsed;
+            }
+
             if (mood == MascotMood.Idle || mood == MascotMood.Listening || mood == MascotMood.Speaking ||
                 mood == MascotMood.Searching || mood == MascotMood.Browsing || mood == MascotMood.Background)
                 DrawRestingArms();
@@ -432,7 +506,8 @@ namespace AgyPet
             {
                 case MascotMood.Idle:
                     if (!hurt) DrawEyes(3.9 + ex, 3.2, 6.3 + ex, 3.2, closed);
-                    DrawIdleSparkle();
+                    if (dancing) DrawDanceNotes();
+                    else DrawIdleSparkle();
                     break;
                 case MascotMood.Sleeping:
                     if (!hurt) DrawShutEyes(4.0, 4.3, 6.2, 4.3);
@@ -476,6 +551,11 @@ namespace AgyPet
                     if (!hurt) DrawEyes(3.9 + bx, 3.1, 6.3 + bx, 3.1, false);
                     DrawBrowserGlobe();
                     break;
+                case MascotMood.Delegating:
+                    double dx = Math.Round(Math.Sin(tick * 0.2)) * 0.35;
+                    if (!hurt) DrawEyes(3.9 + dx, 3.1, 6.3 + dx, 3.1, false);
+                    DrawDelegatingSwarm();
+                    break;
                 case MascotMood.Multitasking:
                     double mx = (tick / 5 % 2 == 0) ? -0.45 : 0.45;
                     if (!hurt) DrawEyes(3.9 + mx, 3.1, 6.3 + mx, 3.1, false);
@@ -500,9 +580,24 @@ namespace AgyPet
                     Dot(air, AgyShadowBrush, 2.5, 8.7, 6.0, 0.4);
                     DrawCelebrationConfetti();
                     break;
+                case MascotMood.Happy:
+                    if (!hurt) DrawHappyEyes();
+                    DrawArmsUp();
+                    Dot(air, AgyShadowBrush, 2.5, 8.7, 6.0, 0.4);
+                    DrawHappyHearts();
+                    break;
+                case MascotMood.Error:
+                    if (!hurt) DrawErrorEyes();
+                    DrawArmsUp();
+                    DrawErrorBadge();
+                    break;
             }
 
-            // 2. Subtle "> <" wince eyes only (no flying sparks or extra props)
+            // 2. Sustained angry (\ /) or sad (/ \) brows across active states
+            if (applyTurnTint && !hurt)
+                DrawSentimentBrows(compact, Sentiment == TurnSentiment.Angry);
+
+            // 3. Subtle "> <" wince eyes on left-click poke above chatbox
             if (hurt)
                 DrawHurtOverlay(compact);
         }
@@ -914,6 +1009,95 @@ namespace AgyPet
             Dot(air, !beat ? (IsDark ? MonoBright : GlassLit) : (IsDark ? MonoDim : AgyBlueBrush), sx + 0.8, sy + 2.95, 0.65, 0.65);
             Dot(air, IsDark ? MonoBright : Cloud, sx + 1.9, sy + 1.0, 1.2, 0.35);
             Dot(air, IsDark ? MonoMid : Cloud, sx + 1.9, sy + 3.1, 1.2, 0.35);
+        }
+
+        // Delegating: 3 orbiting mini-buddies coordinating subagents / swarm workflows
+        void DrawDelegatingSwarm()
+        {
+            DrawArmsUp();
+            Brush[] buddyCols = IsDark
+                ? new[] { MonoBright, MonoMid, MonoBright }
+                : new[] { AgyGoldBrush, AgyEmeraldBrush, AgyVioletBrush };
+            for (int i = 0; i < 3; i++)
+            {
+                double a = tick * 0.20 + i * (Math.PI * 2.0 / 3.0);
+                double bx = 5.0 + Math.Cos(a) * 5.6;
+                double by = 1.6 + Math.Sin(a) * 2.3;
+                Brush col = buddyCols[i];
+                Dot(air, col, bx + 0.35, by, 1.1, 0.55);
+                Dot(air, col, bx, by + 0.55, 1.8, 0.75);
+                Dot(air, col, bx, by + 1.3, 0.55, 0.55);
+                Dot(air, col, bx + 1.25, by + 1.3, 0.55, 0.55);
+                // Link spark halfway toward mascot
+                Dot(air, IsDark ? MonoDim : GlassLit, 5.3 + (bx - 5.0) * 0.52, 2.8 + (by - 1.6) * 0.5, 0.38, 0.38);
+            }
+        }
+
+        // Happy: rising pixel hearts on user praise ("thanks!", "perfect!")
+        void DrawHappyHearts()
+        {
+            int phase = tick / 3;
+            Brush h1 = IsDark ? MonoBright : HeartBrush;
+            Brush h2 = IsDark ? MonoMid : HeartGlowBrush;
+            double liftA = -((phase) % 5) * 0.55;
+            double liftB = -((phase + 2) % 5) * 0.55;
+            Shape(air, h1, -2.0, 0.2 + liftA,
+                "#.#",
+                "###",
+                ".#.");
+            Shape(air, h2, 10.6, -0.4 + liftB,
+                "#.#",
+                "###",
+                ".#.");
+        }
+
+        // Error: startled X X eyes + red "!" badge on failed tool / error status
+        void DrawErrorEyes()
+        {
+            Brush col = IsDark ? MonoBright : EyeWhite;
+            Dot(gear, col, 3.6, 2.9, 0.4, 0.4); Dot(gear, col, 4.4, 2.9, 0.4, 0.4);
+            Dot(gear, col, 4.0, 3.3, 0.45, 0.45);
+            Dot(gear, col, 3.6, 3.75, 0.4, 0.4); Dot(gear, col, 4.4, 3.75, 0.4, 0.4);
+
+            Dot(gear, col, 6.1, 2.9, 0.4, 0.4); Dot(gear, col, 6.9, 2.9, 0.4, 0.4);
+            Dot(gear, col, 6.5, 3.3, 0.45, 0.45);
+            Dot(gear, col, 6.1, 3.75, 0.4, 0.4); Dot(gear, col, 6.9, 3.75, 0.4, 0.4);
+        }
+
+        void DrawErrorBadge()
+        {
+            if (tick % 8 < 2) return;
+            Brush b = IsDark ? MonoBright : ErrorRedBrush;
+            Dot(air, b, 5.0, -3.2, 1, 2.5);
+            Dot(air, b, 5.0, -0.3, 1, 0.9);
+        }
+
+        void DrawSentimentBrows(bool compact, bool angry)
+        {
+            double by = compact ? 3.25 : 2.35;
+            Brush col = IsDark ? MonoBright : EyeWhite;
+            if (angry)
+            {
+                // Tilted "\ /" brows
+                Dot(gear, col, 3.35, by, 0.55, 0.35); Dot(gear, col, 3.9, by + 0.3, 0.55, 0.35);
+                Dot(gear, col, 6.95, by, 0.55, 0.35); Dot(gear, col, 6.4, by + 0.3, 0.55, 0.35);
+            }
+            else
+            {
+                // Drooping "/ \" brows
+                Dot(gear, col, 3.9, by, 0.55, 0.35); Dot(gear, col, 3.35, by + 0.3, 0.55, 0.35);
+                Dot(gear, col, 6.4, by, 0.55, 0.35); Dot(gear, col, 6.95, by + 0.3, 0.55, 0.35);
+            }
+        }
+
+        void DrawDanceNotes()
+        {
+            int t = tick / 3 % 4;
+            Brush c = IsDark ? MonoBright : AgyGoldBrush;
+            Dot(air, c, -1.2, 0.2 - t * 0.4, 0.5, 1.3);
+            Dot(air, c, -1.7, 1.2 - t * 0.4, 0.7, 0.5);
+            Dot(air, IsDark ? MonoMid : GlassLit, 11.4, -0.4 - ((t + 2) % 4) * 0.4, 0.5, 1.3);
+            Dot(air, IsDark ? MonoMid : GlassLit, 10.9, 0.6 - ((t + 2) % 4) * 0.4, 0.7, 0.5);
         }
 
         void DrawZzz()
