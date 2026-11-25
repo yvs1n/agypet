@@ -20,8 +20,27 @@ namespace AgyPet
         // "free" (stays wherever you drag it on screen)
         public string PlacementMode { get; set; }
 
-        // "top-right" | "top-left" | "bottom-right" | "bottom-left" — where the mascot rests when Antigravity is away/minimized
+        // "top-right" | "top-left" | "bottom-right" | "bottom-center" | "bottom-left"
+        // | "taskbar-left" | "taskbar-center" | "taskbar-right" — where the mascot rests when Antigravity is away/minimized
         public string MinimizedCorner { get; set; }
+
+        public struct LocationOption
+        {
+            public readonly string Id, Label;
+            public LocationOption(string id, string label) { Id = id; Label = label; }
+        }
+
+        public static readonly LocationOption[] AwayLocations =
+        {
+            new LocationOption("top-right", "Top-Right"),
+            new LocationOption("top-left", "Top-Left"),
+            new LocationOption("bottom-right", "Bottom-Right (Above Taskbar)"),
+            new LocationOption("bottom-center", "Bottom-Middle (Above Taskbar)"),
+            new LocationOption("bottom-left", "Bottom-Left (Above Taskbar)"),
+            new LocationOption("taskbar-left", "Taskbar · Left"),
+            new LocationOption("taskbar-center", "Taskbar · Middle"),
+            new LocationOption("taskbar-right", "Taskbar · Right"),
+        };
 
         // "small" | "medium" | "large"
         public string Size { get; set; }
@@ -97,8 +116,12 @@ namespace AgyPet
 
         public static string NormalizeCorner(string corner)
         {
-            if (corner == "top-left" || corner == "bottom-right" || corner == "bottom-left")
-                return corner;
+            if (corner != null)
+            {
+                foreach (var opt in AwayLocations)
+                    if (string.Equals(corner, opt.Id, StringComparison.OrdinalIgnoreCase))
+                        return opt.Id;
+            }
             return "top-right";
         }
 

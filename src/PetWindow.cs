@@ -610,6 +610,13 @@ namespace AgyPet
 
             if (nowOnChatScreen && userMovedWhileInFront) return;
 
+            // Keep AgyPet above Shell_TrayWnd when docked along the Windows taskbar itself.
+            if (!nowInFront && !settings.HasCustomFreePos && settings.MinimizedCorner != null &&
+                settings.MinimizedCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
+            {
+                EnsureTopmost();
+            }
+
             Point desired = ComputeDesiredPosition();
             targetLeft = desired.X;
             targetTop = desired.Y;
@@ -660,14 +667,54 @@ namespace AgyPet
 
         public static Point PlaceInCorner(string corner, Rect workArea, double spriteW, double spriteH, double padX, double padY)
         {
+            return PlaceInCorner(corner, workArea, workArea, spriteW, spriteH, padX, padY);
+        }
+
+        public static Point PlaceInCorner(string corner, Rect workArea, Rect screenBounds, double spriteW, double spriteH, double padX, double padY)
+        {
             string normalized = PetSettings.NormalizeCorner(corner);
             double petW = spriteW + padX * 2;
-            bool isLeft = normalized == "top-left" || normalized == "bottom-left";
-            bool isBottom = normalized == "bottom-left" || normalized == "bottom-right";
+            bool isTaskbar = normalized.StartsWith("taskbar-", StringComparison.Ordinal);
 
-            double left = isLeft ? (workArea.Left + 8.0) : (workArea.Right - petW - 8.0);
-            // Bottom corners place the mascot's feet directly above the taskbar (WorkArea.Bottom).
-            double top = isBottom ? (workArea.Bottom - spriteH - padY) : (workArea.Top + 8.0);
+            double left;
+            if (normalized.EndsWith("-left", StringComparison.Ordinal))
+                left = workArea.Left + 8.0;
+            else if (normalized.EndsWith("-center", StringComparison.Ordinal))
+                left = workArea.Left + (workArea.Width - petW) * 0.5;
+            else
+                left = workArea.Right - petW - 8.0;
+
+            double top;
+            if (isTaskbar)
+            {
+                double bottomGap = screenBounds.Bottom - workArea.Bottom;
+                double topGap = workArea.Top - screenBounds.Top;
+                if (bottomGap >= 16.0)
+                {
+                    // Center vertically inside the bottom Windows taskbar strip
+                    top = workArea.Bottom + (bottomGap - spriteH) * 0.5 - padY;
+                }
+                else if (topGap >= 16.0)
+                {
+                    top = screenBounds.Top + (topGap - spriteH) * 0.5 - padY;
+                }
+                else
+                {
+                    // Auto-hide taskbar fallback: sit neatly along the bottom taskbar band
+                    double barH = Math.Max(spriteH + 8.0, 44.0);
+                    top = screenBounds.Bottom - barH + (barH - spriteH) * 0.5 - padY;
+                }
+            }
+            else if (normalized.StartsWith("bottom-", StringComparison.Ordinal))
+            {
+                // Above-taskbar corners/middle rest the mascot's feet flush on WorkArea.Bottom
+                top = workArea.Bottom - spriteH - padY;
+            }
+            else
+            {
+                top = workArea.Top + 8.0;
+            }
+
             return new Point(left, top);
         }
 
@@ -676,6 +723,7 @@ namespace AgyPet
             double dpiX, dpiY;
             GetDpiScale(out dpiX, out dpiY);
             Rect work = SystemParameters.WorkArea;
+            Rect screen = new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
             double spriteW = 11.0 * settings.PixelSize;
             double spriteH = 9.0 * settings.PixelSize;
             double petW = petHitArea.ActualWidth > 10 ? petHitArea.ActualWidth : (spriteW + StagePadX * 2);
@@ -702,13 +750,18 @@ namespace AgyPet
             }
             else
             {
-                Point cornerPt = PlaceInCorner(settings.MinimizedCorner, work, spriteW, spriteH, StagePadX, StagePadY);
+                Point cornerPt = PlaceInCorner(settings.MinimizedCorner, work, screen, spriteW, spriteH, StagePadX, StagePadY);
                 petLeft = cornerPt.X;
                 petTop = cornerPt.Y;
             }
 
+            bool allowTaskbarBand = !tracker.IsInFront && (settings.HasCustomFreePos ||
+                (settings.MinimizedCorner != null && settings.MinimizedCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase)));
+            double maxBottom = allowTaskbarBand ? Math.Max(work.Bottom, screen.Bottom) : work.Bottom;
+            double minTop = allowTaskbarBand ? Math.Min(work.Top, screen.Top) : work.Top;
+
             petLeft = Math.Max(work.Left - StagePadX * 0.5, Math.Min(work.Right - petW + StagePadX * 0.5, petLeft));
-            petTop = Math.Max(work.Top - StagePadY * 0.4, Math.Min(work.Bottom - spriteH - StagePadY, petTop));
+            petTop = Math.Max(minTop - StagePadY * 0.4, Math.Min(maxBottom - spriteH - StagePadY, petTop));
             return new Point(petLeft, petTop);
         }
 
@@ -721,10 +774,21 @@ namespace AgyPet
             RenderHoverContent();
 
             Rect work = SystemParameters.WorkArea;
-            bool openOnRight = Left < work.Left + CardWidth + 24;
-            hoverPopup.Placement = openOnRight ? PlacementMode.Right : PlacementMode.Left;
-            hoverPopup.VerticalOffset = 6;
-            hoverPopup.HorizontalOffset = openOnRight ? -10 : 10;
+            double spriteH = 9.0 * settings.PixelSize;
+            bool nearBottom = Top + StagePadY + spriteH > work.Bottom - 70;
+            if (nearBottom)
+            {
+                hoverPopup.Placement = PlacementMode.Top;
+                hoverPopup.VerticalOffset = -4;
+                hoverPopup.HorizontalOffset = 0;
+            }
+            else
+            {
+                bool openOnRight = Left < work.Left + CardWidth + 24;
+                hoverPopup.Placement = openOnRight ? PlacementMode.Right : PlacementMode.Left;
+                hoverPopup.VerticalOffset = 6;
+                hoverPopup.HorizontalOffset = openOnRight ? -10 : 10;
+            }
 
             if (!hoverPopup.IsOpen)
             {
@@ -843,18 +907,17 @@ namespace AgyPet
             skinMenu.Items.Add(CheckItem("Dark Remake (Monochrome)", settings.Skin == Mascot.DarkSkin, () => ApplySkin(Mascot.DarkSkin)));
             contextMenu.Items.Add(skinMenu);
 
-            var cornerMenu = new MenuItem { Header = "Corner When Away / Minimized" };
-            var corners = new[]
+            var cornerMenu = new MenuItem { Header = "Location When Away / Minimized" };
+            bool insertedSep = false;
+            foreach (var opt in PetSettings.AwayLocations)
             {
-                new[] { "Top-Right", "top-right" },
-                new[] { "Top-Left", "top-left" },
-                new[] { "Bottom-Right (Above Taskbar)", "bottom-right" },
-                new[] { "Bottom-Left (Above Taskbar)", "bottom-left" }
-            };
-            foreach (var c in corners)
-            {
-                string label = c[0], value = c[1];
-                cornerMenu.Items.Add(CheckItem(label, !settings.HasCustomFreePos && settings.MinimizedCorner == value, () => SetMinimizedCorner(value)));
+                if (!insertedSep && opt.Id.StartsWith("taskbar-", StringComparison.Ordinal))
+                {
+                    cornerMenu.Items.Add(new Separator());
+                    insertedSep = true;
+                }
+                string value = opt.Id;
+                cornerMenu.Items.Add(CheckItem(opt.Label, !settings.HasCustomFreePos && settings.MinimizedCorner == value, () => SetMinimizedCorner(value)));
             }
             contextMenu.Items.Add(cornerMenu);
 
@@ -962,14 +1025,30 @@ namespace AgyPet
             return br;
         }
 
+        void EnsureTopmost()
+        {
+            try
+            {
+                IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+            catch { }
+        }
+
         [StructLayout(LayoutKind.Sequential)]
         struct POINT { public int X, Y; }
 
+        static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        const uint SWP_NOSIZE = 0x0001;
+        const uint SWP_NOMOVE = 0x0002;
+        const uint SWP_NOACTIVATE = 0x0010;
         const int GWL_EXSTYLE = -20;
         const int WS_EX_TOOLWINDOW = 0x00000080;
         const int WS_EX_NOACTIVATE = 0x08000000;
         [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
         [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+        [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
         [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT lpPoint);
     }
 }

@@ -128,26 +128,45 @@ namespace AgyPet.Tests
                 }
             });
 
-            Run("Corner placement supports top and bottom taskbar corners across all sizes", () =>
+            Run("Away placement supports top/bottom corners and left/middle/right taskbar locations across all sizes", () =>
             {
                 AssertEq("top-right", PetSettings.NormalizeCorner(null));
                 AssertEq("top-left", PetSettings.NormalizeCorner("top-left"));
                 AssertEq("bottom-right", PetSettings.NormalizeCorner("bottom-right"));
+                AssertEq("bottom-center", PetSettings.NormalizeCorner("bottom-center"));
                 AssertEq("bottom-left", PetSettings.NormalizeCorner("bottom-left"));
+                AssertEq("taskbar-left", PetSettings.NormalizeCorner("taskbar-left"));
+                AssertEq("taskbar-center", PetSettings.NormalizeCorner("taskbar-center"));
+                AssertEq("taskbar-right", PetSettings.NormalizeCorner("taskbar-right"));
 
                 var work = new System.Windows.Rect(0, 0, 1920, 1032);
+                var screen = new System.Windows.Rect(0, 0, 1920, 1080);
                 foreach (double px in new[] { 3.2, 4.2, 5.2 })
                 {
                     double sw = 11.0 * px, sh = 9.0 * px;
-                    var br = PetWindow.PlaceInCorner("bottom-right", work, sw, sh, 32, 24);
-                    var bl = PetWindow.PlaceInCorner("bottom-left", work, sw, sh, 32, 24);
-                    var tl = PetWindow.PlaceInCorner("top-left", work, sw, sh, 32, 24);
-                    var tr = PetWindow.PlaceInCorner("top-right", work, sw, sh, 32, 24);
+                    var br = PetWindow.PlaceInCorner("bottom-right", work, screen, sw, sh, 32, 24);
+                    var bc = PetWindow.PlaceInCorner("bottom-center", work, screen, sw, sh, 32, 24);
+                    var bl = PetWindow.PlaceInCorner("bottom-left", work, screen, sw, sh, 32, 24);
+                    var tl = PetWindow.PlaceInCorner("top-left", work, screen, sw, sh, 32, 24);
+                    var tr = PetWindow.PlaceInCorner("top-right", work, screen, sw, sh, 32, 24);
+
+                    var tbl = PetWindow.PlaceInCorner("taskbar-left", work, screen, sw, sh, 32, 24);
+                    var tbc = PetWindow.PlaceInCorner("taskbar-center", work, screen, sw, sh, 32, 24);
+                    var tbr = PetWindow.PlaceInCorner("taskbar-right", work, screen, sw, sh, 32, 24);
 
                     AssertTrue(Math.Abs((br.Y + 24 + sh) - work.Bottom) < 0.01, "Bottom-right feet should rest directly above taskbar");
+                    AssertTrue(Math.Abs((bc.Y + 24 + sh) - work.Bottom) < 0.01, "Bottom-middle feet should rest directly above taskbar");
                     AssertTrue(Math.Abs((bl.Y + 24 + sh) - work.Bottom) < 0.01, "Bottom-left feet should rest directly above taskbar");
                     AssertTrue(Math.Abs(br.X - tr.X) < 0.01, "Bottom-right X should align with Top-Right X");
                     AssertTrue(Math.Abs(bl.X - tl.X) < 0.01, "Bottom-left X should align with Top-Left X");
+                    AssertTrue(Math.Abs((bc.X + 32 + sw * 0.5) - (work.Left + work.Width * 0.5)) < 0.01, "Bottom-middle should center horizontally");
+
+                    // On-taskbar placements sit centered vertically inside [work.Bottom .. screen.Bottom]
+                    double expectedCenterY = work.Bottom + (screen.Bottom - work.Bottom) * 0.5;
+                    AssertTrue(Math.Abs((tbl.Y + 24 + sh * 0.5) - expectedCenterY) < 0.01, "Taskbar-left should center vertically on taskbar");
+                    AssertTrue(Math.Abs((tbc.Y + 24 + sh * 0.5) - expectedCenterY) < 0.01, "Taskbar-center should center vertically on taskbar");
+                    AssertTrue(Math.Abs((tbr.Y + 24 + sh * 0.5) - expectedCenterY) < 0.01, "Taskbar-right should center vertically on taskbar");
+                    AssertTrue(Math.Abs(tbc.X - bc.X) < 0.01, "Taskbar-center X should match bottom-center X");
                 }
             });
 

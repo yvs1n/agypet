@@ -11,7 +11,7 @@ namespace AgyPet
         readonly PetSettings settings;
         readonly Updater updater;
         ToolStripMenuItem updateItem;
-        ToolStripMenuItem cornerTopRight, cornerTopLeft, cornerBottomRight, cornerBottomLeft;
+        ToolStripMenuItem locationMenu;
 
         public TrayMenu(PetWindow window, PetSettings settings, Updater updater)
         {
@@ -49,17 +49,14 @@ namespace AgyPet
 
         void RefreshCornerChecks()
         {
-            if (cornerTopRight == null) return;
+            if (locationMenu == null) return;
             bool custom = settings.HasCustomFreePos;
-            cornerTopRight.Checked = !custom && settings.MinimizedCorner == "top-right";
-            cornerTopLeft.Checked = !custom && settings.MinimizedCorner == "top-left";
-            cornerBottomRight.Checked = !custom && settings.MinimizedCorner == "bottom-right";
-            cornerBottomLeft.Checked = !custom && settings.MinimizedCorner == "bottom-left";
-        }
-
-        ToolStripMenuItem CornerItem(string label, string value)
-        {
-            return new ToolStripMenuItem(label, null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.SetMinimizedCorner(value))));
+            foreach (ToolStripItem item in locationMenu.DropDownItems)
+            {
+                var mi = item as ToolStripMenuItem;
+                if (mi != null && mi.Tag is string)
+                    mi.Checked = !custom && settings.MinimizedCorner == (string)mi.Tag;
+            }
         }
 
         ContextMenuStrip BuildMenu()
@@ -67,13 +64,23 @@ namespace AgyPet
             var menu = new ContextMenuStrip();
             menu.Items.Add("Skin: Classic (Official Colors)", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.ApplySkin(Mascot.ClassicSkin))));
             menu.Items.Add("Skin: Dark Remake (Monochrome)", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.ApplySkin(Mascot.DarkSkin))));
-            var cornerMenu = new ToolStripMenuItem("Corner When Away / Minimized");
-            cornerTopRight = CornerItem("Top-Right", "top-right");
-            cornerTopLeft = CornerItem("Top-Left", "top-left");
-            cornerBottomRight = CornerItem("Bottom-Right (Above Taskbar)", "bottom-right");
-            cornerBottomLeft = CornerItem("Bottom-Left (Above Taskbar)", "bottom-left");
-            cornerMenu.DropDownItems.AddRange(new ToolStripItem[] { cornerTopRight, cornerTopLeft, cornerBottomRight, cornerBottomLeft });
-            menu.Items.Add(cornerMenu);
+            locationMenu = new ToolStripMenuItem("Location When Away / Minimized");
+            bool addedSep = false;
+            foreach (var opt in PetSettings.AwayLocations)
+            {
+                if (!addedSep && opt.Id.StartsWith("taskbar-", StringComparison.Ordinal))
+                {
+                    locationMenu.DropDownItems.Add(new ToolStripSeparator());
+                    addedSep = true;
+                }
+                string value = opt.Id;
+                var mi = new ToolStripMenuItem(opt.Label, null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.SetMinimizedCorner(value))))
+                {
+                    Tag = value
+                };
+                locationMenu.DropDownItems.Add(mi);
+            }
+            menu.Items.Add(locationMenu);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Reset Position", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(window.ResetPosition)));
             updateItem = new ToolStripMenuItem("Check for Updates", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => { if (updater != null) updater.CheckNow(); })));

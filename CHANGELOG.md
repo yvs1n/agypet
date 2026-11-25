@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.1 (2026-11-26)
+- **Along-the-Taskbar & Bottom-Middle Dock Locations** (suggested by `@Bobdo-b` in #1):
+  - Added **Taskbar · Left**, **Taskbar · Middle**, and **Taskbar · Right** — docks AgyPet vertically centered directly inside the Windows taskbar strip (works for bottom, top, and auto-hide taskbars, with automatic `HWND_TOPMOST` layering).
+  - Added **Bottom-Middle (Above Taskbar)** alongside **Bottom-Left** and **Bottom-Right**.
+  - Updated hover card placement to pop cleanly **above** the mascot whenever docked at the bottom or along the taskbar so status details never clip behind the taskbar.
+
 ## 0.2.0 (2026-11-26)
 - **19 live reactions** (added `Delegating` for subagents/swarms/workflows, `Happy` rising pixel hearts on user praise, and `Error` with `X X` eyes and red `!` badge).
 - **Sustained Turn Sentiment Moods (`Angry` & `Sad`)**: Detects hostility/ALL-CAPS shouting (`Angry` crimson tint + `\ /` brows) and insults (`Sad` muted-blue tint + `/ \` brows) across active working steps until the turn ends, while cleanly ignoring code blocks, URLs, file paths, and SQL queries.
