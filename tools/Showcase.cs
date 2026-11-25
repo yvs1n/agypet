@@ -17,11 +17,11 @@ namespace AgyPet.Tools
 
             RenderSheet(Path.Combine(outDir, "showcase-classic.png"), Mascot.ClassicSkin,
                 "AgyPet · Classic Antigravity Skin",
-                "Refined CLI pixel arch in official Antigravity logo colors — all 11 live reactions");
+                "Refined CLI pixel arch in official Antigravity logo colors — all 16 live reactions");
 
             RenderSheet(Path.Combine(outDir, "showcase-dark.png"), Mascot.DarkSkin,
                 "AgyPet · Dark Remake Skin",
-                "Monochrome obsidian & silver remake with luminous eyes — all 11 live reactions");
+                "Monochrome obsidian & silver remake with luminous eyes — all 16 live reactions");
 
             string siteDir = args.Length > 1 ? args[1] : Path.GetFullPath(Path.Combine(outDir, "..", "site"));
             Directory.CreateDirectory(siteDir);
@@ -302,7 +302,7 @@ namespace AgyPet.Tools
 
         static void RenderSheet(string outPath, string skin, string title, string subtitle)
         {
-            const int W = 1200, H = 680;
+            const int W = 1200, H = 796;
             var root = new Border
             {
                 Width = W,
@@ -312,7 +312,7 @@ namespace AgyPet.Tools
             };
 
             var stack = new StackPanel();
-            var header = new Grid { Margin = new Thickness(0, 0, 0, 22) };
+            var header = new Grid { Margin = new Thickness(0, 0, 0, 20) };
             var titleStack = new StackPanel();
             titleStack.Children.Add(new TextBlock
             {
@@ -343,7 +343,7 @@ namespace AgyPet.Tools
                 Padding = new Thickness(14, 6, 14, 6),
                 Child = new TextBlock
                 {
-                    Text = skin == Mascot.DarkSkin ? "DARK REMAKE" : "OFFICIAL COLORS",
+                    Text = skin == Mascot.DarkSkin ? "DARK REMAKE · 16 REACTIONS" : "OFFICIAL COLORS · 16 REACTIONS",
                     Foreground = skin == Mascot.DarkSkin ? BrushHex(0xE4, 0xE4, 0xE7) : BrushHex(0x60, 0xA5, 0xFA),
                     FontSize = 11.5,
                     FontWeight = FontWeights.SemiBold,
@@ -355,30 +355,35 @@ namespace AgyPet.Tools
 
             var grid = new Grid();
             for (int c = 0; c < 4; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int r = 0; r < 3; r++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(182) });
+            for (int r = 0; r < 4; r++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(166) });
 
             var moods = new[]
             {
-                Tuple.Create(MascotMood.Idle, "Idle", "At rest · Ready", 4),
-                Tuple.Create(MascotMood.Sleeping, "Sleeping", "Idle · Quiet", 24),
-                Tuple.Create(MascotMood.Listening, "Listening", "Hearing you", 8),
-                Tuple.Create(MascotMood.Thinking, "Thinking", "Planning answer", 12),
-                Tuple.Create(MascotMood.Speaking, "Speaking", "Reading aloud", 9),
-                Tuple.Create(MascotMood.Searching, "Searching", "Looking up", 11),
-                Tuple.Create(MascotMood.Reading, "Reading", "Scanning code", 6),
-                Tuple.Create(MascotMood.Working, "Working", "Editing & running", 14),
+                Tuple.Create(MascotMood.Typing, "Typing", "Agent or you typing", 6),
+                Tuple.Create(MascotMood.Thinking, "Thinking", "Planning steps", 12),
+                Tuple.Create(MascotMood.Working, "Working", "Editing & writing code", 14),
+                Tuple.Create(MascotMood.Terminal, "Terminal", "Running commands", 10),
+                Tuple.Create(MascotMood.Browsing, "Browsing", "Live browser steps", 8),
+                Tuple.Create(MascotMood.Reading, "Reading", "Scanning files", 6),
+                Tuple.Create(MascotMood.Searching, "Searching", "Docs & web search", 11),
+                Tuple.Create(MascotMood.Listening, "Listening", "Voice & dictation", 8),
+                Tuple.Create(MascotMood.Speaking, "Speaking", "Voice reply aloud", 9),
+                Tuple.Create(MascotMood.Multitasking, "Multitasking", "2+ active sessions", 14),
+                Tuple.Create(MascotMood.Background, "Background", "Live server running", 10),
                 Tuple.Create(MascotMood.Alert, "Alert", "Needs approval", 5),
-                Tuple.Create(MascotMood.Question, "Question", "Asking a choice", 7),
+                Tuple.Create(MascotMood.Question, "Question", "Waiting on choice", 7),
                 Tuple.Create(MascotMood.Done, "Done", "Task complete", 4),
+                Tuple.Create(MascotMood.Idle, "Idle", "Ready at rest", 4),
+                Tuple.Create(MascotMood.Sleeping, "Sleeping", "Extended quiet", 24),
             };
 
             for (int i = 0; i < moods.Length; i++)
             {
                 var m = moods[i];
-                var mascot = new Mascot(5.0, skin) { Mood = m.Item1 };
+                var mascot = new Mascot(4.6, skin) { Mood = m.Item1 };
                 mascot.Snap(m.Item4);
 
-                var mascotHost = new Grid { Height = 82, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+                var mascotHost = new Grid { Height = 74, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
                 mascotHost.Children.Add(mascot);
 
                 var cardInner = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
@@ -387,10 +392,10 @@ namespace AgyPet.Tools
                 {
                     Text = m.Item2,
                     Foreground = BrushHex(0xF8, 0xFA, 0xFC),
-                    FontSize = 14.5,
+                    FontSize = 14,
                     FontWeight = FontWeights.SemiBold,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    Margin = new Thickness(0, 12, 0, 2),
+                    Margin = new Thickness(0, 8, 0, 2),
                     FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
                 });
                 cardInner.Children.Add(new TextBlock
@@ -408,19 +413,13 @@ namespace AgyPet.Tools
                     BorderBrush = new SolidColorBrush(Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF)),
                     BorderThickness = new Thickness(1),
                     CornerRadius = new CornerRadius(14),
-                    Margin = new Thickness(7),
+                    Margin = new Thickness(6),
                     Child = cardInner,
                 };
                 Grid.SetRow(tile, i / 4);
                 Grid.SetColumn(tile, i % 4);
                 grid.Children.Add(tile);
             }
-
-            // 12th tile: Hover Progress Card preview
-            var progressTile = BuildHoverCardPreviewTile(skin);
-            Grid.SetRow(progressTile, 2);
-            Grid.SetColumn(progressTile, 3);
-            grid.Children.Add(progressTile);
 
             stack.Children.Add(grid);
             root.Child = stack;
