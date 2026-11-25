@@ -1,0 +1,12 @@
+name: Reaction / Feature Idea
+description: Suggest a new mascot reaction, skin, or feature
+title: "[AgyPet Idea] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: Describe your idea
+      placeholder: What Antigravity state, reaction animation, or feature would you like?
+    validations:
+      required: true

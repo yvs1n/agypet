@@ -1,0 +1,18 @@
+# AgyPet — Live Pixel Companion for Google Antigravity
+
+> Lightweight Windows desktop mascot overlay for Google Antigravity App, Antigravity IDE, and Antigravity CLI (`agy`).
+
+- Author: Yassin Ragab (https://yassinr.me)
+- Built with: Google Antigravity (https://antigravity.google)
+- License: MIT
+- Platform: Windows 10 / Windows 11 (native .NET Framework 4.x WPF executable, zero external runtime dependencies)
+
+## What AgyPet Does
+- Perches cleanly on top of the active Antigravity chat composer card and moves smoothly as attachments or multi-line prompts grow.
+- Reacts in real time across 16 animations: Typing, Thinking, Working, Terminal, Browsing, Reading, Searching, Listening, Speaking, Multitasking, Background, Alert, Question, Done, Idle, and Sleeping.
+- Matches the exact open conversation by window title, detects user typing and dictation, and flips between Listening and Speaking during Voice Mode.
+- Glides to your chosen screen corner on Alt+Tab or minimize, shows a scrollable multi-session progress card on hover, and juggles orbiting orbs when 2+ sessions run simultaneously.
+- Includes two skins: Classic Official (Antigravity radial logo colors) and Dark Remake (obsidian monochrome).
+
+## Privacy
+- Reads local Antigravity SQLite state (`conversation_summaries.db`) and `transcript.jsonl` strictly read-only. Zero telemetry, zero cloud calls, zero modifications to Antigravity files.

@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
+  <meta name="color-scheme" content="light dark" />
+  <script>
+    document.documentElement.classList.add("js");
+    try {
+      document.querySelector('meta[name="color-scheme"]').content = localStorage.getItem("color-scheme") ?? "light dark";
+    } catch {}
+  </script>
+  <title>AgyPet: Live Pixel Companion for Google Antigravity</title>
+  <meta name="description" content="A lightweight Windows pixel-art companion by Yassin Ragab that perches on your Google Antigravity chatbox, reacts to 16 live agent and user states, and tracks multi-session progress when minimized." />
+  <meta name="keywords" content="AgyPet, Google Antigravity, Antigravity IDE, Antigravity mascot, desktop pet, pixel companion, AI coding assistant overlay, Yassin Ragab" />
+  <meta name="author" content="Yassin Ragab" />
+  <meta name="creator" content="Yassin Ragab" />
+  <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f6f8fb" />
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0d12" />
+
+  <!-- Favicons -->
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="./favicon.ico" sizes="any" />
+  <link rel="icon" href="./favicon-32x32.png" sizes="32x32" type="image/png" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="AgyPet" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:title" content="AgyPet: Live Pixel Companion for Google Antigravity" />
+  <meta property="og:description" content="16 live reactions, per-chat & voice sync, adaptive chatbox perch, and scrollable multi-session progress tracking. Made by Yassin Ragab for Antigravity." />
+  <meta property="og:image" content="./og-screen.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="AgyPet floating pixel mascot perched on Google Antigravity chatbox with Classic Official and Dark Remake skins" />
+
+  <!-- Twitter / X Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="AgyPet: Live Pixel Companion for Google Antigravity" />
+  <meta name="twitter:description" content="16 live reactions, per-chat & voice sync, adaptive chatbox perch, and scrollable multi-session progress tracking. Made by Yassin Ragab." />
+  <meta name="twitter:image" content="./og-screen.png" />
+  <meta name="twitter:image:alt" content="AgyPet floating pixel mascot perched on Google Antigravity chatbox" />
+
+  <!-- GEO (Generative Engine Optimization) Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "name": "AgyPet",
+        "applicationCategory": "DeveloperApplication",
+        "operatingSystem": "Windows 10, Windows 11",
+        "softwareVersion": "1.0",
+        "license": "https://opensource.org/licenses/MIT",
+        "description": "A zero-dependency Windows pixel-art companion overlay for Google Antigravity App, Antigravity IDE, and Antigravity CLI that perches above the chatbox, reacts across 16 states, and displays scrollable multi-session progress when minimized.",
+        "featureList": [
+          "16 live reactions: Typing, Thinking, Working, Terminal, Browsing, Reading, Searching, Listening, Speaking, Multitasking, Background, Alert, Question, Done, Idle, Sleeping",
+          "Per-chat awareness matching the currently focused Antigravity conversation",
+          "Live Voice Mode and dictation sync (Listening vs Speaking)",
+          "Scrollable multi-session hover progress card when minimized or Alt+Tabbed away",
+          "Classic Official and Dark Remake pixel skins"
+        ],
+        "screenshot": "./og-screen.png",
+        "offers": {
+          "@type": "Offer",
+          "price": "0",
+          "priceCurrency": "USD"
+        },
+        "author": {
+          "@type": "Person",
+          "name": "Yassin Ragab",
+          "url": "https://yassinr.me"
+        },
+        "isRelatedTo": {
+          "@type": "SoftwareApplication",
+          "name": "Google Antigravity",
+          "url": "https://antigravity.google"
+        }
+      },
+      {
+        "@type": "FAQPage",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is AgyPet and how does it work with Google Antigravity?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "AgyPet is a lightweight native Windows WPF overlay that perches above the Google Antigravity chatbox without modifying Antigravity files or using side-panel space. It reads local Antigravity SQLite session summaries and transcripts read-only to react to 16 live agent and user states."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "What happens when I Alt+Tab out or minimize Antigravity?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "AgyPet leaves the chatbox and glides to your chosen screen corner. If 2 or more sessions are active simultaneously, it switches to the Multitasking animation and hovering displays a scrollable card tracking every active session with exact step percentages."
+            }
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="surface-grid">
+  <header class="nav-wrap">
+    <nav class="pill-nav" aria-label="Primary">
+      <a class="brand" href="#top">
+        <canvas id="nav-mascot" width="28" height="24" aria-hidden="true"></canvas>
+        <span>AgyPet</span>
+      </a>
+
+      <div class="nav-links" id="pill-nav-links">
+        <div class="nav-bar" id="nav-bar" aria-hidden="true"></div>
+        <a class="nav-item" href="#demo">Workspace</a>
+        <a class="nav-item" href="#moods">16 reactions</a>
+        <a class="nav-item" href="#skins">Skins</a>
+        <a class="nav-item" href="#feedback">Feedback</a>
+      </div>
+
+      <div class="nav-actions">
+        <div class="skin-switch nav-desktop-only" role="group" aria-label="Mascot skin">
+          <button type="button" class="skin-btn" data-skin="classic" aria-pressed="true">Classic</button>
+          <button type="button" class="skin-btn" data-skin="dark" aria-pressed="false">Dark</button>
+        </div>
+
+        <button type="button" class="icon-btn" id="theme-toggle" title="Switch color scheme">
+          <span class="sr-only" id="theme-label">Switch color scheme</span>
+          <span class="icon-swap" id="icon-sun" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/></svg>
+          </span>
+          <span class="icon-swap is-hidden" id="icon-moon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+          </span>
+        </button>
+
+        <a class="btn-primary btn-nav nav-desktop-only" href="#install">Get AgyPet</a>
+
+        <button type="button" class="icon-btn mobile-menu-btn" id="menu-toggle" aria-expanded="false" aria-controls="mobile-drawer" title="Menu">
+          <span class="sr-only">Toggle navigation menu</span>
+          <span class="icon-swap" id="icon-menu" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+          </span>
+          <span class="icon-swap is-hidden" id="icon-close" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+          </span>
+        </button>
+      </div>
+    </nav>
+  </header>
+
+  <!-- Mobile Navigation Drawer (100dvh) -->
+  <div class="mobile-drawer" id="mobile-drawer" hidden>
+    <a class="drawer-link" href="#demo">Interactive workspace</a>
+    <a class="drawer-link" href="#moods">16 live reactions</a>
+    <a class="drawer-link" href="#skins">Official skins</a>
+    <a class="drawer-link" href="#feedback">Feedback</a>
+    <div class="drawer-row">
+      <span>Mascot skin</span>
+      <div class="skin-switch" role="group" aria-label="Mobile mascot skin">
+        <button type="button" class="skin-btn" data-skin="classic" aria-pressed="true">Classic</button>
+        <button type="button" class="skin-btn" data-skin="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+    <a class="btn-primary" href="https://github.com/yvs1n/agypet/releases/latest/download/AgyPet.exe" target="_blank" rel="noopener noreferrer">Download AgyPet.exe</a>
+  </div>
+
+  <main id="top">
+    <section class="hero" id="demo">
+      <div class="container">
+        <div class="hero-top">
+          <div class="hero-copy">
+            <h1 class="hero-title">A live pixel companion inside Antigravity.</h1>
+            <p class="hero-sub">Tracks each open chat, voice mode, typing, and background servers.</p>
+          </div>
+          <div class="hero-actions" id="install">
+            <a class="btn-primary" href="https://github.com/yvs1n/agypet/releases/latest/download/AgyPet.exe" target="_blank" rel="noopener noreferrer">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span>Download AgyPet.exe</span>
+            </a>
+            <div class="cmd-pill">
+              <code>.\build.ps1</code>
+              <button type="button" class="copy-btn" id="copy-cmd" aria-label="Copy build command">
+                <span class="icon-swap" id="icon-copy" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                </span>
+                <span class="icon-swap is-hidden" id="icon-check" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Full-Width Interactive Antigravity 2.0 App Simulation -->
+        <div class="sim-frame">
+          <div class="sim-controls">
+            <div class="sim-group" role="group" aria-label="Simulate window state">
+              <button type="button" class="chip-btn" id="btn-in-app" aria-pressed="true">In Antigravity</button>
+              <button type="button" class="chip-btn" id="btn-away-multi" aria-pressed="false">Minimized (3 sessions)</button>
+              <button type="button" class="chip-btn" id="btn-away-one" aria-pressed="false">Minimized (1 session)</button>
+            </div>
+
+            <div class="sim-group" role="group" aria-label="Mascot size and motion">
+              <button type="button" class="chip-btn size-btn" data-size="3.2" aria-pressed="false">Small</button>
+              <button type="button" class="chip-btn size-btn" data-size="4.2" aria-pressed="true">Medium</button>
+              <button type="button" class="chip-btn size-btn" data-size="5.2" aria-pressed="false">Large</button>
+              <button type="button" class="icon-btn icon-btn-sm" id="motion-toggle" title="Pause motion">
+                <span class="sr-only" id="motion-label">Pause motion</span>
+                <span class="icon-swap" id="icon-pause" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="10" y1="5" x2="10" y2="19"/><line x1="14" y1="5" x2="14" y2="19"/></svg>
+                </span>
+                <span class="icon-swap is-hidden" id="icon-play" aria-hidden="true">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 4 20 12 6 20 6 4"/></svg>
+                </span>
+              </button>
+            </div>
+          </div>
+
+          <div class="sim-viewport" id="stage-viewport">
+            <!-- Away / Minimized Desktop Overlay -->
+            <div class="away-banner" id="away-banner">
+              <p id="away-copy">Antigravity minimized: AgyPet glides to your corner and juggles multiple active sessions. Hover him to scroll every task.</p>
+              <button type="button" class="btn-ghost" id="btn-restore-app">Return to Antigravity</button>
+            </div>
+
+            <!-- Scrollable Multi-Session Hover Card (active ONLY when away/minimized) -->
+            <div class="stage-hover-card" id="stage-hover-card" role="region" aria-label="Active Antigravity sessions">
+              <div class="hover-hdr">
+                <span id="hover-count">3 active sessions</span>
+                <span id="hover-scroll-hint">Scroll</span>
+              </div>
+              <div class="hover-scroll" id="hover-scroll" tabindex="0"></div>
+            </div>
+
+            <!-- Live Floating Mascot Actor -->
+            <button type="button" class="stage-pet" id="stage-pet" aria-label="Press AgyPet mascot">
+              <canvas id="hero-mascot" width="104" height="82" aria-hidden="true"></canvas>
+            </button>
+
+            <!-- Simulated Antigravity 2.0 Application Shell -->
+            <div class="agy-app" id="mock-app">
+              <aside class="agy-sidebar" role="tablist" aria-label="Simulated Antigravity chats">
+                <div class="sidebar-label">Conversations</div>
+                <button type="button" class="chat-tab" role="tab" data-chat="overlay" aria-selected="true">
+                  <span class="chat-tab-title">AgyPet Overlay</span>
+                  <span class="chat-tab-meta">Agent typing (75%)</span>
+                </button>
+                <button type="button" class="chat-tab" role="tab" data-chat="server" aria-selected="false">
+                  <span class="chat-tab-title">Live Dev Server</span>
+                  <span class="chat-tab-meta">Server active</span>
+                </button>
+                <button type="button" class="chat-tab" role="tab" data-chat="sandbox" aria-selected="false">
+                  <span class="chat-tab-title">Idle Sandbox</span>
+                  <span class="chat-tab-meta">Try typing</span>
+                </button>
+                <button type="button" class="chat-tab" role="tab" data-chat="voice" aria-selected="false">
+                  <span class="chat-tab-title">Voice Mode</span>
+                  <span class="chat-tab-meta">Voice sync</span>
+                </button>
+                <div class="sidebar-label">Workspace</div>
+                <button type="button" class="chat-tab" role="tab" data-chat="settings" aria-selected="false">
+                  <span class="chat-tab-title">Settings</span>
+                  <span class="chat-tab-meta">Corner park</span>
+                </button>
+              </aside>
+
+              <div class="agy-main">
+                <div class="agy-topbar">
+                  <span class="agy-chat-heading" id="chat-heading">AgyPet Overlay</span>
+                  <span class="agy-status-text" id="chat-status">Agent typing a reply (click mascot above box)</span>
+                </div>
+
+                <div class="agy-thread" id="agy-thread">
+                  <div class="msg-user" id="msg-user">Add live chat detection and a subtle press reaction.</div>
+                  <div class="msg-agent" id="msg-agent">Writing updated window tracking and 16 native reactions into Mascot.cs…</div>
+
+                  <div class="voice-bar" id="voice-bar">
+                    <button type="button" class="chip-btn" id="voice-user-btn" aria-pressed="true">You speak</button>
+                    <button type="button" class="chip-btn" id="voice-agent-btn" aria-pressed="false">Agent speaks</button>
+                  </div>
+
+                  <div class="settings-pane" id="settings-pane">
+                    <div class="setting-row"><span>Tool execution policy</span><span>Request review</span></div>
+                    <div class="setting-row"><span>Terminal sandbox</span><span>Enabled</span></div>
+                    <div class="setting-row"><span>Mascot behavior</span><span>Parked calmly in corner when no chatbox is visible</span></div>
+                  </div>
+                </div>
+
+                <div class="composer-card" id="composer-card">
+                  <div class="attachment-row" id="attachment-row"></div>
+                  <textarea class="composer-input" id="composer-input" rows="1" placeholder="Type in Idle Sandbox to see Typing, or add an attachment…"></textarea>
+                  <div class="composer-foot">
+                    <div class="composer-tools">
+                      <button type="button" class="mini-action" id="add-attachment">+ Attachment</button>
+                      <button type="button" class="mini-action" id="dictation-btn" aria-pressed="false">Dictation mic</button>
+                      <button type="button" class="mini-action" id="cycle-mood">Mood: Typing</button>
+                    </div>
+                    <span class="session-pct">Antigravity 2.0</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 16 Live Reactions Strip -->
+    <section class="section" id="moods">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">Sixteen live reactions for everything Antigravity does</h2>
+            <p class="section-desc">Click any card to preview it live above the simulated Antigravity chatbox.</p>
+          </div>
+        </div>
+      </div>
+      <div class="container carousel-frame">
+        <div class="mood-strip" id="mood-strip" role="group" aria-label="Sixteen mascot reactions"></div>
+      </div>
+    </section>
+
+    <!-- Two Official Skins -->
+    <section class="section section-alt" id="skins">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">Two skins crafted from the official Antigravity marks</h2>
+            <p class="section-desc">Switch instantly from the right-click menu or system tray without restarting.</p>
+          </div>
+        </div>
+
+        <div class="skins-grid">
+          <article class="skin-card reveal-on-scroll">
+            <div class="skin-preview">
+              <canvas class="skin-sample" data-skin="classic" data-mood="Typing" width="88" height="72" aria-hidden="true"></canvas>
+              <canvas class="skin-sample" data-skin="classic" data-mood="Multitasking" width="88" height="72" aria-hidden="true"></canvas>
+              <canvas class="skin-sample" data-skin="classic" data-mood="Terminal" width="96" height="72" aria-hidden="true"></canvas>
+            </div>
+            <div class="skin-meta">
+              <div>
+                <h3>Classic Official</h3>
+                <p>Refined CLI pixel arch in radial gold, emerald, coral, and royal-blue logo colors.</p>
+              </div>
+              <button type="button" class="btn-ghost try-skin-btn" data-try-skin="classic">Try skin</button>
+            </div>
+          </article>
+
+          <article class="skin-card reveal-on-scroll">
+            <div class="skin-preview">
+              <canvas class="skin-sample" data-skin="dark" data-mood="Typing" width="88" height="72" aria-hidden="true"></canvas>
+              <canvas class="skin-sample" data-skin="dark" data-mood="Multitasking" width="88" height="72" aria-hidden="true"></canvas>
+              <canvas class="skin-sample" data-skin="dark" data-mood="Terminal" width="96" height="72" aria-hidden="true"></canvas>
+            </div>
+            <div class="skin-meta">
+              <div>
+                <h3>Dark Remake</h3>
+                <p>Obsidian-to-graphite metallic arch with rim highlights, luminous white eyes, and monochrome props.</p>
+              </div>
+              <button type="button" class="btn-ghost try-skin-btn" data-try-skin="dark">Try skin</button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Asymmetric Details Grid -->
+    <section class="section" id="features">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">Context-aware across chats, voice, and background servers</h2>
+            <p class="section-desc">Zero Electron bloat, zero side-panel clutter, and zero edits to Antigravity’s files.</p>
+          </div>
+        </div>
+
+        <div class="bento-grid">
+          <article class="feature-card reveal-on-scroll">
+            <div class="feature-head">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <h3 class="feature-title">Per-chat awareness and voice sync</h3>
+            </div>
+            <p class="feature-body">Matches the exact conversation you are viewing. Shows Typing when either you or the agent is writing, Listening during dictation, and flips live between Listening and Speaking in Voice Mode.</p>
+          </article>
+
+          <article class="feature-card reveal-on-scroll">
+            <div class="feature-head">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+              <h3 class="feature-title">Multitasking and live servers</h3>
+            </div>
+            <p class="feature-body">Juggles orbiting tasks when minimized with multiple active sessions, follows a single session directly, and displays a calm server rack when a finished chat keeps a live server running.</p>
+          </article>
+
+          <article class="feature-card feature-wide reveal-on-scroll">
+            <div class="feature-head">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <h3 class="feature-title">Adaptive perch with subtle press physics</h3>
+            </div>
+            <p class="feature-body">Compiles in two seconds via Windows’ built-in .NET compiler. Tracks the outer composer card as attachments or multi-line prompts grow across Small, Medium, and Large sizes, parks calmly when you open Settings, and gives a subtle wince when pressed above the chatbox.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feedback Section -->
+    <section class="section section-alt" id="feedback">
+      <div class="container">
+        <div class="feedback-grid">
+          <div>
+            <h2 class="section-title">Suggest a reaction or share feedback</h2>
+            <p class="section-desc">Spotted a bug, or have an idea for a new Antigravity state or skin? Send it straight from here or from the AgyPet tray menu.</p>
+          </div>
+
+          <form class="feedback-card reveal-on-scroll" id="feedback-form" novalidate>
+            <div class="feedback-field">
+              <span class="field-label" id="fb-cat-label">Category</span>
+              <div class="sim-group" role="group" aria-labelledby="fb-cat-label">
+                <button type="button" class="chip-btn fb-cat" data-cat="Reaction Idea" aria-pressed="true">Reaction idea</button>
+                <button type="button" class="chip-btn fb-cat" data-cat="Feature Request" aria-pressed="false">Feature</button>
+                <button type="button" class="chip-btn fb-cat" data-cat="Bug Report" aria-pressed="false">Bug report</button>
+                <button type="button" class="chip-btn fb-cat" data-cat="General" aria-pressed="false">General</button>
+              </div>
+            </div>
+
+            <div class="feedback-field">
+              <label class="field-label" for="feedback-msg">Your feedback</label>
+              <textarea class="feedback-input" id="feedback-msg" rows="3" placeholder="Tell us what reaction or improvement you want next…"></textarea>
+            </div>
+
+            <div class="feedback-actions">
+              <button type="submit" class="btn-primary">Submit via GitHub</button>
+              <button type="button" class="btn-ghost" id="feedback-copy">Copy message</button>
+              <span class="feedback-status" id="feedback-status" role="status" aria-live="polite"></span>
+            </div>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <p class="footer-credit">Made by <a class="credit-link" href="https://yassinr.me" target="_blank" rel="noopener noreferrer">Yassin Ragab</a> for <a class="credit-link" href="https://antigravity.google" target="_blank" rel="noopener noreferrer">Antigravity</a>, built with Antigravity.</p>
+      <div class="footer-links">
+        <a href="#demo">Workspace</a>
+        <a href="#moods">16 reactions</a>
+        <a href="#skins">Skins</a>
+        <a href="#feedback">Feedback</a>
+        <a href="https://yassinr.me" target="_blank" rel="noopener noreferrer">yassinr.me</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="./app.js"></script>
+</body>
+</html>

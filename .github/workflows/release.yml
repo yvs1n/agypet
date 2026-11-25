@@ -1,0 +1,84 @@
+name: Release
+
+# Automatically builds, tests, attests, and publishes AgyPet.exe to GitHub Releases:
+#  - Push a tag like v0.1.0 -> creates release v0.1.0
+#  - Push to main -> publishes v<AssemblyVersion> if that release doesn't exist yet (or run manually anytime!)
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  workflow_dispatch:
+    inputs:
+      tag_override:
+        description: 'Optional release tag override (defaults to v<AssemblyVersion>)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve version tag
+        id: ver
+        shell: pwsh
+        run: |
+          $asm = Get-Content src/AssemblyInfo.cs -Raw
+          if ($asm -match 'AssemblyVersion\("(\d+\.\d+\.\d+)\.\d+"\)') {
+            $ver = $Matches[1]
+          } else {
+            throw "Could not parse AssemblyVersion from src/AssemblyInfo.cs"
+          }
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $tag = $env:GITHUB_REF_NAME
+          } elseif ('${{ inputs.tag_override }}' -ne '') {
+            $tag = '${{ inputs.tag_override }}'
+          } else {
+            $tag = "v$ver"
+          }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Run unit tests
+        run: ./build.ps1 -Test
+
+      - name: Build AgyPet.exe
+        run: ./build.ps1
+
+      - name: Generate release notes
+        run: ./tools/release-notes.ps1 -Tag "${{ steps.ver.outputs.tag }}" -Exe bin/AgyPet.exe -Out bin/notes.md
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: bin/AgyPet.exe
+
+      - name: Create or update GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $tag = "${{ steps.ver.outputs.tag }}"
+          $title = "AgyPet $($tag.TrimStart('v'))"
+          $exists = $false
+          try {
+            gh release view $tag 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) { $exists = $true }
+          } catch {}
+
+          if ($exists) {
+            if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -or $env:GITHUB_REF_TYPE -eq 'tag') {
+              gh release upload $tag bin/AgyPet.exe --clobber
+              gh release edit $tag --title $title --notes-file bin/notes.md
+            } else {
+              Write-Host "Release $tag already exists on GitHub; skipping overwrite on regular main push."
+            }
+          } else {
+            gh release create $tag bin/AgyPet.exe --title $title --notes-file bin/notes.md
+          }

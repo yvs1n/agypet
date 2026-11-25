@@ -1,0 +1,25 @@
+name: Bug Report
+description: Report a bug or visual glitch in AgyPet
+title: "[AgyPet Bug] "
+labels: ["bug"]
+body:
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Antigravity Surface
+      options:
+        - Antigravity 2.0 App
+        - Antigravity IDE
+        - Antigravity CLI (agy)
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      placeholder: Describe the issue and steps to reproduce...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: AgyPet Version & Skin
+      placeholder: e.g. v0.1.0, Classic / Dark Remake

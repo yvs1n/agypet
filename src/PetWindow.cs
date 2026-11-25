@@ -1,0 +1,888 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
+using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Shapes;
+using System.Windows.Threading;
+
+namespace AgyPet
+{
+    // Floating, always-on-top transparent companion overlay:
+    //  - Perches cleanly on top-right of Antigravity's chatbox (adapts to attachments, growth & all 3 sizes)
+    //  - Click/poke him in the app for a "hurt/ouch" fidget reaction that preserves his current status!
+    //  - Leaves the chatbox on Alt+Tab / minimize; hover outside app shows accurate multi-session progress
+    //    (scrollable automatically when > 2 sessions are running!)
+    class PetWindow : Window
+    {
+        readonly PetSettings settings;
+        readonly ActivityMonitor monitor;
+        readonly Updater updater;
+        readonly WindowTracker tracker = new WindowTracker();
+
+        readonly Canvas stage = new Canvas { ClipToBounds = false };
+        readonly Border petHitArea;
+
+        // Independent Popup for the hover status card (never shifts PetWindow's Left/Top!)
+        readonly Popup hoverPopup;
+        readonly Border hoverCard;
+        readonly StackPanel cardHeaderWrap = new StackPanel();
+        readonly ScrollViewer sessionScroll;
+        readonly StackPanel sessionList = new StackPanel();
+
+        Mascot mascot;
+        readonly DispatcherTimer pollTimer;
+        readonly DispatcherTimer animTimer;
+        readonly DispatcherTimer hoverLeaveTimer;
+
+        bool mouseDown;
+        bool dragging;
+        POINT dragStartCursor;
+        double dragStartLeft, dragStartTop;
+        bool wasOnChatScreen;
+        bool userMovedWhileInFront;
+        bool contextMenuOpen;
+        bool externalMenuOpen;
+        DateTime menuCooldownUntil = DateTime.MinValue;
+        readonly ContextMenu contextMenu = new ContextMenu();
+
+        bool previewMode;
+        MascotMood previewMood = MascotMood.Idle;
+        double targetLeft = double.NaN, targetTop = double.NaN;
+        DateTime lastAnimTime = DateTime.UtcNow;
+
+        const double StagePadX = 32;
+        const double StagePadY = 24;
+        const double CardWidth = 264;
+        const double DragThresholdPx = 5.0;
+
+        public PetWindow(PetSettings settings, ActivityMonitor monitor, Updater updater)
+        {
+            this.settings = settings;
+            this.monitor = monitor;
+            this.updater = updater;
+
+            Title = "AgyPet";
+            WindowStyle = WindowStyle.None;
+            AllowsTransparency = true;
+            Background = Brushes.Transparent;
+            Topmost = true;
+            ShowInTaskbar = false;
+            ResizeMode = ResizeMode.NoResize;
+            SizeToContent = SizeToContent.WidthAndHeight;
+
+            petHitArea = new Border
+            {
+                Background = new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)),
+                Cursor = Cursors.Hand,
+                Padding = new Thickness(StagePadX, StagePadY, StagePadX, StagePadY),
+                Child = stage,
+            };
+            Content = petHitArea;
+
+            sessionScroll = new ScrollViewer
+            {
+                MaxHeight = 204,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                PanningMode = PanningMode.VerticalOnly,
+                Content = sessionList,
+            };
+
+            var cardRoot = new StackPanel();
+            cardRoot.Children.Add(cardHeaderWrap);
+            cardRoot.Children.Add(sessionScroll);
+
+            hoverCard = new Border
+            {
+                Width = CardWidth,
+                Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x11, 0x13, 0x18)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(12),
+                Padding = new Thickness(13, 10, 13, 10),
+                Child = cardRoot,
+                Opacity = 0,
+                Margin = new Thickness(6),
+            };
+
+            hoverPopup = new Popup
+            {
+                PlacementTarget = petHitArea,
+                Placement = PlacementMode.Left,
+                AllowsTransparency = true,
+                StaysOpen = true,
+                PopupAnimation = PopupAnimation.None,
+                Child = hoverCard,
+            };
+
+            RebuildMascot();
+            contextMenu.Opened += (s, e) =>
+            {
+                contextMenuOpen = true;
+                hoverPopup.IsOpen = false;
+                PopulateContextMenu();
+            };
+            contextMenu.Closed += (s, e) =>
+            {
+                contextMenuOpen = false;
+                menuCooldownUntil = DateTime.UtcNow.AddMilliseconds(220);
+            };
+            PopulateContextMenu();
+            petHitArea.ContextMenu = contextMenu;
+
+            petHitArea.MouseLeftButtonDown += OnPetMouseDown;
+            petHitArea.MouseMove += OnPetMouseMove;
+            petHitArea.MouseLeftButtonUp += OnPetMouseUp;
+            petHitArea.MouseEnter += (s, e) => ShowCard();
+            petHitArea.MouseLeave += (s, e) => ScheduleHideCard();
+            hoverCard.MouseEnter += (s, e) => ShowCard();
+            hoverCard.MouseLeave += (s, e) => ScheduleHideCard();
+            hoverCard.PreviewMouseWheel += OnCardMouseWheel;
+
+            hoverLeaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(240) };
+            hoverLeaveTimer.Tick += (s, e) => { hoverLeaveTimer.Stop(); HideCard(); };
+
+            tracker.Start();
+
+            pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(90) };
+            pollTimer.Tick += (s, e) => PollTarget();
+            pollTimer.Start();
+
+            animTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+            animTimer.Tick += (s, e) => TickSmoothGlide();
+            animTimer.Start();
+
+            monitor.Updated += () => Dispatcher.BeginInvoke(new Action(SyncActivity));
+            SourceInitialized += OnSourceInitialized;
+            Loaded += (s, e) => { SyncActivity(); SnapToTarget(); };
+        }
+
+        void OnCardMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (sessionScroll.ComputedVerticalScrollBarVisibility == Visibility.Visible)
+            {
+                sessionScroll.ScrollToVerticalOffset(sessionScroll.VerticalOffset - e.Delta * 0.45);
+                e.Handled = true;
+            }
+        }
+
+        void OnSourceInitialized(object sender, EventArgs e)
+        {
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            int ex = GetWindowLong(hwnd, GWL_EXSTYLE);
+            SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+        }
+
+        public void RebuildMascot()
+        {
+            stage.Children.Clear();
+            mascot = new Mascot(settings.PixelSize, settings.Skin);
+            mascot.Mood = previewMode ? previewMood : monitor.Latest.Mood;
+            stage.Width = mascot.Width;
+            stage.Height = mascot.Height;
+            stage.Children.Add(mascot);
+        }
+
+        public void SetExternalMenuOpen(bool open)
+        {
+            externalMenuOpen = open;
+            if (!open) menuCooldownUntil = DateTime.UtcNow.AddMilliseconds(220);
+        }
+
+        bool IsAnyMenuActive
+        {
+            get { return contextMenuOpen || externalMenuOpen || DateTime.UtcNow < menuCooldownUntil; }
+        }
+
+        bool IsPerchedOnChatBox
+        {
+            get
+            {
+                return tracker.IsInFront && !tracker.IsMinimized && !tracker.ChatBoxBoundsPx.IsEmpty && !userMovedWhileInFront;
+            }
+        }
+
+        public void ApplySkin(string skin)
+        {
+            settings.Skin = Mascot.NormalizeSkin(skin);
+            settings.Save();
+            if (mascot != null) mascot.SetSkin(settings.Skin);
+            SyncActivity();
+        }
+
+        public void ApplySize(string size)
+        {
+            settings.Size = size;
+            settings.Save();
+            RebuildMascot();
+            SnapToTarget();
+        }
+
+        public void SetPreviewMood(MascotMood? mood)
+        {
+            if (mood.HasValue)
+            {
+                previewMode = true;
+                previewMood = mood.Value;
+                if (mascot != null) mascot.Mood = previewMood;
+                RenderHoverContent();
+            }
+            else
+            {
+                previewMode = false;
+                SyncActivity();
+            }
+        }
+
+        public void ResetPosition()
+        {
+            settings.HasCustomFreePos = false;
+            settings.Save();
+            userMovedWhileInFront = false;
+            SnapToTarget();
+        }
+
+        MascotMood ResolveCurrentMood()
+        {
+            if (previewMode) return previewMood;
+
+            // Inside Antigravity: react specifically to the active chat, voice mode, dictation, and user typing!
+            if (tracker.IsInFront)
+            {
+                if (tracker.InVoiceMode)
+                    return tracker.VoiceAgentSpeaking ? MascotMood.Speaking : MascotMood.Listening;
+                if (tracker.InDictation)
+                    return MascotMood.Listening;
+
+                var focused = monitor.FocusedSession;
+                if (focused != null && focused.IsBusy)
+                    return focused.Mood;
+                if (tracker.IsUserTyping)
+                    return MascotMood.Typing;
+                if (focused != null)
+                    return focused.Mood;
+                return monitor.Latest.Mood;
+            }
+
+            // Outside Antigravity / Minimized:
+            //  - 2+ active sessions -> Multitasking juggle!
+            //  - 1 active session  -> React directly to that 1 session!
+            //  - 0 active sessions -> Background (if live server running), Done, Idle, or Sleeping!
+            var actives = monitor.ActiveSessions;
+            if (actives != null && actives.Count >= 2)
+                return MascotMood.Multitasking;
+            if (actives != null && actives.Count == 1)
+                return actives[0].Mood;
+            return monitor.Latest.Mood;
+        }
+
+        void SyncActivity()
+        {
+            if (mascot != null)
+                mascot.Mood = ResolveCurrentMood();
+
+            if (hoverPopup.IsOpen || !previewMode)
+                RenderHoverContent();
+        }
+
+        void RenderHoverContent()
+        {
+            cardHeaderWrap.Children.Clear();
+            sessionList.Children.Clear();
+            bool darkSkin = settings.Skin == Mascot.DarkSkin;
+
+            if (previewMode)
+            {
+                sessionScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                var fake = new ActivitySnapshot
+                {
+                    Mood = previewMood,
+                    SessionTitle = "Preview Mode",
+                    ActionLabel = ActivityMonitor.MoodDefaultLabel(previewMood),
+                    FocusDetail = "Right-click → Live Mode to resume tracking",
+                    IsBusy = false,
+                };
+                sessionList.Children.Add(BuildSessionItem(fake, darkSkin, false));
+                return;
+            }
+
+            var actives = monitor.ActiveSessions;
+            if (actives != null && actives.Count > 1)
+            {
+                // Multi-session header + scrollable list when > 2 active sessions!
+                var hdr = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+                var countBadge = new TextBlock
+                {
+                    Text = actives.Count + " active sessions",
+                    Foreground = BrushHex(0xF8, 0xFA, 0xFC),
+                    FontSize = 11.5,
+                    FontWeight = FontWeights.SemiBold,
+                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                };
+                hdr.Children.Add(countBadge);
+
+                if (actives.Count > 2)
+                {
+                    var scrollHint = new TextBlock
+                    {
+                        Text = "Scroll ↕",
+                        Foreground = BrushHex(0x94, 0xA3, 0xB8),
+                        FontSize = 10.5,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                    };
+                    DockPanel.SetDock(scrollHint, Dock.Right);
+                    hdr.Children.Insert(0, scrollHint);
+                }
+
+                cardHeaderWrap.Children.Add(hdr);
+                sessionScroll.VerticalScrollBarVisibility = actives.Count > 2 ? ScrollBarVisibility.Auto : ScrollBarVisibility.Disabled;
+
+                for (int i = 0; i < actives.Count; i++)
+                {
+                    sessionList.Children.Add(BuildSessionItem(actives[i], darkSkin, i > 0));
+                }
+            }
+            else
+            {
+                sessionScroll.VerticalScrollBarVisibility = ScrollBarVisibility.Disabled;
+                var single = (actives != null && actives.Count == 1) ? actives[0] : monitor.Latest;
+                sessionList.Children.Add(BuildSessionItem(single, darkSkin, false));
+            }
+        }
+
+        UIElement BuildSessionItem(ActivitySnapshot snap, bool darkSkin, bool withTopDivider)
+        {
+            var stack = new StackPanel();
+            if (withTopDivider)
+            {
+                stack.Children.Add(new Border
+                {
+                    Height = 1,
+                    Background = new SolidColorBrush(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF)),
+                    Margin = new Thickness(0, 8, 0, 8),
+                });
+            }
+
+            double innerW = CardWidth - 36;
+            var dot = new Ellipse
+            {
+                Width = 7,
+                Height = 7,
+                Fill = DotBrushForMood(snap.Mood, darkSkin),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 7, 0),
+            };
+            var title = new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(snap.SessionTitle) ? snap.Source : snap.SessionTitle,
+                Foreground = BrushHex(0x94, 0xA3, 0xB8),
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                MaxWidth = innerW - 18,
+            };
+            var headerRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            headerRow.Children.Add(dot);
+            headerRow.Children.Add(title);
+            stack.Children.Add(headerRow);
+
+            stack.Children.Add(new TextBlock
+            {
+                Text = snap.ActionLabel,
+                Foreground = BrushHex(0xF8, 0xFA, 0xFC),
+                FontSize = 12.5,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 4, 0, 0),
+            });
+
+            if (!string.IsNullOrWhiteSpace(snap.FocusDetail) &&
+                !string.Equals(snap.FocusDetail, snap.ActionLabel, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(snap.FocusDetail, snap.SessionTitle, StringComparison.OrdinalIgnoreCase))
+            {
+                stack.Children.Add(new TextBlock
+                {
+                    Text = snap.FocusDetail,
+                    Foreground = BrushHex(0xA1, 0xA1, 0xAA),
+                    FontSize = 11,
+                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    Margin = new Thickness(0, 2, 0, 0),
+                });
+            }
+
+            if (snap.HasProgress)
+            {
+                double doneW = innerW * (snap.PercentDone / 100.0);
+                double activeSliceW = (snap.StepsInProgress > 0 && snap.StepsTotal > 0 && snap.PercentDone < 100)
+                    ? Math.Min(innerW - doneW, innerW * (snap.StepsInProgress / (double)snap.StepsTotal))
+                    : 0;
+
+                var barRow = new StackPanel { Orientation = Orientation.Horizontal };
+                if (doneW > 0)
+                {
+                    barRow.Children.Add(new Border
+                    {
+                        Height = 5,
+                        Width = Math.Max(3, doneW),
+                        CornerRadius = activeSliceW > 0 ? new CornerRadius(3, 0, 0, 3) : new CornerRadius(3),
+                        Background = darkSkin
+                            ? (Brush)BrushHex(0xF4, 0xF4, 0xF5)
+                            : new LinearGradientBrush(Color.FromRgb(0x34, 0xA8, 0x53), Color.FromRgb(0x25, 0x75, 0xFC), 0),
+                    });
+                }
+                if (activeSliceW > 1)
+                {
+                    barRow.Children.Add(new Border
+                    {
+                        Height = 5,
+                        Width = activeSliceW,
+                        CornerRadius = doneW > 0 ? new CornerRadius(0, 3, 3, 0) : new CornerRadius(3),
+                        Background = new SolidColorBrush(darkSkin ? Color.FromArgb(0x66, 0xE4, 0xE4, 0xE7) : Color.FromArgb(0x77, 0x38, 0xBD, 0xF8)),
+                    });
+                }
+
+                stack.Children.Add(new Border
+                {
+                    Height = 5,
+                    Width = innerW,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    CornerRadius = new CornerRadius(3),
+                    Background = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+                    Child = barRow,
+                    Margin = new Thickness(0, 8, 0, 4),
+                });
+
+                string stepInfo = snap.StepsTotal > 0 ? ("  ·  " + snap.StepsDone + "/" + snap.StepsTotal + " steps") : "";
+                stack.Children.Add(new TextBlock
+                {
+                    Text = snap.PercentDone + "% done  ·  " + snap.PercentLeft + "% left" + stepInfo,
+                    Foreground = BrushHex(0xCB, 0xD5, 0xE1),
+                    FontSize = 10.8,
+                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                });
+            }
+            else if (snap.IsBusy)
+            {
+                stack.Children.Add(new Border
+                {
+                    Height = 5,
+                    Width = innerW,
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    CornerRadius = new CornerRadius(3),
+                    Background = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+                    Child = new Border
+                    {
+                        Height = 5,
+                        Width = innerW * 0.28,
+                        HorizontalAlignment = HorizontalAlignment.Left,
+                        CornerRadius = new CornerRadius(3),
+                        Background = new SolidColorBrush(darkSkin ? Color.FromArgb(0x88, 0xF4, 0xF4, 0xF5) : Color.FromArgb(0x99, 0x25, 0x75, 0xFC)),
+                    },
+                    Margin = new Thickness(0, 8, 0, 4),
+                });
+                stack.Children.Add(new TextBlock
+                {
+                    Text = "Running · No step checklist yet",
+                    Foreground = BrushHex(0x94, 0xA3, 0xB8),
+                    FontSize = 10.5,
+                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                });
+            }
+
+            return stack;
+        }
+
+        static Brush DotBrushForMood(MascotMood mood, bool darkSkin)
+        {
+            if (darkSkin)
+            {
+                if (mood == MascotMood.Idle || mood == MascotMood.Sleeping) return BrushHex(0x71, 0x71, 0x7A);
+                return BrushHex(0xF4, 0xF4, 0xF5);
+            }
+            switch (mood)
+            {
+                case MascotMood.Done: return BrushHex(0x34, 0xA8, 0x53);
+                case MascotMood.Alert: return BrushHex(0xF5, 0x9E, 0x0B);
+                case MascotMood.Question: return BrushHex(0x38, 0xBD, 0xF8);
+                case MascotMood.Idle:
+                case MascotMood.Sleeping: return BrushHex(0x64, 0x74, 0x8B);
+                default: return BrushHex(0x25, 0x75, 0xFC);
+            }
+        }
+
+        // ---- Positioning & Smooth 60fps Motion ----
+
+        void PollTarget()
+        {
+            if (dragging || IsAnyMenuActive) return;
+            tracker.Poll();
+            monitor.PreferredChatTitle = tracker.ActiveChatTitle;
+
+            if (mascot != null && !previewMode)
+                mascot.Mood = ResolveCurrentMood();
+
+            bool nowInFront = tracker.IsInFront;
+            bool nowOnChatScreen = nowInFront && !tracker.IsMinimized && !tracker.ChatBoxBoundsPx.IsEmpty;
+
+            if (nowInFront && hoverPopup.IsOpen)
+                hoverPopup.IsOpen = false;
+
+            // Whenever the user enters an Antigravity chat (from another app OR back from Antigravity Settings),
+            // ALWAYS snap back cleanly above the chatbox!
+            if (nowOnChatScreen && !wasOnChatScreen)
+                userMovedWhileInFront = false;
+            wasOnChatScreen = nowOnChatScreen;
+
+            if (nowOnChatScreen && userMovedWhileInFront) return;
+
+            Point desired = ComputeDesiredPosition();
+            targetLeft = desired.X;
+            targetTop = desired.Y;
+        }
+
+        void TickSmoothGlide()
+        {
+            DateTime now = DateTime.UtcNow;
+            double dt = Math.Min(0.05, Math.Max(0.001, (now - lastAnimTime).TotalSeconds));
+            lastAnimTime = now;
+
+            if (dragging || IsAnyMenuActive || double.IsNaN(targetLeft)) return;
+
+            double dx = targetLeft - Left;
+            double dy = targetTop - Top;
+            if (Math.Abs(dx) < 0.5 && Math.Abs(dy) < 0.5)
+            {
+                if (Left != targetLeft || Top != targetTop)
+                {
+                    Left = targetLeft;
+                    Top = targetTop;
+                }
+                return;
+            }
+
+            double factor = 1.0 - Math.Exp(-14.0 * dt);
+            Left += dx * factor;
+            Top += dy * factor;
+        }
+
+        void SnapToTarget()
+        {
+            tracker.Poll();
+            wasOnChatScreen = tracker.IsInFront && !tracker.IsMinimized && !tracker.ChatBoxBoundsPx.IsEmpty;
+            Point desired = ComputeDesiredPosition();
+            Left = targetLeft = desired.X;
+            Top = targetTop = desired.Y;
+        }
+
+        public static Point PlaceAboveChatBox(Rect chatBoxDip, double spriteW, double spriteH, double padX, double padY)
+        {
+            double visualRight = chatBoxDip.Right - 14.0;
+            double visualBottom = chatBoxDip.Top + 1.0;
+            return new Point(
+                visualRight - spriteW - padX,
+                visualBottom - spriteH - padY);
+        }
+
+        Point ComputeDesiredPosition()
+        {
+            double dpiX, dpiY;
+            GetDpiScale(out dpiX, out dpiY);
+            Rect work = SystemParameters.WorkArea;
+            double spriteW = 11.0 * settings.PixelSize;
+            double spriteH = 9.0 * settings.PixelSize;
+            double petW = petHitArea.ActualWidth > 10 ? petHitArea.ActualWidth : (spriteW + StagePadX * 2);
+            double petH = petHitArea.ActualHeight > 10 ? petHitArea.ActualHeight : (spriteH + StagePadY * 2);
+
+            double petLeft, petTop;
+
+            // Perch above the chatbox ONLY when Antigravity is focused AND a chatbox is present on screen
+            // (so opening Antigravity's Settings / Customizations screen cleanly parks him in the corner instead of bugging out!)
+            if (tracker.IsInFront && !tracker.IsMinimized && !tracker.ChatBoxBoundsPx.IsEmpty)
+            {
+                Rect boxDip = new Rect(
+                    tracker.ChatBoxBoundsPx.Left / dpiX,
+                    tracker.ChatBoxBoundsPx.Top / dpiY,
+                    tracker.ChatBoxBoundsPx.Width / dpiX,
+                    tracker.ChatBoxBoundsPx.Height / dpiY);
+                Point p = PlaceAboveChatBox(boxDip, spriteW, spriteH, StagePadX, StagePadY);
+                petLeft = p.X;
+                petTop = p.Y;
+            }
+            else
+            {
+                if (settings.HasCustomFreePos)
+                {
+                    petLeft = settings.FreeX;
+                    petTop = settings.FreeY;
+                }
+                else if (settings.MinimizedCorner == "top-left")
+                {
+                    petLeft = work.Left + 8;
+                    petTop = work.Top + 8;
+                }
+                else
+                {
+                    petLeft = work.Right - petW - 8;
+                    petTop = work.Top + 8;
+                }
+            }
+
+            petLeft = Math.Max(work.Left - StagePadX * 0.5, Math.Min(work.Right - petW + StagePadX * 0.5, petLeft));
+            petTop = Math.Max(work.Top - StagePadY * 0.4, Math.Min(work.Bottom - petH + StagePadY * 0.4, petTop));
+            return new Point(petLeft, petTop);
+        }
+
+        // ---- Hover Card Popup (active ONLY outside Antigravity) ----
+
+        void ShowCard()
+        {
+            hoverLeaveTimer.Stop();
+            if (!settings.ShowHoverCard || dragging || IsAnyMenuActive || tracker.IsInFront) return;
+            RenderHoverContent();
+
+            Rect work = SystemParameters.WorkArea;
+            bool openOnRight = Left < work.Left + CardWidth + 24;
+            hoverPopup.Placement = openOnRight ? PlacementMode.Right : PlacementMode.Left;
+            hoverPopup.VerticalOffset = 6;
+            hoverPopup.HorizontalOffset = openOnRight ? -10 : 10;
+
+            if (!hoverPopup.IsOpen)
+            {
+                hoverCard.Opacity = 0;
+                hoverPopup.IsOpen = true;
+            }
+            var anim = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(140))
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
+            };
+            hoverCard.BeginAnimation(OpacityProperty, anim);
+        }
+
+        void ScheduleHideCard()
+        {
+            hoverLeaveTimer.Stop();
+            hoverLeaveTimer.Start();
+        }
+
+        void HideCard()
+        {
+            if (!hoverPopup.IsOpen) return;
+            var anim = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(120));
+            anim.Completed += (s, e) =>
+            {
+                if (!petHitArea.IsMouseOver && !hoverCard.IsMouseOver)
+                    hoverPopup.IsOpen = false;
+            };
+            hoverCard.BeginAnimation(OpacityProperty, anim);
+        }
+
+        // ---- Poke Easter Egg + Free Dragging ----
+
+        void OnPetMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton != MouseButton.Left) return;
+            mouseDown = true;
+            dragging = false;
+            GetCursorPos(out dragStartCursor);
+            dragStartLeft = Left;
+            dragStartTop = Top;
+
+            // Subtle press reaction ONLY when the mascot is perched above the chatbox
+            if (mascot != null && IsPerchedOnChatBox) mascot.Poke();
+
+            petHitArea.CaptureMouse();
+            e.Handled = true;
+        }
+
+        void OnPetMouseMove(object sender, MouseEventArgs e)
+        {
+            if (!mouseDown) return;
+            POINT cur;
+            GetCursorPos(out cur);
+            double dxPx = cur.X - dragStartCursor.X;
+            double dyPx = cur.Y - dragStartCursor.Y;
+
+            if (!dragging)
+            {
+                if (Math.Abs(dxPx) < DragThresholdPx && Math.Abs(dyPx) < DragThresholdPx) return;
+                dragging = true;
+                if (mascot != null) mascot.CancelHurt();
+                hoverPopup.IsOpen = false;
+            }
+
+            double dpiX, dpiY;
+            GetDpiScale(out dpiX, out dpiY);
+            Left = dragStartLeft + dxPx / dpiX;
+            Top = dragStartTop + dyPx / dpiY;
+            targetLeft = Left;
+            targetTop = Top;
+        }
+
+        void OnPetMouseUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!mouseDown) return;
+            mouseDown = false;
+            petHitArea.ReleaseMouseCapture();
+
+            if (!dragging) return;
+
+            dragging = false;
+            targetLeft = Left;
+            targetTop = Top;
+
+            if (tracker.IsInFront)
+            {
+                userMovedWhileInFront = true;
+            }
+            else
+            {
+                settings.HasCustomFreePos = true;
+                settings.FreeX = Left;
+                settings.FreeY = Top;
+                settings.Save();
+            }
+        }
+
+        // ---- Right-Click Context Menu ----
+
+        void PopulateContextMenu()
+        {
+            contextMenu.Items.Clear();
+
+            var skinMenu = new MenuItem { Header = "Skin" };
+            skinMenu.Items.Add(CheckItem("Classic (Official Antigravity Colors)", settings.Skin == Mascot.ClassicSkin, () => ApplySkin(Mascot.ClassicSkin)));
+            skinMenu.Items.Add(CheckItem("Dark Remake (Monochrome)", settings.Skin == Mascot.DarkSkin, () => ApplySkin(Mascot.DarkSkin)));
+            contextMenu.Items.Add(skinMenu);
+
+            var cornerMenu = new MenuItem { Header = "Corner When Away / Minimized" };
+            cornerMenu.Items.Add(CheckItem("Top-Right", !settings.HasCustomFreePos && settings.MinimizedCorner == "top-right", () =>
+            {
+                settings.HasCustomFreePos = false;
+                settings.MinimizedCorner = "top-right";
+                settings.Save();
+                if (!tracker.IsInFront) SnapToTarget();
+            }));
+            cornerMenu.Items.Add(CheckItem("Top-Left", !settings.HasCustomFreePos && settings.MinimizedCorner == "top-left", () =>
+            {
+                settings.HasCustomFreePos = false;
+                settings.MinimizedCorner = "top-left";
+                settings.Save();
+                if (!tracker.IsInFront) SnapToTarget();
+            }));
+            contextMenu.Items.Add(cornerMenu);
+
+            var sizeMenu = new MenuItem { Header = "Size" };
+            sizeMenu.Items.Add(CheckItem("Small", settings.Size == "small", () => ApplySize("small")));
+            sizeMenu.Items.Add(CheckItem("Medium", settings.Size == "medium", () => ApplySize("medium")));
+            sizeMenu.Items.Add(CheckItem("Large", settings.Size == "large", () => ApplySize("large")));
+            contextMenu.Items.Add(sizeMenu);
+
+            var previewSub = new MenuItem { Header = "Preview Mood" };
+            previewSub.Items.Add(CheckItem("Live Mode (Auto-react to Antigravity)", !previewMode, () => SetPreviewMood(null)));
+            previewSub.Items.Add(new Separator());
+            foreach (MascotMood m in Enum.GetValues(typeof(MascotMood)))
+            {
+                var captured = m;
+                previewSub.Items.Add(CheckItem(captured.ToString(), previewMode && previewMood == captured, () => SetPreviewMood(captured)));
+            }
+            contextMenu.Items.Add(previewSub);
+
+            contextMenu.Items.Add(new Separator());
+            contextMenu.Items.Add(CheckItem("Show Hover Progress Card", settings.ShowHoverCard, () =>
+            {
+                settings.ShowHoverCard = !settings.ShowHoverCard;
+                settings.Save();
+                if (!settings.ShowHoverCard) hoverPopup.IsOpen = false;
+            }));
+            contextMenu.Items.Add(CheckItem("Start with Windows", settings.StartWithWindows, () =>
+            {
+                settings.StartWithWindows = !settings.StartWithWindows;
+                settings.Save();
+                PetSettings.ApplyStartup(settings.StartWithWindows, Process.GetCurrentProcess().MainModule.FileName);
+            }));
+            contextMenu.Items.Add(ActionItem("Snap Back Above Chatbox", ResetPosition));
+            contextMenu.Items.Add(CheckItem("Auto-Update from GitHub", settings.AutoUpdate, () =>
+            {
+                settings.AutoUpdate = !settings.AutoUpdate;
+                settings.Save();
+            }));
+            if (updater != null)
+            {
+                string updLabel = updater.UpdateReady
+                    ? "Install Update (" + updater.ReadyTag + ")"
+                    : "Check for Updates (" + updater.Status + ")";
+                contextMenu.Items.Add(ActionItem(updLabel, () => updater.CheckNow()));
+            }
+            contextMenu.Items.Add(ActionItem("Send Feedback (GitHub Issue)...", () => FeedbackWindow.ShowDialogOnce(settings.Skin, settings.Size)));
+
+            var creditsMenu = new MenuItem { Header = "Credits" };
+            creditsMenu.Items.Add(ActionItem("Made by Yassin Ragab (yassinr.me)", () => OpenUrl("https://yassinr.me")));
+            creditsMenu.Items.Add(ActionItem("GitHub: yvs1n/agypet", () => OpenUrl("https://github.com/yvs1n/agypet")));
+            creditsMenu.Items.Add(ActionItem("For Antigravity, built with Antigravity", () => OpenUrl("https://antigravity.google")));
+            contextMenu.Items.Add(creditsMenu);
+
+            contextMenu.Items.Add(new Separator());
+            contextMenu.Items.Add(ActionItem("Quit AgyPet", () => Application.Current.Shutdown()));
+        }
+
+        public static void OpenUrl(string url)
+        {
+            try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
+            catch { }
+        }
+
+        static MenuItem CheckItem(string text, bool isChecked, Action onClick)
+        {
+            var item = new MenuItem { Header = text, IsChecked = isChecked };
+            item.Click += (s, e) => onClick();
+            return item;
+        }
+
+        static MenuItem ActionItem(string text, Action onClick)
+        {
+            var item = new MenuItem { Header = text };
+            item.Click += (s, e) => onClick();
+            return item;
+        }
+
+        void GetDpiScale(out double dpiX, out double dpiY)
+        {
+            var src = PresentationSource.FromVisual(this);
+            if (src != null && src.CompositionTarget != null)
+            {
+                dpiX = src.CompositionTarget.TransformToDevice.M11;
+                dpiY = src.CompositionTarget.TransformToDevice.M22;
+                return;
+            }
+            dpiX = dpiY = 1.0;
+        }
+
+        static Brush BrushHex(byte r, byte g, byte b)
+        {
+            var br = new SolidColorBrush(Color.FromRgb(r, g, b));
+            br.Freeze();
+            return br;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct POINT { public int X, Y; }
+
+        const int GWL_EXSTYLE = -20;
+        const int WS_EX_TOOLWINDOW = 0x00000080;
+        const int WS_EX_NOACTIVATE = 0x08000000;
+        [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+        [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+        [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT lpPoint);
+    }
+}
