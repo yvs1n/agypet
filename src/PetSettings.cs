@@ -20,7 +20,7 @@ namespace AgyPet
         // "free" (stays wherever you drag it on screen)
         public string PlacementMode { get; set; }
 
-        // "top-right" | "top-left" — where the mascot rests when Antigravity is minimized
+        // "top-right" | "top-left" | "bottom-right" | "bottom-left" — where the mascot rests when Antigravity is away/minimized
         public string MinimizedCorner { get; set; }
 
         // "small" | "medium" | "large"
@@ -95,11 +95,18 @@ namespace AgyPet
             catch { }
         }
 
+        public static string NormalizeCorner(string corner)
+        {
+            if (corner == "top-left" || corner == "bottom-right" || corner == "bottom-left")
+                return corner;
+            return "top-right";
+        }
+
         public void Normalize()
         {
             Skin = Mascot.NormalizeSkin(Skin);
             PlacementMode = PlacementMode == "free" ? "free" : "pin-chat";
-            MinimizedCorner = MinimizedCorner == "top-left" ? "top-left" : "top-right";
+            MinimizedCorner = NormalizeCorner(MinimizedCorner);
             if (Size != "small" && Size != "medium" && Size != "large") Size = "medium";
             if (double.IsNaN(ChatOffsetFromRight) || ChatOffsetFromRight < 8 || ChatOffsetFromRight > 1200) ChatOffsetFromRight = 92;
             if (double.IsNaN(ChatOffsetFromTop) || ChatOffsetFromTop < 8 || ChatOffsetFromTop > 1200) ChatOffsetFromTop = 64;

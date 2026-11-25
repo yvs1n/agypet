@@ -107,6 +107,29 @@ namespace AgyPet.Tests
                 }
             });
 
+            Run("Corner placement supports top and bottom taskbar corners across all sizes", () =>
+            {
+                AssertEq("top-right", PetSettings.NormalizeCorner(null));
+                AssertEq("top-left", PetSettings.NormalizeCorner("top-left"));
+                AssertEq("bottom-right", PetSettings.NormalizeCorner("bottom-right"));
+                AssertEq("bottom-left", PetSettings.NormalizeCorner("bottom-left"));
+
+                var work = new System.Windows.Rect(0, 0, 1920, 1032);
+                foreach (double px in new[] { 3.2, 4.2, 5.2 })
+                {
+                    double sw = 11.0 * px, sh = 9.0 * px;
+                    var br = PetWindow.PlaceInCorner("bottom-right", work, sw, sh, 32, 24);
+                    var bl = PetWindow.PlaceInCorner("bottom-left", work, sw, sh, 32, 24);
+                    var tl = PetWindow.PlaceInCorner("top-left", work, sw, sh, 32, 24);
+                    var tr = PetWindow.PlaceInCorner("top-right", work, sw, sh, 32, 24);
+
+                    AssertTrue(Math.Abs((br.Y + 24 + sh) - work.Bottom) < 0.01, "Bottom-right feet should rest directly above taskbar");
+                    AssertTrue(Math.Abs((bl.Y + 24 + sh) - work.Bottom) < 0.01, "Bottom-left feet should rest directly above taskbar");
+                    AssertTrue(Math.Abs(br.X - tr.X) < 0.01, "Bottom-right X should align with Top-Right X");
+                    AssertTrue(Math.Abs(bl.X - tl.X) < 0.01, "Bottom-left X should align with Top-Left X");
+                }
+            });
+
             Run("Poke easter egg triggers hurt state while preserving active Mood", () =>
             {
                 var m = new Mascot(4.0, Mascot.ClassicSkin) { Mood = MascotMood.Thinking };

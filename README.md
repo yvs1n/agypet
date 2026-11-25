@@ -24,7 +24,7 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 
 - **Adaptive Chatbox Perch**: Floats cleanly right above the top-right corner of Antigravity's chat composer without occupying side-panel space. Automatically tracks attachments, multi-line prompts, and `Small` / `Medium` / `Large` sizes at 60fps.
 - **Context-Aware Per-Chat Tracking**: Matches whichever conversation you currently have open. Shows `Typing` when either the agent or you are typing, `Listening` during dictation, and flips between `Listening` and `Speaking` in Voice Mode.
-- **Alt+Tab & Minimize Corner Dock**: Leaves the chatbox the moment you switch apps or open Settings, gliding calmly to your chosen screen corner (`Top-Right` or `Top-Left`). Return to Antigravity and he snaps right back above the chatbox.
+- **Alt+Tab & Minimize Corner Dock**: Leaves the chatbox the moment you switch apps or open Settings, gliding calmly to your chosen screen corner (`Top-Right`, `Top-Left`, `Bottom-Right`, or `Bottom-Left` right above the taskbar). Return to Antigravity and he snaps right back above the chatbox.
 - **Multitasking & Live Server States**: Juggles orbiting orbs when minimized with 2+ active sessions, follows a single session directly, and displays a calm pulsing server rack when a finished chat still has a live server running.
 - **Scrollable Multi-Session Hover Card**: Outside Antigravity, hover over the mascot to view every active App, IDE, and CLI session with exact `% done / % left` step progress (automatically scrollable at > 2 sessions).
 - **Subtle Press Fidget**: Click him above the chatbox for a brief subtle wince while preserving his active scene; left-drag anywhere freely.
@@ -65,7 +65,7 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 - **Left-click above chatbox**: Subtle press wince reaction.
 - **Left-drag**: Move freely anywhere on screen (always returns above chatbox when returning to Antigravity).
 - **Hover (when outside Antigravity)**: View live status & scrollable multi-session progress card.
-- **Right-click / System Tray**: Switch skins (`Classic` / `Dark Remake`), set minimized corner (`Top-Right` / `Top-Left`), resize (`Small` / `Medium` / `Large`), preview all 16 moods, toggle `Start with Windows`, **Check for Updates**, or **Send Feedback (GitHub Issue)**.
+- **Right-click / System Tray**: Switch skins (`Classic` / `Dark Remake`), set minimized corner (`Top-Right` / `Top-Left` / `Bottom-Right` / `Bottom-Left`), resize (`Small` / `Medium` / `Large`), preview all 16 moods, toggle `Start with Windows`, **Check for Updates**, or **Send Feedback (GitHub Issue)**.
 
 ---
 

@@ -59,6 +59,7 @@ namespace AgyPet
 
         const double StagePadX = 32;
         const double StagePadY = 24;
+        const double StagePadBottom = 4;
         const double CardWidth = 264;
         const double DragThresholdPx = 5.0;
 
@@ -81,7 +82,7 @@ namespace AgyPet
             {
                 Background = new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)),
                 Cursor = Cursors.Hand,
-                Padding = new Thickness(StagePadX, StagePadY, StagePadX, StagePadY),
+                Padding = new Thickness(StagePadX, StagePadY, StagePadX, StagePadBottom),
                 Child = stage,
             };
             Content = petHitArea;
@@ -239,6 +240,14 @@ namespace AgyPet
                 previewMode = false;
                 SyncActivity();
             }
+        }
+
+        public void SetMinimizedCorner(string corner)
+        {
+            settings.HasCustomFreePos = false;
+            settings.MinimizedCorner = PetSettings.NormalizeCorner(corner);
+            settings.Save();
+            if (!tracker.IsInFront) SnapToTarget();
         }
 
         public void ResetPosition()
@@ -594,6 +603,19 @@ namespace AgyPet
                 visualBottom - spriteH - padY);
         }
 
+        public static Point PlaceInCorner(string corner, Rect workArea, double spriteW, double spriteH, double padX, double padY)
+        {
+            string normalized = PetSettings.NormalizeCorner(corner);
+            double petW = spriteW + padX * 2;
+            bool isLeft = normalized == "top-left" || normalized == "bottom-left";
+            bool isBottom = normalized == "bottom-left" || normalized == "bottom-right";
+
+            double left = isLeft ? (workArea.Left + 8.0) : (workArea.Right - petW - 8.0);
+            // Bottom corners place the mascot's feet directly above the taskbar (WorkArea.Bottom).
+            double top = isBottom ? (workArea.Bottom - spriteH - padY) : (workArea.Top + 8.0);
+            return new Point(left, top);
+        }
+
         Point ComputeDesiredPosition()
         {
             double dpiX, dpiY;
@@ -602,7 +624,6 @@ namespace AgyPet
             double spriteW = 11.0 * settings.PixelSize;
             double spriteH = 9.0 * settings.PixelSize;
             double petW = petHitArea.ActualWidth > 10 ? petHitArea.ActualWidth : (spriteW + StagePadX * 2);
-            double petH = petHitArea.ActualHeight > 10 ? petHitArea.ActualHeight : (spriteH + StagePadY * 2);
 
             double petLeft, petTop;
 
@@ -619,27 +640,20 @@ namespace AgyPet
                 petLeft = p.X;
                 petTop = p.Y;
             }
+            else if (settings.HasCustomFreePos)
+            {
+                petLeft = settings.FreeX;
+                petTop = settings.FreeY;
+            }
             else
             {
-                if (settings.HasCustomFreePos)
-                {
-                    petLeft = settings.FreeX;
-                    petTop = settings.FreeY;
-                }
-                else if (settings.MinimizedCorner == "top-left")
-                {
-                    petLeft = work.Left + 8;
-                    petTop = work.Top + 8;
-                }
-                else
-                {
-                    petLeft = work.Right - petW - 8;
-                    petTop = work.Top + 8;
-                }
+                Point cornerPt = PlaceInCorner(settings.MinimizedCorner, work, spriteW, spriteH, StagePadX, StagePadY);
+                petLeft = cornerPt.X;
+                petTop = cornerPt.Y;
             }
 
             petLeft = Math.Max(work.Left - StagePadX * 0.5, Math.Min(work.Right - petW + StagePadX * 0.5, petLeft));
-            petTop = Math.Max(work.Top - StagePadY * 0.4, Math.Min(work.Bottom - petH + StagePadY * 0.4, petTop));
+            petTop = Math.Max(work.Top - StagePadY * 0.4, Math.Min(work.Bottom - spriteH - StagePadY, petTop));
             return new Point(petLeft, petTop);
         }
 
@@ -766,20 +780,18 @@ namespace AgyPet
             contextMenu.Items.Add(skinMenu);
 
             var cornerMenu = new MenuItem { Header = "Corner When Away / Minimized" };
-            cornerMenu.Items.Add(CheckItem("Top-Right", !settings.HasCustomFreePos && settings.MinimizedCorner == "top-right", () =>
+            var corners = new[]
             {
-                settings.HasCustomFreePos = false;
-                settings.MinimizedCorner = "top-right";
-                settings.Save();
-                if (!tracker.IsInFront) SnapToTarget();
-            }));
-            cornerMenu.Items.Add(CheckItem("Top-Left", !settings.HasCustomFreePos && settings.MinimizedCorner == "top-left", () =>
+                new[] { "Top-Right", "top-right" },
+                new[] { "Top-Left", "top-left" },
+                new[] { "Bottom-Right (Above Taskbar)", "bottom-right" },
+                new[] { "Bottom-Left (Above Taskbar)", "bottom-left" }
+            };
+            foreach (var c in corners)
             {
-                settings.HasCustomFreePos = false;
-                settings.MinimizedCorner = "top-left";
-                settings.Save();
-                if (!tracker.IsInFront) SnapToTarget();
-            }));
+                string label = c[0], value = c[1];
+                cornerMenu.Items.Add(CheckItem(label, !settings.HasCustomFreePos && settings.MinimizedCorner == value, () => SetMinimizedCorner(value)));
+            }
             contextMenu.Items.Add(cornerMenu);
 
             var sizeMenu = new MenuItem { Header = "Size" };
