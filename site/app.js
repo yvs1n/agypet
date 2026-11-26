@@ -161,24 +161,29 @@
     return { ctx, w: logicalW, h: logicalH, dpr };
   }
 
-  function drawMascot(ctx, w, h, px, skin, mood, tick, hurtTicks = 0, dpr = 1, orbCount = 3) {
+  function drawMascot(ctx, w, h, px, skin, mood, tick, state = 0, dpr = 1, orbCount = 3, lookX = 0, lookY = 0) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, Math.round(w * dpr), Math.round(h * dpr));
     const isDark = skin === 'dark';
     const compact = mood === 'Sleeping';
-    const hurt = hurtTicks > 0;
+    const hurt = typeof state === 'object' ? (state.hurt > 0) : state > 0;
+    const hurtT = typeof state === 'object' ? (state.hurt || 0) : (state || 0);
+    const annoyed = typeof state === 'object' && (state.annoyed > 0);
+    const dancing = typeof state === 'object' && (state.dance > 0) && !annoyed && !hurt;
 
-    const shiftLeftProp = (mood === 'Working' || mood === 'Terminal') ? 1.8 * px : 0;
+    const shiftLeftProp = (mood === 'Working' || mood === 'Terminal') ? 1.4 * px : 0;
     const ox = (w - 11 * px) * 0.5 + shiftLeftProp;
     const oy = (h - 9 * px) * 0.5 + 1.3 * px;
 
-    const hops = mood === 'Done';
-    const wiggles = mood === 'Alert' || mood === 'Question' || mood === 'Error';
-    const baseBob = hops ? -Math.round(Math.abs(Math.sin(tick * 0.55)) * 1.4) * px : 0;
-    const bobY = hurt && hurtTicks >= 4 ? baseBob + px * 0.45 : baseBob;
-    const wigX = hurt && hurtTicks >= 4 ? ((hurtTicks % 2 === 0 ? -0.3 : 0.3) * px)
-      : mood === 'Error' && tick % 6 < 2 ? ((tick % 2 === 0 ? -0.45 : 0.45) * px)
-      : (wiggles && tick % 12 < 4 ? (tick % 2 === 0 ? -px * 0.45 : px * 0.45) : 0);
+    const danceBob = dancing ? -Math.abs(Math.sin(tick * 0.34)) * 0.45 * px : 0;
+    const doneHop = mood === 'Done' && !annoyed ? -Math.round(Math.abs(Math.sin(tick * 0.45)) * 1.1) * px : 0;
+    const baseBob = dancing ? danceBob : doneHop;
+    const wiggles = (mood === 'Alert' || mood === 'Question' || mood === 'Error') && !annoyed;
+    const bobY = hurt && hurtT >= 4 ? baseBob + px * 0.45 : baseBob;
+    const danceSway = dancing ? Math.sin(tick * 0.34) * 0.5 * px : 0;
+    const wigX = hurt && hurtT >= 4 ? ((hurtT % 2 === 0 ? -0.28 : 0.28) * px)
+      : (mood === 'Error' && !annoyed && tick % 6 < 2) ? ((tick % 2 === 0 ? -0.4 : 0.4) * px)
+      : (wiggles && tick % 12 < 4 ? (tick % 2 === 0 ? -px * 0.4 : px * 0.4) : danceSway);
 
     // Edge-to-edge physical pixel rounding guarantees zero transparent 1px seams through any mascot!
     const dot = (fill, x, y, dw = 1, dh = 1, inSprite = true) => {
@@ -207,7 +212,7 @@
     const armRL = isDark ? '#3A3A40' : '#2C86FF';
 
     ctx.save();
-    if (hurt && hurtTicks >= 4) {
+    if (hurt && hurtT >= 4) {
       const cx = (ox + 5.5 * px) * dpr, cy = (oy + 7.6 * px) * dpr;
       ctx.translate(cx, cy);
       ctx.scale(1.05, 0.94);
@@ -220,7 +225,8 @@
       dot(cell.fill, cell.x, cell.y, cell.w, cell.h, true);
     }
 
-    const closed = !hurt && (tick % 58 >= 56);
+    const closed = !hurt && !annoyed && (tick % 58 >= 56);
+    const faceBlocked = hurt || annoyed;
     if (mood === 'Idle' || mood === 'Listening' || mood === 'Speaking' || mood === 'Searching' || mood === 'Browsing' || mood === 'Background') {
       dot(armLU, 1.5, 4.8, 0.5, 1.0); dot(armLL, 1.1, 5.4, 0.5, 0.5);
       dot(armRU, 9.0, 4.8, 0.5, 1.0); dot(armRL, 9.4, 5.4, 0.5, 0.5);
@@ -251,32 +257,38 @@
 
     switch (mood) {
       case 'Idle':
-        if (!hurt) drawEyes(3.9, 3.2, 6.3, 3.2, closed);
-        if (tick % 24 < 14) {
-          dot(isDark ? '#F4F4F5' : '#FFF6D6', 9.8, 1.0, 0.5, 0.5, false);
+        if (!faceBlocked) drawEyes(3.9 + lookX * 0.48, 3.2 + lookY * 0.34, 6.3 + lookX * 0.48, 3.2 + lookY * 0.34, closed);
+        if (dancing) {
+          const nt = Math.floor(tick / 3) % 4;
+          dot(isDark ? '#F4F4F5' : '#F8C618', -0.2, 0.6 - nt * 0.3, 0.48, 1.2, false);
+          dot(isDark ? '#F4F4F5' : '#F8C618', -0.65, 1.5 - nt * 0.3, 0.65, 0.48, false);
+          dot(isDark ? '#A1A1AA' : '#38BDF8', 10.2, 0.2 - ((nt + 2) % 4) * 0.3, 0.48, 1.2, false);
+          dot(isDark ? '#A1A1AA' : '#38BDF8', 9.75, 1.1 - ((nt + 2) % 4) * 0.3, 0.65, 0.48, false);
+        } else if (!annoyed && tick % 24 < 14) {
+          dot(isDark ? '#F4F4F5' : '#FFF6D6', 8.9, 1.3, 0.5, 0.5, false);
           if (tick % 24 < 9) {
             const rCol = isDark ? '#A1A1AA' : '#E2E8F0';
-            dot(rCol, 9.3, 1.0, 0.5, 0.5, false); dot(rCol, 10.3, 1.0, 0.5, 0.5, false);
-            dot(rCol, 9.8, 0.5, 0.5, 0.5, false); dot(rCol, 9.8, 1.5, 0.5, 0.5, false);
+            dot(rCol, 8.4, 1.3, 0.5, 0.5, false); dot(rCol, 9.4, 1.3, 0.5, 0.5, false);
+            dot(rCol, 8.9, 0.8, 0.5, 0.5, false); dot(rCol, 8.9, 1.8, 0.5, 0.5, false);
           }
         }
         break;
       case 'Sleeping':
-        if (!hurt) { dot(eyeMain, 4.0, 4.3, 0.9, 0.35); dot(eyeMain, 6.2, 4.3, 0.9, 0.35); }
-        if ((Math.floor(tick / 10) % 4) >= 1) shape(isDark ? '#71717A' : '#64748B', 9.2, -1.5, ["###", "..#", ".#.", "###"]);
-        if ((Math.floor(tick / 10) % 4) >= 2) shape(isDark ? '#F4F4F5' : '#38BDF8', 12.2, -3.2, ["###", "..#", ".#.", "###"]);
+        if (!faceBlocked) { dot(eyeMain, 4.0, 4.3, 0.9, 0.35); dot(eyeMain, 6.2, 4.3, 0.9, 0.35); }
+        if ((Math.floor(tick / 10) % 4) >= 1) shape(isDark ? '#71717A' : '#64748B', 8.6, -1.1, ["###", "..#", ".#.", "###"]);
+        if ((Math.floor(tick / 10) % 4) >= 2) shape(isDark ? '#F4F4F5' : '#38BDF8', 11.4, -2.5, ["###", "..#", ".#.", "###"]);
         break;
       case 'Listening':
-        if (!hurt) drawEyes(3.9, 3.1, 6.3, 3.1, false);
+        if (!faceBlocked) drawEyes(3.9, 3.1, 6.3, 3.1, false);
         for (let i = 0; i <= Math.floor(tick / 3) % 3; i++) {
-          const wh = 3.6 - i * 0.9, wt = 4.5 - wh / 2;
+          const wh = 3.6 - i * 0.85, wt = 4.5 - wh / 2;
           const wc = i === (Math.floor(tick / 3) % 3) ? (isDark ? '#F4F4F5' : '#38BDF8') : (isDark ? '#A1A1AA' : '#1E78FF');
-          dot(wc, -1.1 - i * 1.1, wt, 0.75, wh, false);
-          dot(wc, 11.1 + i * 1.1, wt, 0.75, wh, false);
+          dot(wc, -0.4 - i * 0.95, wt, 0.75, wh, false);
+          dot(wc, 10.6 + i * 0.95, wt, 0.75, wh, false);
         }
         break;
       case 'Thinking': {
-        if (!hurt) {
+        if (!faceBlocked) {
           dot(eyeMain, 3.9, 2.75, 0.85, 0.55);
           dot(eyeMain, 6.3, 2.75, 0.85, 0.8);
           if (!isDark) { dot('#F8FAFC', 4.35, 2.75, 0.35, 0.35); dot('#F8FAFC', 6.75, 2.75, 0.35, 0.35); }
@@ -285,28 +297,28 @@
         dot(armRU, 8.6, 4.6, 0.55, 0.85); dot(armRL, 7.6, 4.2, 1.05, 0.5);
         const rim = isDark ? '#A1A1AA' : '#1E78FF';
         const bg = isDark ? '#27272A' : '#0F172A';
-        dot(rim, 9.0, 0.3, 0.55, 0.55, false);
-        dot(rim, 10.1, -0.7, 0.8, 0.8, false);
-        dot(rim, 9.6, -3.5, 5.3, 2.4, false);
-        dot(bg, 10.0, -3.1, 4.5, 1.6, false);
+        dot(rim, 8.4, 0.6, 0.5, 0.5, false);
+        dot(rim, 9.1, -0.2, 0.75, 0.75, false);
+        dot(rim, 8.7, -2.6, 4.8, 2.2, false);
+        dot(bg, 9.1, -2.25, 4.0, 1.5, false);
         const pulse = Math.floor(tick / 3) % 3;
         const sparks = isDark ? ['#F4F4F5', '#A1A1AA', '#F4F4F5'] : ['#F8C618', '#4EC446', '#38BDF8'];
         for (let d = 0; d < 3; d++) {
           const lit = d === pulse;
-          dot(lit ? sparks[d] : (isDark ? '#52525B' : '#64748B'), 10.6 + d * 1.25, lit ? -2.65 : -2.4, 0.75, 0.75, false);
+          dot(lit ? sparks[d] : (isDark ? '#52525B' : '#64748B'), 9.6 + d * 1.15, lit ? -1.85 : -1.65, 0.7, 0.7, false);
         }
         break;
       }
       case 'Speaking':
-        if (!hurt) {
+        if (!faceBlocked) {
           drawEyes(3.9, 3.1, 6.3, 3.1, false);
           dot(eyeMain, 4.7, 4.4, 1.6, tick % 4 < 2 ? 0.9 : 0.4);
         }
-        if ((Math.floor(tick / 3) % 4) >= 1) dot(isDark ? '#F4F4F5' : '#F8FAFC', 11.3, 4.0, 0.9, 0.9, false);
-        if ((Math.floor(tick / 3) % 4) >= 2) dot(isDark ? '#A1A1AA' : '#38BDF8', 12.6, 3.0, 0.9, 0.9, false);
+        if ((Math.floor(tick / 3) % 4) >= 1) dot(isDark ? '#F4F4F5' : '#F8FAFC', 10.3, 3.8, 0.9, 0.9, false);
+        if ((Math.floor(tick / 3) % 4) >= 2) dot(isDark ? '#A1A1AA' : '#38BDF8', 11.4, 2.9, 0.9, 0.9, false);
         break;
       case 'Typing': {
-        if (!hurt) drawEyes(3.7, 3.3, 6.1, 3.3, false, true);
+        if (!faceBlocked) drawEyes(3.7, 3.3, 6.1, 3.3, false, true);
         dot(isDark ? '#27272A' : '#3F4A5C', 1.4, 6.2, 8.2, 1.4);
         const tap = Math.floor(tick / 2) % 4;
         for (let i = 0; i < 4; i++) {
@@ -316,24 +328,24 @@
         const leftDown = tick % 4 < 2;
         dot(armLU, 1.6, leftDown ? 5.3 : 4.8, 0.65, 0.9);
         dot(armRU, 8.7, leftDown ? 4.8 : 5.3, 0.65, 0.9);
-        dot(isDark ? '#27272A' : '#0F172A', 9.8, -1.6, 4.4, 2.1, false);
+        dot(isDark ? '#27272A' : '#0F172A', 8.7, -0.9, 4.2, 2.0, false);
         for (let d = 0; d < 3; d++) {
-          const lift = ((Math.floor(tick / 3) + d) % 3 === 0) ? -0.35 : 0;
+          const lift = ((Math.floor(tick / 3) + d) % 3 === 0) ? -0.3 : 0;
           const dc = d === 0 ? (isDark ? '#F4F4F5' : '#F8C618') : (d === 1 ? (isDark ? '#A1A1AA' : '#4EC446') : (isDark ? '#F4F4F5' : '#38BDF8'));
-          dot(dc, 10.5 + d * 1.2, -0.8 + lift, 0.65, 0.65, false);
+          dot(dc, 9.35 + d * 1.15, -0.18 + lift, 0.62, 0.62, false);
         }
         break;
       }
       case 'Searching': {
         const sx = Math.round(Math.sin(tick * 0.14)) * 0.35;
-        if (!hurt) drawEyes(3.9 + sx, 3.2, 6.3 + sx, 3.2, false);
-        const gx = 3.5 + Math.round(Math.sin(tick * 0.14) * 3.2);
-        shape(isDark ? '#F4F4F5' : '#38BDF8', gx, -2.8, [".###.", "#...#", "#...#", ".###."]);
-        dot(isDark ? '#A1A1AA' : '#1E78FF', gx + 4, 1.1, 0.9, 0.9, false);
+        if (!faceBlocked) drawEyes(3.9 + sx, 3.2, 6.3 + sx, 3.2, false);
+        const gx = 3.5 + Math.round(Math.sin(tick * 0.14) * 2.8);
+        shape(isDark ? '#F4F4F5' : '#38BDF8', gx, -2.4, [".###.", "#...#", "#...#", ".###."]);
+        dot(isDark ? '#A1A1AA' : '#1E78FF', gx + 4, 1.4, 0.9, 0.9, false);
         break;
       }
       case 'Reading':
-        if (!hurt) drawEyes(3.9, 3.1, 6.3, 3.1, false, true);
+        if (!faceBlocked) drawEyes(3.9, 3.1, 6.3, 3.1, false, true);
         dot(isDark ? '#18181B' : '#0F172A', 0.5, 4.3, 10, 3);
         dot(isDark ? '#A1A1AA' : '#1E78FF', 5.25, 4.3, 0.5, 3);
         dot(isDark ? '#F4F4F5' : '#F8C618', 1.5, 5.0, 3, 0.4);
@@ -342,49 +354,49 @@
         dot(isDark ? '#A1A1AA' : '#4EC446', 6.5, 6.0, 3, 0.4);
         break;
       case 'Working':
-        if (!hurt) {
+        if (!faceBlocked) {
           drawEyes(3.6, 3.4, 6.0, 3.4, false, true);
           dot(eyeMain, 3.3, 2.7, 0.9, 0.3); dot(eyeMain, 6.1, 2.7, 0.9, 0.3);
         }
-        dot(isDark ? '#A1A1AA' : '#94A3B8', -5.2, 1.8, 5.2, 6.0, false);
-        dot(isDark ? '#18181B' : '#E2E8F0', -4.4, 2.5, 3.6, 4.4, false);
-        dot(isDark ? '#27272A' : '#3F4A5C', -5.2, 7.8, 6.8, 0.9, false);
-        dot(isDark ? '#F4F4F5' : '#1E78FF', -4.1, 3.0, 2.6, 0.45, false);
-        dot(isDark ? '#A1A1AA' : '#EF443A', -3.6, 4.0, 2.2, 0.45, false);
-        dot(isDark ? '#F4F4F5' : '#4EC446', -4.1, 5.0, 1.4 + (tick % 3) * 0.6, 0.45, false);
-        dot(armLU, 0.4, 5.0, 1.8, 0.85, false);
+        dot(isDark ? '#A1A1AA' : '#94A3B8', -4.2, 1.8, 5.0, 6.0, false);
+        dot(isDark ? '#18181B' : '#E2E8F0', -3.4, 2.5, 3.4, 4.4, false);
+        dot(isDark ? '#27272A' : '#3F4A5C', -4.2, 7.8, 6.2, 0.9, false);
+        dot(isDark ? '#F4F4F5' : '#1E78FF', -3.1, 3.0, 2.4, 0.45, false);
+        dot(isDark ? '#A1A1AA' : '#EF443A', -2.7, 4.0, 2.0, 0.45, false);
+        dot(isDark ? '#F4F4F5' : '#4EC446', -3.1, 5.0, 1.2 + (tick % 3) * 0.55, 0.45, false);
+        dot(armLU, 0.6, 5.0, 1.6, 0.85, false);
         break;
       case 'Terminal': {
-        if (!hurt) {
+        if (!faceBlocked) {
           drawEyes(3.6, 3.4, 6.0, 3.4, false, true);
           dot(eyeMain, 3.3, 2.7, 0.9, 0.3); dot(eyeMain, 6.1, 2.7, 0.9, 0.3);
         }
-        const tx = -5.4;
-        dot(isDark ? '#A1A1AA' : '#3F4A5C', tx, 1.7, 5.6, 6.2, false);
-        dot('#18181B', tx + 0.45, 2.2, 4.7, 5.2, false);
+        const tx = -4.3;
+        dot(isDark ? '#A1A1AA' : '#3F4A5C', tx, 1.7, 5.2, 6.2, false);
+        dot('#18181B', tx + 0.45, 2.2, 4.3, 5.2, false);
         dot(isDark ? '#F4F4F5' : '#EF443A', tx + 0.75, 2.45, 0.45, 0.45, false);
         dot(isDark ? '#A1A1AA' : '#F8C618', tx + 1.4, 2.45, 0.45, 0.45, false);
         dot(isDark ? '#52525B' : '#4EC446', tx + 2.05, 2.45, 0.45, 0.45, false);
         const prompt = isDark ? '#F4F4F5' : '#4EC446';
         dot(prompt, tx + 0.85, 3.5, 0.4, 0.4, false); dot(prompt, tx + 1.25, 3.85, 0.4, 0.4, false); dot(prompt, tx + 0.85, 4.2, 0.4, 0.4, false);
-        dot(isDark ? '#A1A1AA' : '#E2E8F0', tx + 2.0, 3.7, 1.4 + (Math.floor(tick / 4) % 3) * 0.55, 0.45, false);
-        dot(isDark ? '#71717A' : '#38BDF8', tx + 0.9, 5.0, 2.7, 0.42, false);
-        if (tick % 6 < 3) dot(prompt, tx + 3.7, 5.9, 0.6, 0.6, false);
-        dot(armLU, 0.4, 5.0, 1.8, 0.85, false);
+        dot(isDark ? '#A1A1AA' : '#E2E8F0', tx + 1.9, 3.7, 1.2 + (Math.floor(tick / 4) % 3) * 0.55, 0.45, false);
+        dot(isDark ? '#71717A' : '#38BDF8', tx + 0.9, 5.0, 2.5, 0.42, false);
+        if (tick % 6 < 3) dot(prompt, tx + 3.5, 5.9, 0.6, 0.6, false);
+        dot(armLU, 0.6, 5.0, 1.6, 0.85, false);
         break;
       }
       case 'Browsing': {
         const bx = Math.round(Math.sin(tick * 0.16)) * 0.35;
-        if (!hurt) drawEyes(3.9 + bx, 3.1, 6.3 + bx, 3.1, false);
-        shape(isDark ? '#F4F4F5' : '#38BDF8', 9.4, -1.6, [".###.", "#...#", "#...#", ".###."]);
-        dot(isDark ? '#A1A1AA' : '#1E78FF', 10.4, -0.1, 3, 0.45, false);
+        if (!faceBlocked) drawEyes(3.9 + bx, 3.1, 6.3 + bx, 3.1, false);
+        shape(isDark ? '#F4F4F5' : '#38BDF8', 8.6, -1.0, [".###.", "#...#", "#...#", ".###."]);
+        dot(isDark ? '#A1A1AA' : '#1E78FF', 9.6, 0.5, 3, 0.45, false);
         const sw = 1.2 + Math.round(Math.sin(tick * 0.25) * 0.9);
-        dot(isDark ? '#F4F4F5' : '#F8C618', 9.4 + sw, -1.1, 0.65, 3.0, false);
+        dot(isDark ? '#F4F4F5' : '#F8C618', 8.6 + sw, -0.5, 0.65, 3.0, false);
         break;
       }
       case 'Multitasking': {
         const mx = (Math.floor(tick / 5) % 2 === 0) ? -0.45 : 0.45;
-        if (!hurt) drawEyes(3.9 + mx, 3.1, 6.3 + mx, 3.1, false);
+        if (!faceBlocked) drawEyes(3.9 + mx, 3.1, 6.3 + mx, 3.1, false);
         const ph = tick % 6 < 3;
         dot(armLU, 1.0, ph ? 3.5 : 4.2, 0.55, 1.0); dot(armLL, 1.5, 4.4, 0.5, 0.6);
         dot(armRL, 9.45, ph ? 4.2 : 3.5, 0.55, 1.0); dot(armRU, 8.95, 4.4, 0.5, 0.6);
@@ -393,84 +405,84 @@
         const orbSize = nOrbs >= 6 ? 0.9 : 1.05;
         for (let i = 0; i < nOrbs; i++) {
           const a = tick * 0.24 + i * ((Math.PI * 2) / nOrbs);
-          dot(orbs[i % orbs.length], 5.2 + Math.cos(a) * 4.8, -0.8 + Math.sin(a) * 2.1, orbSize, orbSize, false);
+          dot(orbs[i % orbs.length], 5.1 + Math.cos(a) * 3.9, -0.4 + Math.sin(a) * 1.55, orbSize, orbSize, false);
         }
         break;
       }
       case 'Background': {
-        if (!hurt) drawHappyEyes();
+        if (!faceBlocked) drawHappyEyes();
         const beat = tick % 10 < 5;
-        dot(isDark ? '#27272A' : '#0F172A', 9.8, 0.2, 3.8, 4.6, false);
-        dot(isDark ? '#52525B' : '#3F4A5C', 10.15, 0.6, 3.1, 1.5, false);
-        dot(isDark ? '#52525B' : '#3F4A5C', 10.15, 2.7, 3.1, 1.5, false);
-        dot(beat ? (isDark ? '#F4F4F5' : '#4EC446') : (isDark ? '#71717A' : '#1FA8D8'), 10.6, 1.05, 0.65, 0.65, false);
-        dot(!beat ? (isDark ? '#F4F4F5' : '#38BDF8') : (isDark ? '#71717A' : '#1E78FF'), 10.6, 3.15, 0.65, 0.65, false);
-        dot(isDark ? '#F4F4F5' : '#E2E8F0', 11.7, 1.2, 1.2, 0.35, false);
-        dot(isDark ? '#A1A1AA' : '#E2E8F0', 11.7, 3.3, 1.2, 0.35, false);
+        dot(isDark ? '#27272A' : '#0F172A', 9.0, 0.6, 3.8, 4.6, false);
+        dot(isDark ? '#52525B' : '#3F4A5C', 9.35, 1.0, 3.1, 1.5, false);
+        dot(isDark ? '#52525B' : '#3F4A5C', 9.35, 3.1, 3.1, 1.5, false);
+        dot(beat ? (isDark ? '#F4F4F5' : '#4EC446') : (isDark ? '#71717A' : '#1FA8D8'), 9.8, 1.45, 0.65, 0.65, false);
+        dot(!beat ? (isDark ? '#F4F4F5' : '#38BDF8') : (isDark ? '#71717A' : '#1E78FF'), 9.8, 3.55, 0.65, 0.65, false);
+        dot(isDark ? '#F4F4F5' : '#E2E8F0', 10.9, 1.6, 1.2, 0.35, false);
+        dot(isDark ? '#A1A1AA' : '#E2E8F0', 10.9, 3.7, 1.2, 0.35, false);
         break;
       }
       case 'Alert':
-        if (!hurt) {
+        if (!faceBlocked) {
           dot('#F8FAFC', 3.6, 2.9, 1.25, 1.25); dot('#0B1220', 3.95, 3.25, 0.55, 0.55);
           dot('#F8FAFC', 6.1, 2.9, 1.25, 1.25); dot('#0B1220', 6.45, 3.25, 0.55, 0.55);
         }
         dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
         if (tick % 10 >= 2) {
-          dot(isDark ? '#F4F4F5' : '#F59E0B', 5.0, -2.8, 1, 2.2, false);
-          dot(isDark ? '#F4F4F5' : '#F59E0B', 5.0, -0.2, 1, 0.8, false);
+          dot(isDark ? '#F4F4F5' : '#F59E0B', 5.0, -2.3, 1, 2.2, false);
+          dot(isDark ? '#F4F4F5' : '#F59E0B', 5.0, 0.3, 1, 0.8, false);
         }
         break;
       case 'Question':
-        if (!hurt) {
+        if (!faceBlocked) {
           drawEyes(3.7, 3.2, 6.2, 3.2, false);
           dot('#F8FAFC', 6.0, 2.8, 1.35, 1.35); dot('#0B1220', 6.45, 3.25, 0.55, 0.55);
         }
         if (tick % 16 >= 2) {
-          shape(isDark ? '#F4F4F5' : '#38BDF8', 4.0, -2.9, [".##.", "...#", "..#."]);
-          dot(isDark ? '#F4F4F5' : '#38BDF8', 6.0, 0.3, 0.9, 0.9, false);
+          shape(isDark ? '#F4F4F5' : '#38BDF8', 4.0, -2.3, [".##.", "...#", "..#."]);
+          dot(isDark ? '#F4F4F5' : '#38BDF8', 6.0, 0.5, 0.9, 0.9, false);
         }
         break;
       case 'Delegating': {
-        if (!hurt) drawEyes(4.1, 3.1, 6.5, 3.1, false);
+        if (!faceBlocked) drawEyes(4.1, 3.1, 6.5, 3.1, false);
         dot(armLU, 1.5, 4.8, 0.5, 1.0); dot(armLL, 1.1, 5.4, 0.5, 0.5);
-        dot(armRU, 8.9, 4.2, 1.35, 0.65, false);
+        dot(armRU, 8.7, 4.2, 1.1, 0.65, false);
         const frame = isDark ? '#27272A' : '#0F172A';
         const slot = isDark ? '#A1A1AA' : '#3F4A5C';
         for (let row = 0; row < 2; row++) {
-          const ny = row === 0 ? -0.4 : 3.2;
-          dot(slot, 10.5, ny, 4.2, 2.7, false);
-          dot(frame, 10.85, ny + 0.35, 3.5, 2.0, false);
+          const ny = row === 0 ? 0.1 : 3.4;
+          dot(slot, 9.5, ny, 4.1, 2.6, false);
+          dot(frame, 9.85, ny + 0.35, 3.4, 1.9, false);
           const active = (Math.floor(tick / 4) % 2) === row;
           const badge = row === 0 ? (isDark ? '#F4F4F5' : '#F8C618') : (isDark ? '#A1A1AA' : '#7B61EC');
-          dot(badge, 11.2, ny + 0.75, 0.65, 0.65, false);
-          dot(active ? (isDark ? '#F4F4F5' : '#38BDF8') : (isDark ? '#52525B' : '#64748B'), 12.15, ny + 0.85, 1.6, 0.45, false);
-          dot(isDark ? '#52525B' : '#4EC446', 11.2, ny + 1.65, 2.2, 0.38, false);
+          dot(badge, 10.2, ny + 0.7, 0.65, 0.65, false);
+          dot(active ? (isDark ? '#F4F4F5' : '#38BDF8') : (isDark ? '#52525B' : '#64748B'), 11.1, ny + 0.8, 1.5, 0.45, false);
+          dot(isDark ? '#52525B' : '#4EC446', 10.2, ny + 1.55, 2.1, 0.38, false);
         }
         const frac = (tick % 6) / 5.0;
         const upper = Math.floor(tick / 6) % 2 === 0;
-        dot(isDark ? '#F4F4F5' : '#F8C618', 9.4 + frac * 1.1, 4.2 + (upper ? -2.9 : -0.1) * frac, 0.65, 0.65, false);
+        dot(isDark ? '#F4F4F5' : '#F8C618', 8.9 + frac * 0.8, 4.2 + (upper ? -2.6 : -0.1) * frac, 0.65, 0.65, false);
         break;
       }
       case 'Error': {
-        if (!hurt) {
+        if (!faceBlocked) {
           dot('#F8FAFC', 3.55, 2.95, 0.45, 0.35); dot('#F8FAFC', 4.0, 3.3, 0.45, 0.35); dot('#F8FAFC', 3.55, 3.65, 0.45, 0.35);
           dot('#F8FAFC', 6.85, 2.95, 0.45, 0.35); dot('#F8FAFC', 6.4, 3.3, 0.45, 0.35); dot('#F8FAFC', 6.85, 3.65, 0.45, 0.35);
         }
         dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
         if (tick % 8 >= 2) {
-          shape(isDark ? '#F4F4F5' : '#EF4444', 4.2, -3.7, ["..##", ".##.", "###.", ".##.", ".#.."]);
-          dot(isDark ? '#A1A1AA' : '#FFD24A', 5.1, -2.1, 0.45, 0.45, false);
+          shape(isDark ? '#F4F4F5' : '#EF4444', 4.3, -2.7, ["..##", ".##.", "###.", ".##.", ".#.."]);
+          dot(isDark ? '#A1A1AA' : '#FFD24A', 5.2, -1.1, 0.45, 0.45, false);
         }
         break;
       }
       case 'Done': {
-        if (!hurt) drawHappyEyes();
+        if (!faceBlocked) drawHappyEyes();
         dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
-        const lift = tick % 8 < 4 ? -0.3 : 0.2;
-        dot(isDark ? '#F4F4F5' : '#EF443A', 0.8, -0.8 + lift, 0.6, 0.6, false);
-        dot(isDark ? '#A1A1AA' : '#4EC446', 3.0, -1.8 - lift, 0.6, 0.6, false);
-        dot(isDark ? '#F4F4F5' : '#F8C618', 7.8, -1.6 + lift, 0.6, 0.6, false);
-        dot(isDark ? '#A1A1AA' : '#38BDF8', 9.8, -0.6 - lift, 0.6, 0.6, false);
+        const lift = tick % 8 < 4 ? -0.25 : 0.15;
+        dot(isDark ? '#F4F4F5' : '#EF443A', 0.2, 1.2 + lift, 0.45, 0.85, false);
+        dot(isDark ? '#A1A1AA' : '#4EC446', 1.3, -0.7 - lift, 1.0, 0.36, false);
+        dot(isDark ? '#F4F4F5' : '#F8C618', 3.1, -1.4 + lift, 0.45, 0.45, false);
+        dot(isDark ? '#A1A1AA' : '#38BDF8', 8.7, -0.6 - lift, 0.9, 0.36, false);
         break;
       }
     }
@@ -479,6 +491,19 @@
       const ey = compact ? 3.85 : 3.05;
       dot(eyeMain, 3.65, ey, 0.4, 0.35); dot(eyeMain, 4.05, ey + 0.32, 0.45, 0.35); dot(eyeMain, 3.65, ey + 0.64, 0.4, 0.35);
       dot(eyeMain, 6.75, ey, 0.4, 0.35); dot(eyeMain, 6.3, ey + 0.32, 0.45, 0.35); dot(eyeMain, 6.75, ey + 0.64, 0.4, 0.35);
+    } else if (annoyed) {
+      const ey = compact ? 4.05 : 3.25;
+      dot(eyeMain, 3.7, ey + 0.25, 1.0, 0.45);
+      dot(eyeMain, 6.2, ey + 0.25, 1.0, 0.45);
+      dot(eyeMain, 3.5, ey - 0.45, 0.6, 0.32); dot(eyeMain, 4.05, ey - 0.2, 0.6, 0.32);
+      dot(eyeMain, 6.8, ey - 0.45, 0.6, 0.32); dot(eyeMain, 6.25, ey - 0.2, 0.6, 0.32);
+      if (tick % 8 < 6) {
+        const mk = isDark ? '#F4F4F5' : '#EF4444';
+        const mx = 8.4, my = compact ? 0.5 : -0.5;
+        dot(mk, mx, my, 0.45, 0.45, false); dot(mk, mx + 0.9, my, 0.45, 0.45, false);
+        dot(mk, mx + 0.45, my + 0.45, 0.45, 0.45, false);
+        dot(mk, mx, my + 0.9, 0.45, 0.45, false); dot(mk, mx + 0.9, my + 0.9, 0.45, 0.45, false);
+      }
     }
 
     ctx.restore();
@@ -558,6 +583,12 @@
   let motionPaused = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let globalTick = 0;
   let hurtTicks = 0;
+  let danceTicks = 0;
+  let annoyedTicks = 0;
+  let clickStreak = 0;
+  let lastClickMs = 0;
+  let simLookX = 0;
+  let simLookY = 0;
 
   const navCanvas = document.getElementById('nav-mascot');
   const heroCanvas = document.getElementById('hero-mascot');
@@ -768,7 +799,7 @@
     const vp = stageViewport.getBoundingClientRect();
     const spriteW = 11 * heroPx;
     const spriteH = 9 * heroPx;
-    const shiftLeftProp = (heroMood === 'Working' || heroMood === 'Terminal') ? 1.8 * heroPx : 0;
+    const shiftLeftProp = (heroMood === 'Working' || heroMood === 'Terminal') ? 1.4 * heroPx : 0;
     const canvasOffsetX = (heroMeta.w - spriteW) * 0.5 + shiftLeftProp;
     const canvasOffsetY = (heroMeta.h - spriteH) * 0.5 + 1.3 * heroPx;
 
@@ -789,18 +820,34 @@
     }
   }
 
-  // Subtle press reaction when perched above chatbox, or wake-on-nudge if Sleeping
+  // Single-click gently dances; rapid clicking (4+ within 2.2s) makes him annoyed; Sleeping wakes up!
   stagePet.addEventListener('click', () => {
     if (heroMood === 'Sleeping') {
-      hurtTicks = 6;
       setHeroMood('Idle');
       chatStatus.textContent = 'Woke up from sleep (At rest)';
-      return;
     }
-    if (!isPerchedOnChatBox()) return;
-    hurtTicks = 6;
+    const nowMs = performance.now();
+    if (nowMs - lastClickMs > 2200) clickStreak = 0;
+    clickStreak++;
+    lastClickMs = nowMs;
+    if (clickStreak >= 4) {
+      danceTicks = 0;
+      annoyedTicks = 28;
+    } else {
+      annoyedTicks = 0;
+      danceTicks = 24;
+    }
     renderAllOnce();
   });
+
+  window.addEventListener('pointermove', (e) => {
+    const r = stagePet.getBoundingClientRect();
+    if (r.width <= 0) return;
+    const cx = r.left + r.width * 0.5;
+    const cy = r.top + r.height * 0.45;
+    simLookX = Math.tanh((e.clientX - cx) / 200);
+    simLookY = Math.tanh((e.clientY - cy) / 140);
+  }, { passive: true });
 
   // Hover card ONLY when away / minimized
   let hoverLeave = 0;
@@ -937,9 +984,9 @@
   let lastTickAt = 0;
 
   function renderAllOnce() {
-    drawMascot(navMeta.ctx, navMeta.w, navMeta.h, 2.1, currentSkin, 'Idle', globalTick, 0, navMeta.dpr);
-    drawMascot(heroMeta.ctx, heroMeta.w, heroMeta.h, heroPx, currentSkin, heroMood, globalTick, hurtTicks, heroMeta.dpr);
-    moodTiles.forEach((t, i) => drawMascot(t.ctx, t.w, t.h, 3.6, currentSkin, t.mood, globalTick + i * 3, 0, t.dpr));
+    drawMascot(navMeta.ctx, navMeta.w, navMeta.h, 2.1, currentSkin, 'Idle', globalTick, 0, navMeta.dpr, 3, simLookX, simLookY);
+    drawMascot(heroMeta.ctx, heroMeta.w, heroMeta.h, heroPx, currentSkin, heroMood, globalTick, { hurt: hurtTicks, dance: danceTicks, annoyed: annoyedTicks }, heroMeta.dpr, 3, simLookX, simLookY);
+    moodTiles.forEach((t, i) => drawMascot(t.ctx, t.w, t.h, 3.6, currentSkin, t.mood, globalTick + i * 3, 0, t.dpr, 3, t.mood === 'Idle' ? simLookX : 0, t.mood === 'Idle' ? simLookY : 0));
     skinSamples.forEach((s, i) => drawMascot(s.ctx, s.w, s.h, 4.2, s.skin, s.mood, globalTick + i * 5, 0, s.dpr));
   }
 
@@ -958,6 +1005,8 @@
       lastTickAt = now;
       globalTick++;
       if (hurtTicks > 0) hurtTicks--;
+      if (danceTicks > 0) danceTicks--;
+      if (annoyedTicks > 0) annoyedTicks--;
       renderAllOnce();
     }
     requestAnimationFrame(frame);

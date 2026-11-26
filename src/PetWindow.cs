@@ -54,6 +54,7 @@ namespace AgyPet
         DateTime menuCooldownUntil = DateTime.MinValue;
         DateTime menuOpenedAtUtc = DateTime.MinValue;
         int prevMenuMouseMask;
+        HwndSource selfHwndSource;
         readonly ContextMenu contextMenu = new ContextMenu();
 
         bool previewMode;
@@ -183,6 +184,15 @@ namespace AgyPet
             monitor.Updated += () => Dispatcher.BeginInvoke(new Action(SyncActivity));
             SourceInitialized += OnSourceInitialized;
             Loaded += (s, e) => { SyncActivity(); SnapToTarget(); };
+            Closed += (s, e) =>
+            {
+                menuDismissTimer.Stop();
+                if (selfHwndSource != null)
+                {
+                    selfHwndSource.RemoveHook(OnWndProc);
+                    selfHwndSource = null;
+                }
+            };
         }
 
         void OnCardMouseWheel(object sender, MouseWheelEventArgs e)
@@ -199,6 +209,20 @@ namespace AgyPet
             IntPtr hwnd = new WindowInteropHelper(this).Handle;
             int ex = GetWindowLong(hwnd, GWL_EXSTYLE);
             SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+            selfHwndSource = HwndSource.FromHwnd(hwnd);
+            if (selfHwndSource != null)
+                selfHwndSource.AddHook(OnWndProc);
+        }
+
+        IntPtr OnWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            // Never activate PetWindow on click so keyboard focus & key-up events stay intact in the active app.
+            if (msg == 0x0021) // WM_MOUSEACTIVATE
+            {
+                handled = true;
+                return new IntPtr(3); // MA_NOACTIVATE
+            }
+            return IntPtr.Zero;
         }
 
         public void RebuildMascot()
@@ -748,6 +772,21 @@ namespace AgyPet
             Point desired = ComputeDesiredPosition();
             targetLeft = desired.X;
             targetTop = desired.Y;
+            UpdateMascotEyeGaze();
+        }
+
+        void UpdateMascotEyeGaze()
+        {
+            if (mascot == null || mascot.Mood != MascotMood.Idle) return;
+            POINT cur;
+            if (!GetCursorPos(out cur)) return;
+            double dpiX, dpiY;
+            GetDpiScale(out dpiX, out dpiY);
+            double eyeCenterX = (Left + StagePadX + 5.5 * settings.PixelSize) * dpiX;
+            double eyeCenterY = (Top + StagePadY + 3.4 * settings.PixelSize) * dpiY;
+            double nx, ny;
+            Mascot.NormalizeLookOffset(cur.X - eyeCenterX, cur.Y - eyeCenterY, out nx, out ny);
+            mascot.SetLookOffset(nx, ny);
         }
 
         void TickSmoothGlide()
@@ -1017,32 +1056,10 @@ namespace AgyPet
         {
             if (e.ChangedButton != MouseButton.Left) return;
 
-            bool wokeFromSleep = false;
             if (!previewMode && mascot != null && mascot.Mood == MascotMood.Sleeping)
             {
                 monitor.WakeUp();
                 SyncActivity();
-                wokeFromSleep = true;
-            }
-
-            // Double-click when calm triggers joyful dance; single click perched (or locked / waking nudge) gives subtle wince
-            if (mascot != null && e.ClickCount >= 2 &&
-                (mascot.Mood == MascotMood.Idle || mascot.Mood == MascotMood.Done))
-            {
-                mascot.CancelHurt();
-                mascot.Dance();
-            }
-            else if (mascot != null && (IsPerchedOnTarget || settings.LockPosition || wokeFromSleep))
-            {
-                mascot.Poke();
-            }
-
-            if (settings.LockPosition)
-            {
-                mouseDown = false;
-                dragging = false;
-                e.Handled = true;
-                return;
             }
 
             mouseDown = true;
@@ -1085,7 +1102,11 @@ namespace AgyPet
             mouseDown = false;
             petHitArea.ReleaseMouseCapture();
 
-            if (!dragging) return;
+            if (!dragging)
+            {
+                if (mascot != null) mascot.RegisterClick();
+                return;
+            }
 
             dragging = false;
             targetLeft = Left;

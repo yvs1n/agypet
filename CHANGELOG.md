@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.6 (2026-11-27)
+- **Single-Click Dance & Rapid-Click Annoyed Reaction**: Single-clicking AgyPet triggers a calmer, gentle dance groove (without stacking frame speedups), while clicking rapidly 4+ times makes him annoyed (`\ /` glare + pulsing mark).
+- **Cursor-Following Idle Eyes**: When `Idle`, AgyPet's pupils subtly track your mouse cursor smoothly across the screen while still blinking naturally.
+- **Tighter Floating Props & Gentler Dance**: Reduced dance bob/sway amplitude and pulled floating icons (clouds, orbs, sparkles, speech dots, globe, server rack, cards, and lightning) closer in toward the mascot.
+- **Keyboard Safety & Focus Guard**: Added `WM_MOUSEACTIVATE` (`MA_NOACTIVATE`) hook on `PetWindow` and switched typing detection strictly to non-destructive `0x8000` key-down state (ignoring `Win` key chords as well as `Ctrl`/`Alt`) so clicking never drops key-up events or triggers repeating keys.
+
 ## 0.3.5 (2026-11-27)
 - **Dynamic Multi-Session Orbiting Orbs**: `Multitasking` now juggles one orbiting orb per active session (`2`–`8` orbs spaced evenly overhead, matching live `ActiveSessions.Count` while defaulting to `3` in Preview Mode).
 - **Updated Landing Page**: Added interactive `agy CLI Terminal` simulator tab plus explicit coverage of Antigravity IDE, App, `agy` CLI perching, inner prompt alignment, Pin Above Taskbar, Lock Position, Auto-Hide, Wake-on-Nudge, and dynamic session orbs.

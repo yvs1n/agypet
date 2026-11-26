@@ -293,17 +293,16 @@ namespace AgyPet
         // Checks whether a typing key is currently down without installing any global keyboard hook.
         static bool AnyTypingKeyPressed()
         {
-            // Ignore shortcut chords (Ctrl / Alt held)
-            if ((GetAsyncKeyState(0x11) & 0x8000) != 0 || (GetAsyncKeyState(0x12) & 0x8000) != 0)
+            // Ignore shortcut chords (Ctrl / Alt / Win held) and read key-down strictly without clearing transition bit 0x0001
+            if ((GetAsyncKeyState(0x11) & 0x8000) != 0 || (GetAsyncKeyState(0x12) & 0x8000) != 0 ||
+                (GetAsyncKeyState(0x5B) & 0x8000) != 0 || (GetAsyncKeyState(0x5C) & 0x8000) != 0)
                 return false;
 
-            // Letters A-Z (0x41..0x5A) and Digits 0-9 (0x30..0x39)
             for (int vk = 0x41; vk <= 0x5A; vk++)
-                if ((GetAsyncKeyState(vk) & 0x8001) != 0) return true;
+                if ((GetAsyncKeyState(vk) & 0x8000) != 0) return true;
             for (int vk = 0x30; vk <= 0x39; vk++)
-                if ((GetAsyncKeyState(vk) & 0x8001) != 0) return true;
-            // Space (0x20), Backspace (0x08), OEM punctuation
-            if ((GetAsyncKeyState(0x20) & 0x8001) != 0 || (GetAsyncKeyState(0x08) & 0x8001) != 0)
+                if ((GetAsyncKeyState(vk) & 0x8000) != 0) return true;
+            if ((GetAsyncKeyState(0x20) & 0x8000) != 0 || (GetAsyncKeyState(0x08) & 0x8000) != 0)
                 return true;
             return false;
         }

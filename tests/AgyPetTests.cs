@@ -208,14 +208,32 @@ namespace AgyPet.Tests
                 }
             });
 
-            Run("Poke easter egg triggers hurt state while preserving active Mood", () =>
+            Run("Click dances gently once, turns annoyed on rapid clicks, and cursor gaze normalizes cleanly", () =>
             {
-                var m = new Mascot(4.0, Mascot.ClassicSkin) { Mood = MascotMood.Thinking };
+                var m = new Mascot(4.0, Mascot.ClassicSkin) { Mood = MascotMood.Idle };
                 m.Poke();
                 AssertTrue(m.IsHurt, "Mascot should enter hurt state immediately when poked");
-                AssertEq(MascotMood.Thinking, m.Mood);
+                AssertEq(MascotMood.Idle, m.Mood);
                 m.CancelHurt();
                 AssertTrue(!m.IsHurt, "CancelHurt should clear hurt state on drag");
+
+                var t0 = new DateTime(2026, 11, 27, 1, 0, 0, DateTimeKind.Utc);
+                m.RegisterClickAt(t0);
+                AssertTrue(m.IsDancing && !m.IsAnnoyed, "First single click should dance gently without annoyance");
+                m.RegisterClickAt(t0.AddMilliseconds(250));
+                m.RegisterClickAt(t0.AddMilliseconds(500));
+                AssertTrue(m.IsDancing && !m.IsAnnoyed, "Up to 3 clicks stays playful");
+                m.RegisterClickAt(t0.AddMilliseconds(750));
+                AssertTrue(m.IsAnnoyed && !m.IsDancing, "4th rapid click triggers annoyed state cleanly without fighting dance");
+                m.RegisterClickAt(t0.AddSeconds(4));
+                AssertTrue(m.IsDancing && !m.IsAnnoyed, "Cooldown resets streak so later single click dances again");
+
+                double nx, ny;
+                Mascot.NormalizeLookOffset(0, 0, out nx, out ny);
+                AssertEq(0.0, nx);
+                AssertEq(0.0, ny);
+                Mascot.NormalizeLookOffset(5000, -5000, out nx, out ny);
+                AssertTrue(nx > 0.95 && nx <= 1.0 && ny < -0.95 && ny >= -1.0, "Gaze should normalize cleanly within [-1, 1]");
 
                 AssertEq(3, Mascot.ResolveOrbCount(0));
                 AssertEq(2, Mascot.ResolveOrbCount(2));

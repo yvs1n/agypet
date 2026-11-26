@@ -69,7 +69,7 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 
 ## Controls
 
-- **Left-click mascot**: Subtle press wince reaction (and wakes up immediately if `Sleeping`).
+- **Left-click mascot**: Single-click for a gentle dance groove (or wake up if `Sleeping`); click rapidly 4+ times and he gets annoyed (`\ /` glare).
 - **Double-click when calm**: Joyful dance groove (`Idle` / `Done`).
 - **Left-drag**: Move freely anywhere on screen (always returns above chatbox when returning to Antigravity).
 - **Hover (when outside Antigravity)**: View live status & scrollable multi-session progress card.
