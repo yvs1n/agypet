@@ -690,7 +690,9 @@ namespace AgyPet
 
         public static Point PlaceAboveChatBox(Rect chatBoxDip, double spriteW, double spriteH, double padX, double padY)
         {
-            double visualRight = chatBoxDip.Right - 14.0;
+            // Keep both feet clear of Antigravity's rounded top-right composer corner (even at Small size).
+            double rightInset = Math.Min(28.0, Math.Max(14.0, chatBoxDip.Width * 0.12));
+            double visualRight = chatBoxDip.Right - rightInset;
             double visualBottom = chatBoxDip.Top + 1.0;
             return new Point(
                 visualRight - spriteW - padX,

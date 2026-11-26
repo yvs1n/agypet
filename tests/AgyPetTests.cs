@@ -161,7 +161,7 @@ namespace AgyPet.Tests
                     var pt = PetWindow.PlaceAboveChatBox(box, sw, sh, 32, 24);
                     double visualRight = pt.X + 32 + sw;
                     double visualBottom = pt.Y + 24 + sh;
-                    AssertTrue(Math.Abs(visualRight - (box.Right - 14.0)) < 0.01, "Right edge should stay inset 14px inside chatbox");
+                    AssertTrue(Math.Abs(visualRight - (box.Right - 28.0)) < 0.01, "Right foot should stay inset 28px clear of rounded top-right chatbox corner");
                     AssertTrue(Math.Abs(visualBottom - (box.Top + 1.0)) < 0.01, "Feet should rest cleanly on top border of chatbox");
                 }
             });

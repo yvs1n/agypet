@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.3.2 (2026-11-26)
+- **Chatbox Corner Perch Alignment (`#6`)**: Increased the horizontal right-edge inset on `PlaceAboveChatBox` from `14px` to `28px` (scaling safely on narrow boxes) so AgyPet's right foot sits squarely on the flat top border of Antigravity's chatbox instead of hanging off the rounded top-right corner—especially noticeable on `Small` size.
+
 ## 0.3.1 (2026-11-26)
 - **Wake-on-Nudge from Sleep**: Clicking or nudging AgyPet while `Sleeping` wakes it up immediately to `Idle` (`"At rest · Ready"`) with a subtle startle blink and resets the 6-minute idle sleep timer.
 - **Improved Per-Chat Reaction Matching**: Added UIA active-pane header and selected-conversation probing (`ActiveChatCandidates`) on top of window titles, ellipsis-prefix matching (`…`), App-vs-CLI focus isolation, `New conversation` detection, per-session `Done` tracking, and 0ms chat-switch updates.

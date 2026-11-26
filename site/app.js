@@ -765,7 +765,7 @@
       const box = composerCard.getBoundingClientRect();
       const relRight = box.right - vp.left;
       const relTop = box.top - vp.top;
-      targetX = (relRight - 14) - spriteW - canvasOffsetX - 8;
+      targetX = (relRight - 24) - spriteW - canvasOffsetX - 8;
       targetY = (relTop + 1) - spriteH - canvasOffsetY - 8;
     } else {
       targetX = vp.width - heroMeta.w - 14;
