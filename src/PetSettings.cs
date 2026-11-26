@@ -71,6 +71,8 @@ namespace AgyPet
         public bool ShowHoverCard { get; set; }
         public bool HideWhenInactive { get; set; }
         public bool HideWhenMinimized { get; set; }
+        public bool PinAboveTaskbar { get; set; }
+        public bool LockPosition { get; set; }
         public bool StartWithWindows { get; set; }
         public bool AutoUpdate { get; set; }
 
@@ -90,6 +92,8 @@ namespace AgyPet
             ShowHoverCard = true;
             HideWhenInactive = false;
             HideWhenMinimized = false;
+            PinAboveTaskbar = false;
+            LockPosition = false;
             StartWithWindows = false;
             AutoUpdate = true;
         }
@@ -130,6 +134,21 @@ namespace AgyPet
                 else File.Move(tmp, FilePath);
             }
             catch { }
+        }
+
+        public static bool IsBottomOrTaskbarCorner(string corner)
+        {
+            string c = NormalizeCorner(corner);
+            return c.StartsWith("bottom-", StringComparison.Ordinal) ||
+                   c.StartsWith("taskbar-", StringComparison.Ordinal);
+        }
+
+        public static string ResolvePinnedCorner(string corner, bool pinAboveTaskbar)
+        {
+            string normalized = NormalizeCorner(corner);
+            if (pinAboveTaskbar && !IsBottomOrTaskbarCorner(normalized))
+                return "bottom-right";
+            return normalized;
         }
 
         public static string NormalizeCorner(string corner)

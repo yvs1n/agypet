@@ -272,6 +272,59 @@ namespace AgyPet.Tests
                 AssertTrue(!PetWindow.ShouldHideMascot(true, true, false, true, false, false, false, false, true), "Open menu must keep mascot visible");
             });
 
+            Run("Pin above taskbar and lock position settings resolve corners and custom coords cleanly", () =>
+            {
+                var defaults = new PetSettings();
+                AssertTrue(!defaults.PinAboveTaskbar, "PinAboveTaskbar should default to false");
+                AssertTrue(!defaults.LockPosition, "LockPosition should default to false");
+
+                AssertTrue(!PetSettings.IsBottomOrTaskbarCorner("top-right"), "top-right is not above taskbar");
+                AssertTrue(PetSettings.IsBottomOrTaskbarCorner("bottom-right"), "bottom-right is above taskbar");
+                AssertTrue(PetSettings.IsBottomOrTaskbarCorner("bottom-center"), "bottom-center is above taskbar");
+                AssertTrue(PetSettings.IsBottomOrTaskbarCorner("taskbar-right"), "taskbar-right is a taskbar placement");
+
+                AssertEq("bottom-right", PetSettings.ResolvePinnedCorner("top-right", true));
+                AssertEq("bottom-left", PetSettings.ResolvePinnedCorner("bottom-left", true));
+                AssertEq("taskbar-center", PetSettings.ResolvePinnedCorner("taskbar-center", true));
+                AssertEq("top-right", PetSettings.ResolvePinnedCorner("top-right", false));
+
+                var work = new System.Windows.Rect(0, 0, 1920, 1032);
+                var screen = new System.Windows.Rect(0, 0, 1920, 1080);
+                double sw = 11.0 * 4.2, sh = 9.0 * 4.2;
+
+                var pinnedDefault = PetWindow.ComputePinnedAwayPosition("top-right", true, false, 0, 0, work, screen, sw, sh, 32, 24);
+                var expectedBottomRight = PetWindow.PlaceInCorner("bottom-right", work, screen, sw, sh, 32, 24);
+                AssertEq(expectedBottomRight.X, pinnedDefault.X);
+                AssertEq(expectedBottomRight.Y, pinnedDefault.Y);
+
+                var pinnedCustom = PetWindow.ComputePinnedAwayPosition("bottom-right", true, true, 1234.5, 950.0, work, screen, sw, sh, 32, 24);
+                AssertEq(1234.5, pinnedCustom.X);
+                AssertEq(950.0, pinnedCustom.Y);
+            });
+
+            Run("Composer header detection excludes project tab while keeping attachments inside box", () =>
+            {
+                AssertTrue(WindowTracker.IsExplicitProjectLabel("No Project"), "No Project label must be recognized");
+                AssertTrue(WindowTracker.IsExplicitProjectLabel("No Project v"), "No Project dropdown text must be recognized");
+                AssertTrue(!WindowTracker.IsExplicitProjectLabel("PetWindow.cs"), "File name must not be treated as project tab");
+
+                AssertTrue(WindowTracker.IsAttachmentLabel("Remove screenshot.png"), "Remove button must be treated as attachment");
+                AssertTrue(WindowTracker.IsAttachmentLabel("image.png"), "Image file must be treated as attachment");
+                AssertTrue(!WindowTracker.IsAttachmentLabel("No Project"), "No Project must not be treated as attachment");
+
+                var input = new System.Windows.Rect(420, 760, 560, 42);
+                var inner = new System.Windows.Rect(404, 738, 592, 114); // wraps input + bottom toolbar (bottom=852 >= 760+16)
+                var outer = new System.Windows.Rect(400, 696, 600, 160); // adds 42px project bar on top
+                var band = new System.Windows.Rect(404, 698, 592, 38);
+
+                AssertTrue(WindowTracker.IsProjectHeaderBand(band, inner, outer, input, false, true, true),
+                    "Should exclude explicit No Project header bar above inner composer");
+                AssertTrue(WindowTracker.IsProjectHeaderBand(band, inner, outer, input, false, false, true),
+                    "Should exclude compact interactive project bar above inner composer with bottom toolbar");
+                AssertTrue(!WindowTracker.IsProjectHeaderBand(band, inner, outer, input, true, false, true),
+                    "Must keep band when attachment signal (thumbnail/remove/file) is present");
+            });
+
             Console.WriteLine("Tests complete: " + passed + " passed, " + failed + " failed.");
             return failed == 0 ? 0 : 1;
         }

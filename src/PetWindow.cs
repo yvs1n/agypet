@@ -228,7 +228,7 @@ namespace AgyPet
         {
             get
             {
-                return tracker.IsInFront && !tracker.IsMinimized && !userMovedWhileInFront &&
+                return !settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && !userMovedWhileInFront &&
                        (tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty);
             }
         }
@@ -328,8 +328,9 @@ namespace AgyPet
                 Left = targetLeft = desired.X;
                 Top = targetTop = desired.Y;
                 Visibility = Visibility.Visible;
-                if (!tracker.IsInFront && !settings.HasCustomFreePos && settings.MinimizedCorner != null &&
-                    settings.MinimizedCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
+                string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
+                if ((!tracker.IsInFront || settings.PinAboveTaskbar) && !settings.HasCustomFreePos &&
+                    effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
                 {
                     EnsureTopmost();
                 }
@@ -342,7 +343,23 @@ namespace AgyPet
             settings.HasCustomFreePos = false;
             settings.MinimizedCorner = PetSettings.NormalizeCorner(corner);
             settings.Save();
-            if (!tracker.IsInFront) SnapToTarget();
+            if (!tracker.IsInFront || settings.PinAboveTaskbar) SnapToTarget();
+        }
+
+        public void SetPinAboveTaskbar(bool pin)
+        {
+            settings.PinAboveTaskbar = pin;
+            if (pin && !settings.HasCustomFreePos && !PetSettings.IsBottomOrTaskbarCorner(settings.MinimizedCorner))
+                settings.MinimizedCorner = "bottom-right";
+            settings.Save();
+            userMovedWhileInFront = false;
+            SnapToTarget();
+        }
+
+        public void SetLockPosition(bool locked)
+        {
+            settings.LockPosition = locked;
+            settings.Save();
         }
 
         public void SetCliPlacement(string placement)
@@ -701,7 +718,7 @@ namespace AgyPet
 
             bool nowInFront = tracker.IsInFront;
             bool hasTargetBox = tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty;
-            bool nowOnChatScreen = nowInFront && !tracker.IsMinimized && hasTargetBox;
+            bool nowOnChatScreen = !settings.PinAboveTaskbar && nowInFront && !tracker.IsMinimized && hasTargetBox;
 
             if (nowInFront && hoverPopup.IsOpen)
                 hoverPopup.IsOpen = false;
@@ -715,8 +732,9 @@ namespace AgyPet
             if (nowOnChatScreen && userMovedWhileInFront) return;
 
             // Keep AgyPet above Shell_TrayWnd when docked along the Windows taskbar itself.
-            if (!nowInFront && !settings.HasCustomFreePos && settings.MinimizedCorner != null &&
-                settings.MinimizedCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
+            string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
+            if ((!nowInFront || settings.PinAboveTaskbar) && !settings.HasCustomFreePos &&
+                effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
             {
                 EnsureTopmost();
             }
@@ -756,7 +774,7 @@ namespace AgyPet
             tracker.TrackCliWindows = settings.CliPlacement != "off";
             tracker.Poll();
             bool hasTargetBox = tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty;
-            wasOnChatScreen = tracker.IsInFront && !tracker.IsMinimized && hasTargetBox;
+            wasOnChatScreen = !settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && hasTargetBox;
             Point desired = ComputeDesiredPosition();
             Left = targetLeft = desired.X;
             Top = targetTop = desired.Y;
@@ -846,6 +864,26 @@ namespace AgyPet
             return new Point(left, top);
         }
 
+        public static Point ComputePinnedAwayPosition(
+            string corner,
+            bool pinAboveTaskbar,
+            bool hasCustomFreePos,
+            double freeX,
+            double freeY,
+            Rect workArea,
+            Rect screenBounds,
+            double spriteW,
+            double spriteH,
+            double padX,
+            double padY)
+        {
+            if (hasCustomFreePos)
+                return new Point(freeX, freeY);
+
+            string effectiveCorner = PetSettings.ResolvePinnedCorner(corner, pinAboveTaskbar);
+            return PlaceInCorner(effectiveCorner, workArea, screenBounds, spriteW, spriteH, padX, padY);
+        }
+
         Point ComputeDesiredPosition()
         {
             double dpiX, dpiY;
@@ -857,9 +895,10 @@ namespace AgyPet
             double petW = petHitArea.ActualWidth > 10 ? petHitArea.ActualWidth : (spriteW + StagePadX * 2);
 
             double petLeft, petTop;
+            string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
 
-            // Perch above Antigravity chatbox OR on active agy CLI terminal window when focused
-            if (tracker.IsInFront && !tracker.IsMinimized && tracker.IsCliInFront &&
+            // Perch above Antigravity chatbox OR on active agy CLI terminal window when focused (unless pinned above taskbar)
+            if (!settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && tracker.IsCliInFront &&
                 settings.CliPlacement != "off" && !tracker.WindowBoundsPx.IsEmpty)
             {
                 Rect winDip = new Rect(
@@ -871,7 +910,7 @@ namespace AgyPet
                 petLeft = p.X;
                 petTop = p.Y;
             }
-            else if (tracker.IsInFront && !tracker.IsMinimized && !tracker.IsCliInFront && !tracker.ChatBoxBoundsPx.IsEmpty)
+            else if (!settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && !tracker.IsCliInFront && !tracker.ChatBoxBoundsPx.IsEmpty)
             {
                 Rect boxDip = new Rect(
                     tracker.ChatBoxBoundsPx.Left / dpiX,
@@ -882,20 +921,27 @@ namespace AgyPet
                 petLeft = p.X;
                 petTop = p.Y;
             }
-            else if (settings.HasCustomFreePos)
-            {
-                petLeft = settings.FreeX;
-                petTop = settings.FreeY;
-            }
             else
             {
-                Point cornerPt = PlaceInCorner(settings.MinimizedCorner, work, screen, spriteW, spriteH, StagePadX, StagePadY);
-                petLeft = cornerPt.X;
-                petTop = cornerPt.Y;
+                Point awayPt = ComputePinnedAwayPosition(
+                    settings.MinimizedCorner,
+                    settings.PinAboveTaskbar,
+                    settings.HasCustomFreePos,
+                    settings.FreeX,
+                    settings.FreeY,
+                    work,
+                    screen,
+                    spriteW,
+                    spriteH,
+                    StagePadX,
+                    StagePadY);
+                petLeft = awayPt.X;
+                petTop = awayPt.Y;
             }
 
-            bool allowTaskbarBand = !tracker.IsInFront && (settings.HasCustomFreePos ||
-                (settings.MinimizedCorner != null && settings.MinimizedCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase)));
+            bool pinnedAway = !tracker.IsInFront || settings.PinAboveTaskbar;
+            bool allowTaskbarBand = pinnedAway && (settings.HasCustomFreePos ||
+                effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase));
             double maxBottom = allowTaskbarBand ? Math.Max(work.Bottom, screen.Bottom) : work.Bottom;
             double minTop = allowTaskbarBand ? Math.Min(work.Top, screen.Top) : work.Top;
 
@@ -964,11 +1010,6 @@ namespace AgyPet
         void OnPetMouseDown(object sender, MouseButtonEventArgs e)
         {
             if (e.ChangedButton != MouseButton.Left) return;
-            mouseDown = true;
-            dragging = false;
-            GetCursorPos(out dragStartCursor);
-            dragStartLeft = Left;
-            dragStartTop = Top;
 
             bool wokeFromSleep = false;
             if (!previewMode && mascot != null && mascot.Mood == MascotMood.Sleeping)
@@ -978,17 +1019,31 @@ namespace AgyPet
                 wokeFromSleep = true;
             }
 
-            // Double-click when calm triggers joyful dance; single click perched (or waking nudge) gives subtle wince
+            // Double-click when calm triggers joyful dance; single click perched (or locked / waking nudge) gives subtle wince
             if (mascot != null && e.ClickCount >= 2 &&
                 (mascot.Mood == MascotMood.Idle || mascot.Mood == MascotMood.Done))
             {
                 mascot.CancelHurt();
                 mascot.Dance();
             }
-            else if (mascot != null && (IsPerchedOnTarget || wokeFromSleep))
+            else if (mascot != null && (IsPerchedOnTarget || settings.LockPosition || wokeFromSleep))
             {
                 mascot.Poke();
             }
+
+            if (settings.LockPosition)
+            {
+                mouseDown = false;
+                dragging = false;
+                e.Handled = true;
+                return;
+            }
+
+            mouseDown = true;
+            dragging = false;
+            GetCursorPos(out dragStartCursor);
+            dragStartLeft = Left;
+            dragStartTop = Top;
 
             petHitArea.CaptureMouse();
             e.Handled = true;
@@ -996,7 +1051,7 @@ namespace AgyPet
 
         void OnPetMouseMove(object sender, MouseEventArgs e)
         {
-            if (!mouseDown) return;
+            if (!mouseDown || settings.LockPosition) return;
             POINT cur;
             GetCursorPos(out cur);
             double dxPx = cur.X - dragStartCursor.X;
@@ -1030,7 +1085,7 @@ namespace AgyPet
             targetLeft = Left;
             targetTop = Top;
 
-            if (tracker.IsInFront)
+            if (tracker.IsInFront && !settings.PinAboveTaskbar)
             {
                 userMovedWhileInFront = true;
             }
@@ -1067,6 +1122,9 @@ namespace AgyPet
                 cornerMenu.Items.Add(CheckItem(opt.Label, !settings.HasCustomFreePos && settings.MinimizedCorner == value, () => SetMinimizedCorner(value)));
             }
             contextMenu.Items.Add(cornerMenu);
+
+            contextMenu.Items.Add(CheckItem("Pin Above Taskbar (Stay in Place)", settings.PinAboveTaskbar, () => SetPinAboveTaskbar(!settings.PinAboveTaskbar)));
+            contextMenu.Items.Add(CheckItem("Lock Position (Disable Dragging)", settings.LockPosition, () => SetLockPosition(!settings.LockPosition)));
 
             var cliMenu = new MenuItem { Header = "CLI Terminal Placement" };
             foreach (var opt in PetSettings.CliLocations)
@@ -1110,7 +1168,7 @@ namespace AgyPet
                 settings.Save();
                 PetSettings.ApplyStartup(settings.StartWithWindows, Process.GetCurrentProcess().MainModule.FileName);
             }));
-            contextMenu.Items.Add(ActionItem("Snap Back Above Chatbox", ResetPosition));
+            contextMenu.Items.Add(ActionItem(settings.PinAboveTaskbar ? "Reset Pinned Position" : "Snap Back Above Chatbox", ResetPosition));
             contextMenu.Items.Add(CheckItem("Auto-Update from GitHub", settings.AutoUpdate, () =>
             {
                 settings.AutoUpdate = !settings.AutoUpdate;

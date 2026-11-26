@@ -12,6 +12,8 @@ namespace AgyPet
         readonly Updater updater;
         ToolStripMenuItem updateItem;
         ToolStripMenuItem locationMenu;
+        ToolStripMenuItem pinAboveTaskbarItem;
+        ToolStripMenuItem lockPositionItem;
         ToolStripMenuItem cliLocationMenu;
         ToolStripMenuItem hideInactiveItem;
         ToolStripMenuItem hideMinimizedItem;
@@ -75,6 +77,10 @@ namespace AgyPet
                 hideInactiveItem.Checked = settings.HideWhenInactive;
             if (hideMinimizedItem != null)
                 hideMinimizedItem.Checked = settings.HideWhenMinimized;
+            if (pinAboveTaskbarItem != null)
+                pinAboveTaskbarItem.Checked = settings.PinAboveTaskbar;
+            if (lockPositionItem != null)
+                lockPositionItem.Checked = settings.LockPosition;
         }
 
         ContextMenuStrip BuildMenu()
@@ -99,6 +105,11 @@ namespace AgyPet
                 locationMenu.DropDownItems.Add(mi);
             }
             menu.Items.Add(locationMenu);
+
+            pinAboveTaskbarItem = new ToolStripMenuItem("Pin Above Taskbar (Stay in Place)", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.SetPinAboveTaskbar(!settings.PinAboveTaskbar))));
+            lockPositionItem = new ToolStripMenuItem("Lock Position (Disable Dragging)", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.SetLockPosition(!settings.LockPosition))));
+            menu.Items.Add(pinAboveTaskbarItem);
+            menu.Items.Add(lockPositionItem);
 
             cliLocationMenu = new ToolStripMenuItem("CLI Terminal Placement");
             foreach (var opt in PetSettings.CliLocations)

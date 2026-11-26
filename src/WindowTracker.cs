@@ -656,10 +656,225 @@ namespace AgyPet
             return fallback;
         }
 
+        static readonly string[] AttachmentExtensions =
+        {
+            ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg", ".pdf",
+            ".cs", ".ts", ".tsx", ".js", ".jsx", ".py", ".md", ".json", ".txt",
+            ".html", ".css", ".yml", ".yaml", ".xml", ".ps1", ".sh", ".csv"
+        };
+
+        internal static bool IsAttachmentLabel(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            string n = name.Trim().ToLowerInvariant();
+            if (n.Contains("remove") || n.Contains("delete") || n.Contains("clear") ||
+                n.Contains("detach") || n.Contains("dismiss") || n.Contains("attachment") ||
+                n.Contains("attached") || n.Contains("screenshot"))
+                return true;
+
+            foreach (string ext in AttachmentExtensions)
+                if (n.EndsWith(ext, StringComparison.Ordinal) || n.Contains(ext + " "))
+                    return true;
+
+            return false;
+        }
+
+        internal static bool IsExplicitProjectLabel(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            string n = name.Trim().ToLowerInvariant();
+            if (n == "no project" || n.StartsWith("no project", StringComparison.Ordinal) ||
+                n.Contains("no project") || n.Contains("select project") ||
+                n.Contains("choose project") || n.Contains("switch project") ||
+                n.Contains("add project") || n.Contains("open project") ||
+                n == "project" || n == "projects" || n == "workspace")
+                return true;
+            return false;
+        }
+
+        internal static bool IsProjectHeaderBand(
+            Rect bandRect,
+            Rect innerRect,
+            Rect outerRect,
+            Rect inputRect,
+            bool hasAttachmentSignal,
+            bool hasExplicitProjectSignal,
+            bool hasInteractiveControl)
+        {
+            if (hasAttachmentSignal) return false;
+            if (bandRect.IsEmpty || bandRect.Height < 16 || bandRect.Height > 56) return false;
+            if (bandRect.Bottom > inputRect.Top + 4) return false;
+
+            if (hasExplicitProjectSignal) return true;
+
+            // Inner composer already wraps the bottom toolbar, and outer adds only a compact top header bar.
+            bool innerHasBottomToolbar = innerRect.Bottom >= inputRect.Bottom + 16;
+            bool topOnlyGrowth = (innerRect.Top - outerRect.Top) >= 18 &&
+                                 (outerRect.Bottom - innerRect.Bottom) <= 14 &&
+                                 (outerRect.Width - innerRect.Width) <= 24;
+            return innerHasBottomToolbar && topOnlyGrowth && hasInteractiveControl && bandRect.Height <= 52;
+        }
+
+        static void InspectElementsForBand(
+            AutomationElement root,
+            ref bool hasAttachmentSignal,
+            ref bool hasExplicitProjectSignal,
+            ref bool hasInteractiveControl)
+        {
+            var walker = TreeWalker.RawViewWalker;
+            var queue = new Queue<AutomationElement>();
+            queue.Enqueue(root);
+            int visited = 0;
+
+            while (queue.Count > 0 && visited < 24)
+            {
+                AutomationElement el = queue.Dequeue();
+                visited++;
+                try
+                {
+                    var cur = el.Current;
+                    if (cur.IsOffscreen) continue;
+
+                    string name = cur.Name ?? "";
+                    ControlType ct = cur.ControlType;
+                    Rect r = cur.BoundingRectangle;
+
+                    if (ct == ControlType.Image && !r.IsEmpty && r.Width >= 18 && r.Height >= 18)
+                        hasAttachmentSignal = true;
+                    else if (IsAttachmentLabel(name))
+                        hasAttachmentSignal = true;
+
+                    if (IsExplicitProjectLabel(name))
+                        hasExplicitProjectSignal = true;
+
+                    if (ct == ControlType.Button || ct == ControlType.ComboBox || ct == ControlType.MenuItem)
+                        hasInteractiveControl = true;
+
+                    AutomationElement child = walker.GetFirstChild(el);
+                    int childCount = 0;
+                    while (child != null && childCount < 10)
+                    {
+                        queue.Enqueue(child);
+                        child = walker.GetNextSibling(child);
+                        childCount++;
+                    }
+                }
+                catch { }
+            }
+        }
+
+        static bool ShouldStopBeforeProjectHeader(
+            AutomationElement parent,
+            Rect innerRect,
+            Rect outerRect,
+            Rect inputRect)
+        {
+            if (innerRect.Bottom < inputRect.Bottom + 16) return false;
+            if ((innerRect.Top - outerRect.Top) < 18 || (outerRect.Bottom - innerRect.Bottom) > 14) return false;
+
+            var walker = TreeWalker.RawViewWalker;
+            Rect bandRect = Rect.Empty;
+            bool hasAttachmentSignal = false;
+            bool hasExplicitProjectSignal = false;
+            bool hasInteractiveControl = false;
+
+            try
+            {
+                AutomationElement child = walker.GetFirstChild(parent);
+                int checkedCount = 0;
+                while (child != null && checkedCount < 12)
+                {
+                    checkedCount++;
+                    try
+                    {
+                        var cur = child.Current;
+                        Rect r = cur.BoundingRectangle;
+                        if (!cur.IsOffscreen && !r.IsEmpty && r.Height >= 16 && r.Bottom <= innerRect.Top + 6)
+                        {
+                            bandRect = bandRect.IsEmpty ? r : Rect.Union(bandRect, r);
+                            InspectElementsForBand(child, ref hasAttachmentSignal, ref hasExplicitProjectSignal, ref hasInteractiveControl);
+                        }
+                    }
+                    catch { }
+                    child = walker.GetNextSibling(child);
+                }
+            }
+            catch { return false; }
+
+            return IsProjectHeaderBand(
+                bandRect,
+                innerRect,
+                outerRect,
+                inputRect,
+                hasAttachmentSignal,
+                hasExplicitProjectSignal,
+                hasInteractiveControl);
+        }
+
+        static Rect TrimDirectProjectHeader(AutomationElement cardEl, Rect cardRect, Rect inputRect)
+        {
+            if (cardEl == null || cardRect.IsEmpty) return cardRect;
+            var walker = TreeWalker.RawViewWalker;
+            AutomationElement firstBand = null;
+            Rect firstRect = Rect.Empty;
+            Rect nextRect = Rect.Empty;
+
+            try
+            {
+                AutomationElement child = walker.GetFirstChild(cardEl);
+                int checkedCount = 0;
+                while (child != null && checkedCount < 12)
+                {
+                    checkedCount++;
+                    try
+                    {
+                        var cur = child.Current;
+                        Rect r = cur.BoundingRectangle;
+                        if (!cur.IsOffscreen && !r.IsEmpty && r.Height >= 12)
+                        {
+                            if (firstBand == null)
+                            {
+                                firstBand = child;
+                                firstRect = r;
+                            }
+                            else if (r.Top >= firstRect.Bottom - 4)
+                            {
+                                nextRect = r;
+                                break;
+                            }
+                        }
+                    }
+                    catch { }
+                    child = walker.GetNextSibling(child);
+                }
+            }
+            catch { return cardRect; }
+
+            if (firstBand == null || nextRect.IsEmpty) return cardRect;
+            if (firstRect.Top > cardRect.Top + 14 || firstRect.Bottom > inputRect.Top + 4) return cardRect;
+            if (firstRect.Height < 16 || firstRect.Height > 56) return cardRect;
+            if (nextRect.Top > inputRect.Top + 6) return cardRect;
+
+            bool hasAttachment = false, hasProject = false, hasInteractive = false;
+            InspectElementsForBand(firstBand, ref hasAttachment, ref hasProject, ref hasInteractive);
+
+            if (!hasAttachment && hasProject)
+            {
+                double newTop = (nextRect.Top - firstRect.Bottom) > 4
+                    ? Math.Max(firstRect.Bottom + 1, nextRect.Top - 4)
+                    : nextRect.Top;
+                if (newTop > cardRect.Top && newTop <= inputRect.Top + 2 && (cardRect.Bottom - newTop) >= inputRect.Height + 16)
+                    return new Rect(cardRect.Left, newTop, cardRect.Width, cardRect.Bottom - newTop);
+            }
+
+            return cardRect;
+        }
+
         static Rect ResolveOuterComposerCard(AutomationElement inputEl, Rect inputRect, Rect winRect)
         {
             var walker = TreeWalker.RawViewWalker;
             Rect card = Rect.Empty;
+            AutomationElement cardEl = null;
             AutomationElement cur = inputEl;
 
             for (int depth = 0; depth < 9 && cur != null; depth++)
@@ -672,28 +887,50 @@ namespace AgyPet
                 Rect pr;
                 try { pr = parent.Current.BoundingRectangle; }
                 catch { break; }
-                cur = parent;
 
-                if (pr.IsEmpty) continue;
-                if (pr.Left > inputRect.Left + 4 || pr.Right < inputRect.Right - 4) continue;
-                if (pr.Top > inputRect.Top + 4 || pr.Bottom < inputRect.Bottom - 4) continue;
+                if (pr.IsEmpty)
+                {
+                    cur = parent;
+                    continue;
+                }
+                if (pr.Left > inputRect.Left + 4 || pr.Right < inputRect.Right - 4)
+                {
+                    cur = parent;
+                    continue;
+                }
+                if (pr.Top > inputRect.Top + 4 || pr.Bottom < inputRect.Bottom - 4)
+                {
+                    cur = parent;
+                    continue;
+                }
 
                 if (pr.Width > inputRect.Width + 140) break;
                 if (pr.Height > winRect.Height * 0.62) break;
                 if (pr.Top < winRect.Top + winRect.Height * 0.20) break;
                 if (pr.Bottom > inputRect.Bottom + 110) break;
 
+                if (!card.IsEmpty && ShouldStopBeforeProjectHeader(parent, card, pr, inputRect))
+                    break;
+
+                cur = parent;
+
                 if (pr.Height >= inputRect.Height + 16 || pr.Width >= inputRect.Width + 8)
+                {
                     card = pr;
+                    cardEl = parent;
+                }
             }
 
             if (!card.IsEmpty)
             {
+                card = TrimDirectProjectHeader(cardEl, card, inputRect);
+                double clampedLeft = Math.Max(winRect.Left + 8, card.Left);
+                double clampedTop = Math.Max(winRect.Top + 36, card.Top);
                 return new Rect(
-                    Math.Max(winRect.Left + 8, card.Left),
-                    Math.Max(winRect.Top + 36, card.Top),
-                    Math.Min(winRect.Right - 8 - Math.Max(winRect.Left + 8, card.Left), card.Width),
-                    card.Height);
+                    clampedLeft,
+                    clampedTop,
+                    Math.Min(winRect.Right - 8 - clampedLeft, card.Width),
+                    Math.Max(20, card.Bottom - clampedTop));
             }
 
             double left = Math.Max(winRect.Left + 12, inputRect.Left - 16);
