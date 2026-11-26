@@ -247,6 +247,78 @@ namespace AgyPet
                 previewMode = false;
                 SyncActivity();
             }
+            SyncVisibility();
+        }
+
+        public void SetHideWhenInactive(bool hide)
+        {
+            settings.HideWhenInactive = hide;
+            settings.Save();
+            SyncVisibility();
+        }
+
+        public void SetHideWhenMinimized(bool hide)
+        {
+            settings.HideWhenMinimized = hide;
+            settings.Save();
+            SyncVisibility();
+        }
+
+        public static bool ShouldHideMascot(
+            bool hideWhenInactive,
+            bool hideWhenMinimized,
+            bool isAppOpen,
+            bool isAppMinimized,
+            bool hasActiveCli,
+            bool hasVisibleCli,
+            bool isCliMinimized,
+            bool previewMode,
+            bool menuActive)
+        {
+            if (previewMode || menuActive) return false;
+            bool anyRunning = isAppOpen || hasActiveCli;
+            if (hideWhenInactive && !anyRunning) return true;
+            bool hasVisibleTarget = (isAppOpen && !isAppMinimized) || hasVisibleCli;
+            bool anyMinimized = isAppMinimized || isCliMinimized;
+            if (hideWhenMinimized && anyMinimized && !hasVisibleTarget) return true;
+            return false;
+        }
+
+        bool SyncVisibility()
+        {
+            bool shouldHide = ShouldHideMascot(
+                settings.HideWhenInactive,
+                settings.HideWhenMinimized,
+                tracker.IsAppOpen,
+                tracker.IsAppMinimized,
+                tracker.HasActiveCli,
+                tracker.HasVisibleCli,
+                tracker.IsCliMinimized,
+                previewMode,
+                contextMenuOpen || externalMenuOpen);
+
+            if (shouldHide)
+            {
+                hoverLeaveTimer.Stop();
+                hoverPopup.IsOpen = false;
+                if (Visibility != Visibility.Hidden)
+                    Visibility = Visibility.Hidden;
+                return true;
+            }
+
+            if (Visibility != Visibility.Visible)
+            {
+                Point desired = ComputeDesiredPosition();
+                Left = targetLeft = desired.X;
+                Top = targetTop = desired.Y;
+                Visibility = Visibility.Visible;
+                if (!tracker.IsInFront && !settings.HasCustomFreePos && settings.MinimizedCorner != null &&
+                    settings.MinimizedCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
+                {
+                    EnsureTopmost();
+                }
+            }
+            return false;
         }
 
         public void SetMinimizedCorner(string corner)
@@ -590,6 +662,8 @@ namespace AgyPet
             if (!previewMode)
                 ApplyResolvedMascotState();
 
+            if (SyncVisibility()) return;
+
             bool nowInFront = tracker.IsInFront;
             bool hasTargetBox = tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty;
             bool nowOnChatScreen = nowInFront && !tracker.IsMinimized && hasTargetBox;
@@ -623,7 +697,7 @@ namespace AgyPet
             double dt = Math.Min(0.05, Math.Max(0.001, (now - lastAnimTime).TotalSeconds));
             lastAnimTime = now;
 
-            if (dragging || IsAnyMenuActive || double.IsNaN(targetLeft)) return;
+            if (dragging || IsAnyMenuActive || Visibility != Visibility.Visible || double.IsNaN(targetLeft)) return;
 
             double dx = targetLeft - Left;
             double dy = targetTop - Top;
@@ -651,6 +725,7 @@ namespace AgyPet
             Point desired = ComputeDesiredPosition();
             Left = targetLeft = desired.X;
             Top = targetTop = desired.Y;
+            SyncVisibility();
         }
 
         public static Point PlaceAboveChatBox(Rect chatBoxDip, double spriteW, double spriteH, double padX, double padY)
@@ -797,7 +872,7 @@ namespace AgyPet
         void ShowCard()
         {
             hoverLeaveTimer.Stop();
-            if (!settings.ShowHoverCard || dragging || IsAnyMenuActive || tracker.IsInFront) return;
+            if (!settings.ShowHoverCard || dragging || IsAnyMenuActive || tracker.IsInFront || Visibility != Visibility.Visible) return;
             RenderHoverContent();
 
             Rect work = SystemParameters.WorkArea;
@@ -955,6 +1030,11 @@ namespace AgyPet
                 cliMenu.Items.Add(CheckItem(opt.Label, settings.CliPlacement == value, () => SetCliPlacement(value)));
             }
             contextMenu.Items.Add(cliMenu);
+
+            var autoHideMenu = new MenuItem { Header = "Auto-Hide" };
+            autoHideMenu.Items.Add(CheckItem("Hide When Inactive (App & CLI Closed)", settings.HideWhenInactive, () => SetHideWhenInactive(!settings.HideWhenInactive)));
+            autoHideMenu.Items.Add(CheckItem("Hide When Minimized", settings.HideWhenMinimized, () => SetHideWhenMinimized(!settings.HideWhenMinimized)));
+            contextMenu.Items.Add(autoHideMenu);
 
             var sizeMenu = new MenuItem { Header = "Size" };
             sizeMenu.Items.Add(CheckItem("Small", settings.Size == "small", () => ApplySize("small")));
