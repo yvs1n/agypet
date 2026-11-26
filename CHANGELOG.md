@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.3 (2026-11-26)
+- **Auto-Hide When Inactive or Minimized (`#3` / PR `#7` by `@Bobdo-b`, requested by `@Manufacturing-Downtime`)**:
+  - Added optional **Auto-Hide** settings (`Hide When Inactive (App & CLI Closed)` and `Hide When Minimized`) under both the Right-Click and System Tray menus (both default to `false` to preserve existing behavior).
+  - Automatically hides the mascot and hover card when enabled conditions apply, stays visible during `Preview Mode` or open menus, and snaps cleanly back to position when reappearing.
+
 ## 0.3.2 (2026-11-26)
 - **Chatbox Corner Perch Alignment (`#6`)**: Increased the horizontal right-edge inset on `PlaceAboveChatBox` from `14px` to `28px` (scaling safely on narrow boxes) so AgyPet's right foot sits squarely on the flat top border of Antigravity's chatbox instead of hanging off the rounded top-right corner—especially noticeable on `Small` size.
 
