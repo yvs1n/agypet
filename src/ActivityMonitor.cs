@@ -66,14 +66,16 @@ namespace AgyPet
         volatile ActivitySnapshot focusedSession = new ActivitySnapshot();
         volatile List<ActivitySnapshot> activeSessions = new List<ActivitySnapshot>();
         volatile string preferredChatTitle = "";
+        volatile string[] preferredChatCandidates = new string[0];
         volatile string preferredSource = "";
+        volatile bool preferAppOnly;
 
         readonly HashSet<string> prevBusyIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        readonly Dictionary<string, DateTime> doneUntilById = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
         readonly AutoResetEvent wakeEvent = new AutoResetEvent(false);
         readonly List<FileSystemWatcher> watchers = new List<FileSystemWatcher>();
-        ActivitySnapshot lastCompletedSnapshot;
-        DateTime lastDoneAt = DateTime.MinValue;
         DateTime lastActiveAt = DateTime.Now;
+        long lastNudgeTicks = DateTime.MinValue.Ticks;
         bool running;
 
         public ActivitySnapshot Latest { get { return latest; } }
@@ -84,12 +86,67 @@ namespace AgyPet
             get { return preferredChatTitle; }
             set { preferredChatTitle = value ?? ""; }
         }
+        public string[] PreferredChatCandidates
+        {
+            get { return preferredChatCandidates; }
+            set { preferredChatCandidates = value ?? new string[0]; }
+        }
         public string PreferredSource
         {
             get { return preferredSource; }
             set { preferredSource = value ?? ""; }
         }
+        public bool PreferAppOnly
+        {
+            get { return preferAppOnly; }
+            set { preferAppOnly = value; }
+        }
         public event Action Updated;
+
+        // Nudging a sleeping mascot wakes it immediately and resets the idle sleep clock.
+        public void WakeUp()
+        {
+            WakeUpAt(DateTime.Now);
+        }
+
+        internal void WakeUpAt(DateTime at)
+        {
+            Interlocked.Exchange(ref lastNudgeTicks, at.Ticks);
+            latest = WakeSnapshot(latest, at);
+            focusedSession = WakeSnapshot(focusedSession, at);
+            wakeEvent.Set();
+        }
+
+        internal static bool ShouldSleep(DateTime lastActivityAt, DateTime lastNudgeAt, DateTime now)
+        {
+            if (lastActivityAt <= DateTime.MinValue) return false;
+            DateTime effective = lastNudgeAt > lastActivityAt ? lastNudgeAt : lastActivityAt;
+            return (now - effective) > SleepAfterIdle;
+        }
+
+        internal static ActivitySnapshot WakeSnapshot(ActivitySnapshot snap, DateTime at)
+        {
+            if (snap == null || snap.Mood != MascotMood.Sleeping) return snap;
+            return new ActivitySnapshot
+            {
+                SessionId = snap.SessionId,
+                SessionTitle = snap.SessionTitle,
+                Source = snap.Source,
+                Mood = MascotMood.Idle,
+                ActionLabel = "At rest · Ready",
+                FocusDetail = snap.FocusDetail,
+                IsBusy = snap.IsBusy,
+                HasBackgroundTask = snap.HasBackgroundTask,
+                HasError = snap.HasError,
+                HasProgress = snap.HasProgress,
+                PercentDone = snap.PercentDone,
+                PercentLeft = snap.PercentLeft,
+                StepsDone = snap.StepsDone,
+                StepsTotal = snap.StepsTotal,
+                StepsInProgress = snap.StepsInProgress,
+                UpdatedAt = at,
+            };
+        }
 
         public void Start()
         {
@@ -164,6 +221,7 @@ namespace AgyPet
             SessionRow bestRecent = null;
             var seenIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             DateTime now = DateTime.Now;
+            DateTime nudgeAt = new DateTime(Interlocked.Read(ref lastNudgeTicks));
 
             foreach (var src in Sources)
             {
@@ -193,23 +251,35 @@ namespace AgyPet
 
             busyRows.Sort((a, b) => b.Updated.CompareTo(a.Updated));
 
-            // 1. Build global active sessions list (for hover card & minimized Multitasking)
+            // 1. Track per-session Done celebrations & build global active sessions list
+            var currBusyIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in busyRows)
+            {
+                currBusyIds.Add(r.Id);
+                doneUntilById.Remove(r.Id);
+            }
+            foreach (string prevId in prevBusyIds)
+            {
+                if (!currBusyIds.Contains(prevId))
+                    doneUntilById[prevId] = now + DoneHoldDuration;
+            }
+            prevBusyIds.Clear();
+            foreach (string id in currBusyIds) prevBusyIds.Add(id);
+
+            var expiredDone = new List<string>();
+            foreach (var kv in doneUntilById)
+                if (now >= kv.Value) expiredDone.Add(kv.Key);
+            foreach (string id in expiredDone) doneUntilById.Remove(id);
+
             var builtBusy = new List<ActivitySnapshot>(busyRows.Count);
             if (busyRows.Count > 0)
             {
-                prevBusyIds.Clear();
                 foreach (var r in busyRows)
-                {
-                    prevBusyIds.Add(r.Id);
-                    builtBusy.Add(BuildSnapshotForRow(r, now, false));
-                }
+                    builtBusy.Add(BuildSnapshotForRow(r, now, false, nudgeAt));
                 lastActiveAt = now;
-                lastCompletedSnapshot = builtBusy[0];
             }
-            else if (prevBusyIds.Count > 0)
+            else if (expiredDone.Count > 0 || doneUntilById.Count > 0)
             {
-                prevBusyIds.Clear();
-                lastDoneAt = now;
                 lastActiveAt = now;
             }
 
@@ -222,17 +292,16 @@ namespace AgyPet
             }
             else if (bgRows.Count > 0)
             {
-                latest = BuildSnapshotForRow(bgRows[0], now, false);
+                latest = BuildSnapshotForRow(bgRows[0], now, false, nudgeAt);
             }
             else if (bestRecent != null)
             {
-                bool showDone = (now - lastDoneAt) < DoneHoldDuration;
-                latest = BuildSnapshotForRow(bestRecent, now, showDone);
+                latest = BuildSnapshotForRow(bestRecent, now, IsSessionDone(bestRecent.Id, now), nudgeAt);
             }
             else
             {
                 var idle = new ActivitySnapshot();
-                if ((now - lastActiveAt) > SleepAfterIdle)
+                if (ShouldSleep(lastActiveAt, nudgeAt, now))
                 {
                     idle.Mood = MascotMood.Sleeping;
                     idle.ActionLabel = "Sleeping · Waiting for Antigravity";
@@ -240,23 +309,99 @@ namespace AgyPet
                 latest = idle;
             }
 
-            // 2. Match the SPECIFIC conversation/source currently open (including Antigravity CLI terminal!)
+            // 2. Match the SPECIFIC conversation/source currently open (App, IDE, or Antigravity CLI!)
             string wantSource = preferredSource;
-            string wantTitle = preferredChatTitle;
-            SessionRow matched = FindSessionForFocus(allRows, wantTitle, wantSource);
+            string[] wantCandidates = BuildCandidateList(preferredChatCandidates, preferredChatTitle);
+            bool appOnly = preferAppOnly && string.IsNullOrWhiteSpace(wantSource);
+
+            SessionRow matched = FindSessionForFocus(allRows, wantCandidates, wantSource, appOnly);
             if (matched != null)
             {
-                bool showDone = !matched.IsBusy && !matched.HasBackgroundTask && (now - lastDoneAt) < DoneHoldDuration &&
-                                lastCompletedSnapshot != null && matched.Id == lastCompletedSnapshot.SessionId;
-                focusedSession = BuildSnapshotForRow(matched, now, showDone);
+                bool showDone = !matched.IsBusy && !matched.HasBackgroundTask && IsSessionDone(matched.Id, now);
+                focusedSession = BuildSnapshotForRow(matched, now, showDone, nudgeAt);
+            }
+            else if (IsExplicitNewChat(wantCandidates))
+            {
+                focusedSession = new ActivitySnapshot
+                {
+                    Mood = MascotMood.Idle,
+                    SessionTitle = "New conversation",
+                    Source = "Antigravity",
+                    ActionLabel = "New chat · Ready",
+                    FocusDetail = "Waiting for your first message",
+                };
             }
             else
             {
-                focusedSession = latest;
+                focusedSession = appOnly ? PickLatestNonCliSnapshot(allRows, bgRows, now, nudgeAt) ?? latest : latest;
             }
         }
 
-        static SessionRow FindSessionForFocus(List<SessionRow> rows, string title, string source)
+        bool IsSessionDone(string sessionId, DateTime now)
+        {
+            DateTime until;
+            return !string.IsNullOrEmpty(sessionId) && doneUntilById.TryGetValue(sessionId, out until) && now < until;
+        }
+
+        ActivitySnapshot PickLatestNonCliSnapshot(List<SessionRow> allRows, List<SessionRow> bgRows, DateTime now, DateTime nudgeAt)
+        {
+            SessionRow appBusy = null, appBg = null, appRecent = null;
+            foreach (var r in allRows)
+            {
+                if (string.Equals(r.Source, "Antigravity CLI", StringComparison.OrdinalIgnoreCase)) continue;
+                if (r.IsBusy && (appBusy == null || r.Updated > appBusy.Updated)) appBusy = r;
+                else if (r.HasBackgroundTask && (appBg == null || r.Updated > appBg.Updated)) appBg = r;
+                if (appRecent == null || r.Updated > appRecent.Updated) appRecent = r;
+            }
+            if (appBusy != null) return BuildSnapshotForRow(appBusy, now, false, nudgeAt);
+            if (appBg != null) return BuildSnapshotForRow(appBg, now, false, nudgeAt);
+            if (appRecent != null) return BuildSnapshotForRow(appRecent, now, IsSessionDone(appRecent.Id, now), nudgeAt);
+            return null;
+        }
+
+        static string[] BuildCandidateList(string[] candidates, string singleTitle)
+        {
+            var list = new List<string>();
+            if (candidates != null)
+            {
+                foreach (string c in candidates)
+                    if (!string.IsNullOrWhiteSpace(c)) list.Add(c.Trim());
+            }
+            if (!string.IsNullOrWhiteSpace(singleTitle))
+            {
+                string st = singleTitle.Trim();
+                bool dup = false;
+                foreach (string existing in list)
+                    if (string.Equals(existing, st, StringComparison.OrdinalIgnoreCase)) { dup = true; break; }
+                if (!dup) list.Add(st);
+            }
+            return list.ToArray();
+        }
+
+        internal static bool IsExplicitNewChat(string[] candidates)
+        {
+            if (candidates == null || candidates.Length == 0) return false;
+            int limit = Math.Min(candidates.Length, 3);
+            for (int i = 0; i < limit; i++)
+            {
+                string c = candidates[i];
+                if (string.Equals(c, "New conversation", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(c, "New Chat", StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+
+        internal static string MatchSessionIdForTest(string[] titles, string[] sources, string[] candidates, string preferredSource, bool appOnly)
+        {
+            var rows = new List<SessionRow>();
+            for (int i = 0; i < titles.Length; i++)
+                rows.Add(new SessionRow { Id = "s" + i, Title = titles[i], Source = sources[i] });
+            SessionRow found = FindSessionForFocus(rows, candidates, preferredSource, appOnly);
+            return found != null ? found.Id : null;
+        }
+
+        static SessionRow FindSessionForFocus(List<SessionRow> rows, string[] candidates, string source, bool appOnly)
         {
             if (rows.Count == 0) return null;
             if (!string.IsNullOrWhiteSpace(source))
@@ -268,7 +413,7 @@ namespace AgyPet
 
                 if (sourceRows.Count > 0)
                 {
-                    var byTitle = FindSessionByTitle(sourceRows, title);
+                    var byTitle = FindSessionByCandidates(sourceRows, candidates);
                     if (byTitle != null) return byTitle;
 
                     SessionRow best = null;
@@ -282,26 +427,66 @@ namespace AgyPet
                     if (best != null) return best;
                 }
             }
-            return FindSessionByTitle(rows, title);
-        }
 
-        static SessionRow FindSessionByTitle(List<SessionRow> rows, string title)
-        {
-            if (string.IsNullOrWhiteSpace(title) || rows.Count == 0) return null;
-            string want = title.Trim().ToLowerInvariant();
-            SessionRow partial = null;
-            foreach (var r in rows)
+            if (appOnly)
             {
-                string rt = (r.Title ?? "").Trim().ToLowerInvariant();
-                if (string.IsNullOrEmpty(rt)) continue;
-                if (rt == want) return r;
-                if (partial == null && (rt.Contains(want) || want.Contains(rt)))
-                    partial = r;
+                var appRows = new List<SessionRow>();
+                foreach (var r in rows)
+                    if (!string.Equals(r.Source, "Antigravity CLI", StringComparison.OrdinalIgnoreCase))
+                        appRows.Add(r);
+                var appMatch = FindSessionByCandidates(appRows, candidates);
+                if (appMatch != null) return appMatch;
             }
-            return partial;
+
+            return FindSessionByCandidates(rows, candidates);
         }
 
-        ActivitySnapshot BuildSnapshotForRow(SessionRow r, DateTime now, bool celebrateDone)
+        static string NormalizeMatchTitle(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return "";
+            string clean = s.Trim();
+            while (clean.EndsWith("...", StringComparison.Ordinal) || clean.EndsWith("…", StringComparison.Ordinal))
+            {
+                clean = clean.EndsWith("...", StringComparison.Ordinal)
+                    ? clean.Substring(0, clean.Length - 3).TrimEnd()
+                    : clean.Substring(0, clean.Length - 1).TrimEnd();
+            }
+            return clean.ToLowerInvariant();
+        }
+
+        static SessionRow FindSessionByCandidates(List<SessionRow> rows, string[] candidates)
+        {
+            if (candidates == null || candidates.Length == 0 || rows.Count == 0) return null;
+            foreach (string raw in candidates)
+            {
+                string want = NormalizeMatchTitle(raw);
+                if (want.Length < 2) continue;
+
+                // 1. Exact match (or exact match before UIA truncation ellipsis)
+                foreach (var r in rows)
+                {
+                    string rt = (r.Title ?? "").Trim().ToLowerInvariant();
+                    if (string.IsNullOrEmpty(rt)) continue;
+                    if (rt == want || (want.Length >= 6 && rt.StartsWith(want, StringComparison.Ordinal)))
+                        return r;
+                }
+
+                // 2. Partial match when distinct (>= 3 chars)
+                if (want.Length >= 3)
+                {
+                    foreach (var r in rows)
+                    {
+                        string rt = (r.Title ?? "").Trim().ToLowerInvariant();
+                        if (string.IsNullOrEmpty(rt)) continue;
+                        if (rt.Contains(want) || want.Contains(rt))
+                            return r;
+                    }
+                }
+            }
+            return null;
+        }
+
+        ActivitySnapshot BuildSnapshotForRow(SessionRow r, DateTime now, bool celebrateDone, DateTime nudgeAt)
         {
             TranscriptInfo info = InspectSessionFiles(r.BrainRoot, r.Id);
             var snap = new ActivitySnapshot
@@ -366,7 +551,7 @@ namespace AgyPet
                 return snap;
             }
 
-            bool sleeping = r.Updated > DateTime.MinValue && (now - r.Updated) > SleepAfterIdle;
+            bool sleeping = ShouldSleep(r.Updated, nudgeAt, now);
             snap.Mood = sleeping ? MascotMood.Sleeping : MascotMood.Idle;
             snap.ActionLabel = sleeping ? "Sleeping · Quiet" : "At rest · Ready";
             if (string.IsNullOrEmpty(snap.FocusDetail)) snap.FocusDetail = snap.SessionTitle;
@@ -747,7 +932,7 @@ namespace AgyPet
             try
             {
                 string query = "SELECT conversation_id, title, status, not_fully_idle, last_modified_time " +
-                               "FROM conversation_summaries WHERE killed = 0 ORDER BY last_modified_time DESC LIMIT 20;\0";
+                               "FROM conversation_summaries WHERE killed = 0 ORDER BY last_modified_time DESC LIMIT 40;\0";
                 byte[] sqlBytes = Encoding.UTF8.GetBytes(query);
                 IntPtr stmt;
                 if (SqliteNative.Prepare(db, sqlBytes, sqlBytes.Length, out stmt, IntPtr.Zero) != SqliteNative.SQLITE_OK)

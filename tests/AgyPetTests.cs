@@ -126,6 +126,11 @@ namespace AgyPet.Tests
                 AssertEq("Quick Fix", WindowTracker.ParseWindowTitle("Quick Fix - Antigravity"));
                 AssertEq((string)null, WindowTracker.ParseWindowTitle("Antigravity"));
 
+                var cands = WindowTracker.ParseWindowTitleCandidates("PetWindow.cs - AgyDock - Antigravity");
+                AssertEq(2, cands.Length);
+                AssertEq("PetWindow.cs", cands[0]);
+                AssertEq("AgyDock", cands[1]);
+
                 AssertTrue(WindowTracker.IsAntigravityProcessName("Antigravity"), "Antigravity.exe must match");
                 AssertTrue(WindowTracker.IsAntigravityProcessName("Antigravity IDE"), "Antigravity IDE must match");
                 AssertTrue(!WindowTracker.IsAntigravityProcessName("chrome"), "Chrome must never match");
@@ -133,6 +138,18 @@ namespace AgyPet.Tests
                 AssertTrue(!WindowTracker.IsAntigravityProcessName("firefox"), "Firefox must never match");
                 AssertTrue(!WindowTracker.IsAntigravityProcessName("AgyPet"), "Self must never match");
                 AssertTrue(!WindowTracker.IsAntigravityProcessName("hp-one-agent-service"), "Unrelated agent service must never match");
+            });
+
+            Run("Per-chat matching tracks focused chat across truncated UIA headers, CLI isolation, and New Chat", () =>
+            {
+                string[] titles = { "Anti-Gravity Mascot Add-on Implementation", "Brag Video", "CLI Session" };
+                string[] sources = { "Antigravity", "Antigravity", "Antigravity CLI" };
+
+                AssertEq("s0", ActivityMonitor.MatchSessionIdForTest(titles, sources, new[] { "Anti-Gravity Mascot Add-on Imp…", "PetWindow.cs" }, "", true));
+                AssertEq("s1", ActivityMonitor.MatchSessionIdForTest(titles, sources, new[] { "Brag Video" }, "", true));
+                AssertEq("s2", ActivityMonitor.MatchSessionIdForTest(titles, sources, new[] { "Unknown Terminal" }, "Antigravity CLI", false));
+                AssertTrue(ActivityMonitor.IsExplicitNewChat(new[] { "New conversation" }), "Explicit New conversation header should stay Idle");
+                AssertTrue(!ActivityMonitor.IsExplicitNewChat(new[] { "Brag Video" }), "Named chat should not match New Chat");
             });
 
             Run("Chatbox placement adapts visual right & feet cleanly across Small, Medium, and Large", () =>
@@ -199,6 +216,29 @@ namespace AgyPet.Tests
                 AssertEq(MascotMood.Thinking, m.Mood);
                 m.CancelHurt();
                 AssertTrue(!m.IsHurt, "CancelHurt should clear hurt state on drag");
+            });
+
+            Run("Nudge wakes a sleeping mascot and resets the idle sleep clock", () =>
+            {
+                var now = new DateTime(2026, 11, 26, 12, 0, 0);
+                var oldActivity = now.AddMinutes(-10);
+                AssertTrue(ActivityMonitor.ShouldSleep(oldActivity, DateTime.MinValue, now), "Should sleep after >6 minutes idle without nudge");
+                AssertTrue(!ActivityMonitor.ShouldSleep(oldActivity, now.AddSeconds(-30), now), "Recent nudge should keep mascot awake");
+                AssertTrue(ActivityMonitor.ShouldSleep(oldActivity, now.AddMinutes(-7), now), "Should return to sleep >6 minutes after last nudge");
+                AssertTrue(!ActivityMonitor.ShouldSleep(DateTime.MinValue, DateTime.MinValue, now), "Undated activity should stay awake");
+
+                var sleepingSnap = new ActivitySnapshot { Mood = MascotMood.Sleeping, ActionLabel = "Sleeping · Quiet" };
+                var awakeSnap = ActivityMonitor.WakeSnapshot(sleepingSnap, now);
+                AssertEq(MascotMood.Idle, awakeSnap.Mood);
+                AssertEq("At rest · Ready", awakeSnap.ActionLabel);
+
+                var m = new Mascot(4.0, Mascot.ClassicSkin) { Mood = MascotMood.Sleeping };
+                var mon = new ActivityMonitor();
+                mon.WakeUpAt(now);
+                m.Mood = awakeSnap.Mood;
+                m.Poke();
+                AssertEq(MascotMood.Idle, m.Mood);
+                AssertTrue(m.IsHurt, "Waking nudge should give brief tactile feedback while staying awake");
             });
 
             Run("Updater parses GitHub latest release and compares semantic versions", () =>

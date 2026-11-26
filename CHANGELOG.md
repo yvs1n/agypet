@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1 (2026-11-26)
+- **Wake-on-Nudge from Sleep**: Clicking or nudging AgyPet while `Sleeping` wakes it up immediately to `Idle` (`"At rest · Ready"`) with a subtle startle blink and resets the 6-minute idle sleep timer.
+- **Improved Per-Chat Reaction Matching**: Added UIA active-pane header and selected-conversation probing (`ActiveChatCandidates`) on top of window titles, ellipsis-prefix matching (`…`), App-vs-CLI focus isolation, `New conversation` detection, per-session `Done` tracking, and 0ms chat-switch updates.
+- **Outside-Click Menu Dismissal & Accessibility**: Fixed the right-click context menu on the `WS_EX_NOACTIVATE` overlay so clicking anywhere outside the menu/submenus or pressing `Esc` closes it cleanly; added `Esc`/`Ctrl+Enter` shortcuts in Feedback and screen-reader `AutomationProperties.Name` metadata.
+- **Website UX & Accessibility Polish**: Synced all copy and metadata to 18 live reactions, added skip-link, keyboard tablist navigation, `aria-live` state announcements, persistent skin preference, and sleep wake-on-nudge parity in the interactive simulator.
+
 ## 0.3.0 (2026-11-26)
 - **CLI Terminal Placements (`agy` CLI Support)**:
   - Added **CLI Terminal Placement** options (`Bottom-Right (CLI Prompt)`, `Bottom-Middle (Prompt Center)`, `Bottom-Left (Above Prompt)`, `Top-Right (Window Edge)`, `Top-Left (Window Edge)`, and `Off`) under Right-Click / System Tray.

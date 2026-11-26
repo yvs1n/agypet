@@ -116,6 +116,26 @@ body {
   outline-offset: 2px;
 }
 
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 16px;
+  z-index: 100;
+  padding: 8px 16px;
+  border-radius: 12px;
+  background: var(--accent-blue);
+  color: var(--ink-on-accent);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform 150ms var(--ease-out-quart);
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 button,
 a {
   touch-action: manipulation;
@@ -1063,7 +1083,7 @@ html.js .stage-hover-card.is-open {
   grid-auto-columns: minmax(156px, 1fr);
   gap: 16px;
   overflow-x: auto;
-  padding-block: 8px 16px;
+  padding-block: 12px 20px;
   padding-inline: 24px;
   touch-action: pan-x pan-y;
   -webkit-overflow-scrolling: touch;

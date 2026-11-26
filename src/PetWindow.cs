@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
@@ -40,6 +41,7 @@ namespace AgyPet
         readonly DispatcherTimer pollTimer;
         readonly DispatcherTimer animTimer;
         readonly DispatcherTimer hoverLeaveTimer;
+        readonly DispatcherTimer menuDismissTimer;
 
         bool mouseDown;
         bool dragging;
@@ -50,11 +52,14 @@ namespace AgyPet
         bool contextMenuOpen;
         bool externalMenuOpen;
         DateTime menuCooldownUntil = DateTime.MinValue;
+        DateTime menuOpenedAtUtc = DateTime.MinValue;
+        int prevMenuMouseMask;
         readonly ContextMenu contextMenu = new ContextMenu();
 
         bool previewMode;
         MascotMood previewMood = MascotMood.Idle;
         MascotMood lastAppliedMood = MascotMood.Idle;
+        string lastFocusedSessionId = "";
         DateTime lastBusySwitchAt = DateTime.MinValue;
         double targetLeft = double.NaN, targetTop = double.NaN;
         DateTime lastAnimTime = DateTime.UtcNow;
@@ -128,15 +133,26 @@ namespace AgyPet
             };
 
             RebuildMascot();
+            AutomationProperties.SetName(petHitArea, "AgyPet companion");
+            AutomationProperties.SetName(hoverCard, "Active Antigravity sessions");
+            AutomationProperties.SetName(contextMenu, "AgyPet options menu");
+
+            menuDismissTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(30) };
+            menuDismissTimer.Tick += CheckMenuOutsideClick;
+
             contextMenu.Opened += (s, e) =>
             {
                 contextMenuOpen = true;
                 hoverPopup.IsOpen = false;
                 PopulateContextMenu();
+                menuOpenedAtUtc = DateTime.UtcNow;
+                prevMenuMouseMask = CurrentMouseMask();
+                menuDismissTimer.Start();
             };
             contextMenu.Closed += (s, e) =>
             {
                 contextMenuOpen = false;
+                menuDismissTimer.Stop();
                 menuCooldownUntil = DateTime.UtcNow.AddMilliseconds(220);
             };
             PopulateContextMenu();
@@ -321,6 +337,14 @@ namespace AgyPet
         void ApplyResolvedMascotState()
         {
             if (mascot == null) return;
+            var focused = monitor.FocusedSession;
+            string focusedId = focused != null ? (focused.SessionId ?? "") : "";
+            if (!string.Equals(focusedId, lastFocusedSessionId, StringComparison.OrdinalIgnoreCase))
+            {
+                lastFocusedSessionId = focusedId;
+                lastBusySwitchAt = DateTime.MinValue;
+            }
+
             MascotMood nextMood = ResolveCurrentMood();
 
             if (!previewMode && IsBusyWorkMood(lastAppliedMood) && IsBusyWorkMood(nextMood) &&
@@ -341,6 +365,15 @@ namespace AgyPet
         void SyncActivity()
         {
             ApplyResolvedMascotState();
+
+            if (mascot != null)
+            {
+                var activeSnap = (tracker.IsInFront && monitor.FocusedSession != null) ? monitor.FocusedSession : monitor.Latest;
+                string label = activeSnap != null && !string.IsNullOrEmpty(activeSnap.ActionLabel)
+                    ? activeSnap.ActionLabel
+                    : ActivityMonitor.MoodDefaultLabel(mascot.Mood);
+                AutomationProperties.SetName(petHitArea, "AgyPet: " + mascot.Mood + " — " + label);
+            }
 
             if (hoverPopup.IsOpen || !previewMode)
                 RenderHoverContent();
@@ -584,8 +617,10 @@ namespace AgyPet
             if (dragging || IsAnyMenuActive) return;
             tracker.TrackCliWindows = settings.CliPlacement != "off";
             tracker.Poll();
+            monitor.PreferredChatCandidates = tracker.ActiveChatCandidates;
             monitor.PreferredChatTitle = tracker.ActiveChatTitle;
             monitor.PreferredSource = tracker.IsCliInFront ? "Antigravity CLI" : "";
+            monitor.PreferAppOnly = tracker.IsInFront && !tracker.IsCliInFront;
 
             if (!previewMode)
                 ApplyResolvedMascotState();
@@ -858,14 +893,22 @@ namespace AgyPet
             dragStartLeft = Left;
             dragStartTop = Top;
 
-            // Double-click when calm triggers joyful dance; single click perched on chatbox/CLI gives subtle wince
+            bool wokeFromSleep = false;
+            if (!previewMode && mascot != null && mascot.Mood == MascotMood.Sleeping)
+            {
+                monitor.WakeUp();
+                SyncActivity();
+                wokeFromSleep = true;
+            }
+
+            // Double-click when calm triggers joyful dance; single click perched (or waking nudge) gives subtle wince
             if (mascot != null && e.ClickCount >= 2 &&
                 (mascot.Mood == MascotMood.Idle || mascot.Mood == MascotMood.Done))
             {
                 mascot.CancelHurt();
                 mascot.Dance();
             }
-            else if (mascot != null && IsPerchedOnTarget)
+            else if (mascot != null && (IsPerchedOnTarget || wokeFromSleep))
             {
                 mascot.Poke();
             }
@@ -1060,8 +1103,75 @@ namespace AgyPet
             catch { }
         }
 
+        static int CurrentMouseMask()
+        {
+            int mask = 0;
+            if ((GetAsyncKeyState(0x01) & 0x8000) != 0) mask |= 1; // VK_LBUTTON
+            if ((GetAsyncKeyState(0x02) & 0x8000) != 0) mask |= 2; // VK_RBUTTON
+            if ((GetAsyncKeyState(0x04) & 0x8000) != 0) mask |= 4; // VK_MBUTTON
+            return mask;
+        }
+
+        void CheckMenuOutsideClick(object sender, EventArgs e)
+        {
+            if (!contextMenu.IsOpen)
+            {
+                menuDismissTimer.Stop();
+                return;
+            }
+
+            if ((DateTime.UtcNow - menuOpenedAtUtc).TotalMilliseconds < 120)
+            {
+                prevMenuMouseMask = CurrentMouseMask();
+                return;
+            }
+
+            if ((GetAsyncKeyState(0x1B) & 0x8000) != 0) // VK_ESCAPE
+            {
+                contextMenu.IsOpen = false;
+                return;
+            }
+
+            int mask = CurrentMouseMask();
+            int newlyPressed = mask & ~prevMenuMouseMask;
+            prevMenuMouseMask = mask;
+            if (newlyPressed == 0) return;
+
+            POINT pt;
+            if (!GetCursorPos(out pt)) return;
+            if (!IsCursorInsideAnyMenuPopup(pt.X, pt.Y))
+                contextMenu.IsOpen = false;
+        }
+
+        bool IsCursorInsideAnyMenuPopup(int x, int y)
+        {
+            IntPtr selfHwnd = new WindowInteropHelper(this).Handle;
+            IntPtr hoverHwnd = IntPtr.Zero;
+            var hoverSrc = PresentationSource.FromVisual(hoverCard) as HwndSource;
+            if (hoverSrc != null) hoverHwnd = hoverSrc.Handle;
+
+            bool inside = false;
+            EnumThreadWindows(GetCurrentThreadId(), (h, l) =>
+            {
+                if (h == selfHwnd || h == hoverHwnd || !IsWindowVisible(h)) return true;
+                if (HwndSource.FromHwnd(h) == null) return true;
+                RECT r;
+                if (GetWindowRect(h, out r) && (r.Right - r.Left) > 4 && (r.Bottom - r.Top) > 4 &&
+                    x >= r.Left && x <= r.Right && y >= r.Top && y <= r.Bottom)
+                {
+                    inside = true;
+                    return false;
+                }
+                return true;
+            }, IntPtr.Zero);
+            return inside;
+        }
+
         [StructLayout(LayoutKind.Sequential)]
         struct POINT { public int X, Y; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct RECT { public int Left, Top, Right, Bottom; }
 
         static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
         const uint SWP_NOSIZE = 0x0001;
@@ -1070,9 +1180,15 @@ namespace AgyPet
         const int GWL_EXSTYLE = -20;
         const int WS_EX_TOOLWINDOW = 0x00000080;
         const int WS_EX_NOACTIVATE = 0x08000000;
+        delegate bool EnumThreadWndProc(IntPtr hWnd, IntPtr lParam);
         [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
         [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
         [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
         [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT lpPoint);
+        [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
+        [DllImport("user32.dll")] static extern bool EnumThreadWindows(uint dwThreadId, EnumThreadWndProc lpfn, IntPtr lParam);
+        [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
+        [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+        [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
     }
 }

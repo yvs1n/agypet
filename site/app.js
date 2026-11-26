@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  // ---- 1. Exact 20x18 Antigravity Pixel Mascot Engine (16 Reactions + Classic & Dark Remake) ----
+  // ---- 1. Exact 20x18 Antigravity Pixel Mascot Engine (18 Reactions + Classic & Dark Remake) ----
   const ARCH_MASK = [
     "........####........",
     ".......######.......",
@@ -568,8 +568,9 @@
   const settingsPane = document.getElementById('settings-pane');
   const cycleMoodBtn = document.getElementById('cycle-mood');
   const dictationBtn = document.getElementById('dictation-btn');
+  const stageLive = document.getElementById('stage-live');
 
-  // Build 16-reaction carousel + mouse drag-to-scroll & prev/next controls
+  // Build 18-reaction carousel + mouse drag-to-scroll & prev/next controls
   const stripEl = document.getElementById('mood-strip');
   const moodPrevBtn = document.getElementById('mood-prev');
   const moodNextBtn = document.getElementById('mood-next');
@@ -604,7 +605,7 @@
     moodTiles.push({ mood: m.id, canvas: c, ctx: setup.ctx, w: setup.w, h: setup.h, dpr: setup.dpr, btn });
   });
 
-  // Mouse drag-to-scroll on 16-reaction strip
+  // Mouse drag-to-scroll on 18-reaction strip
   let stripDragging = false, stripDidMove = false, stripStartX = 0, stripStartScroll = 0;
   stripEl.addEventListener('pointerdown', (e) => {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
@@ -655,6 +656,11 @@
   function setHeroMood(m) {
     heroMood = m;
     cycleMoodBtn.textContent = `Mood: ${heroMood}`;
+    const info = MOODS.find((item) => item.id === m);
+    const sub = info ? info.sub : '';
+    const wakeHint = m === 'Sleeping' ? ' — press to wake' : ' — press to poke';
+    stagePet.setAttribute('aria-label', `AgyPet mascot: ${m}${sub ? ` (${sub})` : ''}${wakeHint}`);
+    if (stageLive) stageLive.textContent = `Mascot state: ${m}${sub ? `, ${sub}` : ''}`;
     moodTiles.forEach((t) => t.btn.setAttribute('aria-pressed', String(t.mood === heroMood)));
     computeStageTarget();
     renderAllOnce();
@@ -698,10 +704,24 @@
     computeStageTarget();
   }
 
-  document.querySelectorAll('.chat-tab').forEach((tab) => {
+  const chatTabs = Array.from(document.querySelectorAll('.chat-tab'));
+  chatTabs.forEach((tab, idx) => {
     tab.addEventListener('click', () => {
       if (awayMode !== 'none') setAwayMode('none');
       selectChat(tab.dataset.chat);
+    });
+    tab.addEventListener('keydown', (e) => {
+      let next = -1;
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') next = (idx + 1) % chatTabs.length;
+      else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') next = (idx - 1 + chatTabs.length) % chatTabs.length;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = chatTabs.length - 1;
+      if (next >= 0) {
+        e.preventDefault();
+        if (awayMode !== 'none') setAwayMode('none');
+        chatTabs[next].focus();
+        selectChat(chatTabs[next].dataset.chat);
+      }
     });
   });
 
@@ -758,8 +778,14 @@
     }
   }
 
-  // Subtle press reaction ONLY when perched above the chatbox
+  // Subtle press reaction when perched above chatbox, or wake-on-nudge if Sleeping
   stagePet.addEventListener('click', () => {
+    if (heroMood === 'Sleeping') {
+      hurtTicks = 6;
+      setHeroMood('Idle');
+      chatStatus.textContent = 'Woke up from sleep (At rest)';
+      return;
+    }
     if (!isPerchedOnChatBox()) return;
     hurtTicks = 6;
     renderAllOnce();
@@ -863,9 +889,14 @@
 
   function applySkin(skin) {
     currentSkin = skin;
+    try { localStorage.setItem('agypet-skin', skin); } catch {}
     document.querySelectorAll('.skin-btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.skin === skin)));
     renderAllOnce();
   }
+  try {
+    const savedSkin = localStorage.getItem('agypet-skin');
+    if (savedSkin === 'classic' || savedSkin === 'dark') applySkin(savedSkin);
+  } catch {}
   document.querySelectorAll('.skin-btn').forEach((b) => b.addEventListener('click', () => applySkin(b.dataset.skin)));
   document.querySelectorAll('.try-skin-btn').forEach((b) => b.addEventListener('click', () => {
     applySkin(b.dataset.trySkin);
@@ -1038,6 +1069,12 @@
 
   fbMsg.addEventListener('input', () => {
     try { localStorage.setItem('agypet-feedback-draft', fbMsg.value); } catch {}
+  });
+  fbMsg.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      fbForm.requestSubmit();
+    }
   });
 
   document.querySelectorAll('.fb-cat').forEach((btn) => {

@@ -11,7 +11,7 @@
     } catch {}
   </script>
   <title>AgyPet: Live Pixel Companion for Google Antigravity</title>
-  <meta name="description" content="A lightweight Windows pixel-art companion by Yassin Ragab that perches on your Google Antigravity chatbox, reacts to 16 live agent and user states, and tracks multi-session progress when minimized." />
+  <meta name="description" content="A lightweight Windows pixel-art companion by Yassin Ragab that perches on your Google Antigravity chatbox and agy CLI terminals, reacts to 18 live agent and user states, and tracks multi-session progress when minimized." />
   <meta name="keywords" content="AgyPet, Google Antigravity, Antigravity IDE, Antigravity mascot, desktop pet, pixel companion, AI coding assistant overlay, Yassin Ragab" />
   <meta name="author" content="Yassin Ragab" />
   <meta name="creator" content="Yassin Ragab" />
@@ -54,9 +54,9 @@
         "name": "AgyPet",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Windows 10, Windows 11",
-        "softwareVersion": "1.0",
+        "softwareVersion": "0.3.1",
         "license": "https://opensource.org/licenses/MIT",
-        "description": "A zero-dependency Windows pixel-art companion overlay for Google Antigravity App, Antigravity IDE, and Antigravity CLI that perches above the chatbox, reacts across 16 states, and displays scrollable multi-session progress when minimized.",
+        "description": "A zero-dependency Windows pixel-art companion overlay for Google Antigravity App, Antigravity IDE, and Antigravity CLI that perches above the chatbox, reacts across 18 states, and displays scrollable multi-session progress when minimized.",
         "featureList": [
           "18 live reactions: Typing, Thinking, Working, Terminal, Browsing, Delegating, Reading, Searching, Listening, Speaking, Multitasking, Background, Alert, Question, Done, Error, Idle, Sleeping",
           "Antigravity App composer perch plus automatic agy CLI terminal window placements",
@@ -90,7 +90,7 @@
             "name": "What is AgyPet and how does it work with Google Antigravity?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "AgyPet is a lightweight native Windows WPF overlay that perches above the Google Antigravity chatbox without modifying Antigravity files or using side-panel space. It reads local Antigravity SQLite session summaries and transcripts read-only to react to 16 live agent and user states."
+              "text": "AgyPet is a lightweight native Windows WPF overlay that perches above the Google Antigravity chatbox and agy CLI terminals without modifying Antigravity files or using side-panel space. It reads local Antigravity SQLite session summaries and transcripts read-only to react to 18 live agent and user states."
             }
           },
           {
@@ -112,6 +112,7 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body class="surface-grid">
+  <a class="skip-link" href="#demo">Skip to interactive workspace</a>
   <header class="nav-wrap">
     <nav class="pill-nav" aria-label="Primary">
       <a class="brand" href="#top">
@@ -248,13 +249,14 @@
                 <span id="hover-count">3 active sessions</span>
                 <span id="hover-scroll-hint">Scroll</span>
               </div>
-              <div class="hover-scroll" id="hover-scroll" tabindex="0"></div>
+              <div class="hover-scroll" id="hover-scroll" tabindex="0" aria-label="Scrollable active sessions list"></div>
             </div>
 
             <!-- Live Floating Mascot Actor -->
-            <button type="button" class="stage-pet" id="stage-pet" aria-label="Press AgyPet mascot">
+            <button type="button" class="stage-pet" id="stage-pet" aria-label="Press AgyPet mascot (currently Typing)">
               <canvas id="hero-mascot" width="104" height="82" aria-hidden="true"></canvas>
             </button>
+            <span class="sr-only" id="stage-live" aria-live="polite"></span>
 
             <!-- Simulated Antigravity 2.0 Application Shell -->
             <div class="agy-app" id="mock-app">
@@ -283,7 +285,7 @@
                 </button>
               </aside>
 
-              <div class="agy-main">
+              <div class="agy-main" id="mock-tabpanel" role="tabpanel" aria-labelledby="chat-heading">
                 <div class="agy-topbar">
                   <span class="agy-chat-heading" id="chat-heading">AgyPet Overlay</span>
                   <span class="agy-status-text" id="chat-status">Agent typing a reply (click mascot above box)</span>
@@ -291,7 +293,7 @@
 
                 <div class="agy-thread" id="agy-thread">
                   <div class="msg-user" id="msg-user">Add live chat detection and a subtle press reaction.</div>
-                  <div class="msg-agent" id="msg-agent">Writing updated window tracking and 16 native reactions into Mascot.cs…</div>
+                  <div class="msg-agent" id="msg-agent">Writing updated window tracking and 18 native reactions into Mascot.cs…</div>
 
                   <div class="voice-bar" id="voice-bar">
                     <button type="button" class="chip-btn" id="voice-user-btn" aria-pressed="true">You speak</button>
@@ -324,7 +326,7 @@
       </div>
     </section>
 
-    <!-- 16 Live Reactions Strip -->
+    <!-- 18 Live Reactions Strip -->
     <section class="section" id="moods">
       <div class="container">
         <div class="section-head">
@@ -424,7 +426,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
               <h3 class="feature-title">Adaptive perch with subtle press physics</h3>
             </div>
-            <p class="feature-body">Compiles in two seconds via Windows’ built-in .NET compiler. Tracks the composer card across Small, Medium, and Large sizes, attaches natively to Windows Terminal / PowerShell running agy CLI, docks on your taskbar, and gives a subtle wince when pressed.</p>
+            <p class="feature-body">Compiles in two seconds via Windows’ built-in .NET compiler. Tracks the composer card across Small, Medium, and Large sizes, attaches natively to Windows Terminal / PowerShell running agy CLI, docks on your taskbar, and wakes right up with a subtle startle when nudged.</p>
           </article>
         </div>
       </div>

@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -74,6 +75,7 @@ namespace AgyPet
                 Cursor = Cursors.Hand,
                 VerticalAlignment = VerticalAlignment.Center,
             };
+            AutomationProperties.SetName(closeBtn, "Close feedback dialog");
             closeBtn.Click += (s, e) => Close();
             DockPanel.SetDock(closeBtn, Dock.Right);
             header.Children.Add(closeBtn);
@@ -116,6 +118,7 @@ namespace AgyPet
                 Margin = new Thickness(0, 0, 0, 12),
                 FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
             };
+            AutomationProperties.SetName(categoryBox, "Feedback category");
             categoryBox.Items.Add("Reaction Idea");
             categoryBox.Items.Add("Feature Request");
             categoryBox.Items.Add("Bug Report");
@@ -149,6 +152,7 @@ namespace AgyPet
                 FontSize = 13,
                 FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
             };
+            AutomationProperties.SetName(messageBox, "Feedback message");
             stack.Children.Add(messageBox);
 
             stack.Children.Add(new TextBlock
@@ -210,6 +214,19 @@ namespace AgyPet
 
             outer.Child = stack;
             Content = outer;
+            PreviewKeyDown += (s, e) =>
+            {
+                if (e.Key == Key.Escape)
+                {
+                    Close();
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+                {
+                    SubmitFeedback(openGitHub: true);
+                    e.Handled = true;
+                }
+            };
             Loaded += (s, e) => messageBox.Focus();
         }
 

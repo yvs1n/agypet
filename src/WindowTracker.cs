@@ -27,6 +27,7 @@ namespace AgyPet
         public Rect ChatBoxBoundsPx { get; private set; }
         public IntPtr WindowHandle { get; private set; }
         public string ActiveChatTitle { get; private set; }
+        public string[] ActiveChatCandidates { get; private set; }
 
         public bool IsUserTyping { get; private set; }
         public bool InDictation { get; private set; }
@@ -44,12 +45,14 @@ namespace AgyPet
         volatile bool probeActive;
         volatile bool probedVoice, probedDictation, probedAgentSpeaking;
         Rect probedChatBox = Rect.Empty;
+        string[] probedChatCandidates = new string[0];
         readonly object chatLock = new object();
         bool uiaStarted;
 
         AutomationElement cachedInputEl;
         IntPtr cachedInputHwnd = IntPtr.Zero;
         int probeCycle;
+        int loopTick;
         DateTime lastKeystrokeAt = DateTime.MinValue;
 
         public void Start()
@@ -233,11 +236,27 @@ namespace AgyPet
                 RECT r;
                 if (GetWindowRect(visible, out r) && r.Right > r.Left && r.Bottom > r.Top)
                     WindowBoundsPx = new Rect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
-                ActiveChatTitle = TitleFromWindow(visible) ?? "";
+
+                string rawTitle = RawWindowTitle(visible);
+                var cands = new List<string>();
+                if (!IsCliInFront)
+                {
+                    string[] uiaCands;
+                    lock (chatLock) { uiaCands = probedChatCandidates; }
+                    if (uiaCands != null)
+                        foreach (var c in uiaCands)
+                            AddUniqueCandidate(cands, c);
+                }
+                foreach (var wt in ParseWindowTitleCandidates(rawTitle))
+                    AddUniqueCandidate(cands, wt);
+
+                ActiveChatCandidates = cands.ToArray();
+                ActiveChatTitle = cands.Count > 0 ? cands[0] : "";
             }
             else
             {
                 WindowBoundsPx = Rect.Empty;
+                ActiveChatCandidates = new string[0];
                 ActiveChatTitle = "";
             }
 
@@ -279,29 +298,55 @@ namespace AgyPet
             return false;
         }
 
-        public static string ParseWindowTitle(string full)
+        public static string[] ParseWindowTitleCandidates(string full)
         {
-            if (string.IsNullOrWhiteSpace(full)) return null;
+            if (string.IsNullOrWhiteSpace(full)) return new string[0];
             string s = full.Trim();
             const string suffix = " - Antigravity";
             if (s.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 s = s.Substring(0, s.Length - suffix.Length).Trim();
             else if (s.Equals("Antigravity", StringComparison.OrdinalIgnoreCase))
-                return null;
-            int sep = s.IndexOf(" - ", StringComparison.Ordinal);
-            if (sep > 0) s = s.Substring(0, sep).Trim();
-            return s.Length == 0 || s.Equals("Antigravity", StringComparison.OrdinalIgnoreCase) ? null : s;
+                return new string[0];
+
+            var list = new List<string>();
+            string[] parts = s.Split(new[] { " - ", " — ", " | " }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (string rawPart in parts)
+            {
+                string part = rawPart.Trim();
+                if (part.Length == 0 ||
+                    part.Equals("Antigravity", StringComparison.OrdinalIgnoreCase) ||
+                    part.Equals("Antigravity IDE", StringComparison.OrdinalIgnoreCase) ||
+                    part.Equals("Visual Studio Code", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                AddUniqueCandidate(list, part);
+            }
+            return list.ToArray();
         }
 
-        static string TitleFromWindow(IntPtr hwnd)
+        public static string ParseWindowTitle(string full)
+        {
+            string[] cands = ParseWindowTitleCandidates(full);
+            return cands.Length > 0 ? cands[0] : null;
+        }
+
+        static string RawWindowTitle(IntPtr hwnd)
         {
             try
             {
                 var sb = new StringBuilder(512);
-                if (GetWindowText(hwnd, sb, sb.Capacity) <= 0) return null;
-                return ParseWindowTitle(sb.ToString());
+                return GetWindowText(hwnd, sb, sb.Capacity) > 0 ? sb.ToString() : null;
             }
             catch { return null; }
+        }
+
+        static void AddUniqueCandidate(List<string> list, string value)
+        {
+            if (string.IsNullOrWhiteSpace(value)) return;
+            string clean = value.Trim();
+            if (clean.Length < 2) return;
+            foreach (string existing in list)
+                if (string.Equals(existing, clean, StringComparison.OrdinalIgnoreCase)) return;
+            list.Add(clean);
         }
 
         void ProbeLoop()
@@ -332,8 +377,12 @@ namespace AgyPet
                         Rect found = FindComposerCardRect(h, inputCond);
                         lock (chatLock) { probedChatBox = found; }
 
-                        if (probeCycle % 3 == 0)
+                        if (loopTick++ % 3 == 0)
+                        {
                             ProbeVoiceAndDictation(h, voiceCond, dictationCond);
+                            string[] chatCands = ProbeChatTitleCandidates(h, found);
+                            lock (chatLock) { probedChatCandidates = chatCands; }
+                        }
                     }
                     else
                     {
@@ -342,6 +391,7 @@ namespace AgyPet
                         probedVoice = false;
                         probedDictation = false;
                         probedAgentSpeaking = false;
+                        lock (chatLock) { probedChatCandidates = new string[0]; }
                     }
                 }
                 catch
@@ -389,6 +439,103 @@ namespace AgyPet
             probedVoice = voice;
             probedDictation = dictation;
             probedAgentSpeaking = agentSpeaking;
+        }
+
+        // Reads selected conversation items and top-of-pane header labels inside the active Antigravity window
+        // so switching chats updates reactions per chat even when the outer window title stays generic.
+        static string[] ProbeChatTitleCandidates(IntPtr hwnd, Rect chatBox)
+        {
+            var found = new List<string>();
+            try
+            {
+                RECT wr;
+                if (!GetWindowRect(hwnd, out wr)) return new string[0];
+                var win = AutomationElement.FromHandle(hwnd);
+                if (win == null) return new string[0];
+
+                if (!chatBox.IsEmpty)
+                {
+                    var hdrCond = new OrCondition(
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Text),
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TabItem));
+                    var hdrEls = win.FindAll(TreeScope.Descendants, hdrCond);
+                    double minLeft = chatBox.Left - 80.0;
+                    double maxRight = chatBox.Right + 80.0;
+                    double minTop = wr.Top + 26.0;
+                    double maxBottom = Math.Min(chatBox.Top - 36.0, wr.Top + 145.0);
+                    int scanned = 0;
+
+                    foreach (AutomationElement el in hdrEls)
+                    {
+                        if (scanned++ > 180) break;
+                        try
+                        {
+                            var cur = el.Current;
+                            if (cur.IsOffscreen || string.IsNullOrWhiteSpace(cur.Name)) continue;
+                            Rect r = cur.BoundingRectangle;
+                            if (r.IsEmpty || r.Height > 44 || r.Width < 24) continue;
+                            if (r.Top < minTop || r.Bottom > maxBottom) continue;
+                            if (r.Left < minLeft || r.Right > maxRight) continue;
+                            string clean = cur.Name.Trim();
+                            if (!IsIgnoredChatLabel(clean))
+                                AddUniqueCandidate(found, clean);
+                        }
+                        catch { }
+                    }
+                }
+
+                var selCond = new PropertyCondition(AutomationElement.IsSelectionItemPatternAvailableProperty, true);
+                var selEls = win.FindAll(TreeScope.Descendants, selCond);
+                int selChecked = 0;
+                foreach (AutomationElement el in selEls)
+                {
+                    if (selChecked++ > 80) break;
+                    try
+                    {
+                        object isSelObj = el.GetCurrentPropertyValue(SelectionItemPattern.IsSelectedProperty);
+                        if (isSelObj is bool && (bool)isSelObj)
+                        {
+                            string name = (el.Current.Name ?? "").Trim();
+                            if (!IsIgnoredChatLabel(name))
+                                AddUniqueCandidate(found, name);
+                        }
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+            return found.ToArray();
+        }
+
+        static bool IsIgnoredChatLabel(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s) || s.Length < 2 || s.Length > 120) return true;
+            switch (s.ToLowerInvariant())
+            {
+                case "antigravity":
+                case "antigravity ide":
+                case "minimize":
+                case "maximize":
+                case "restore":
+                case "close":
+                case "file":
+                case "edit":
+                case "selection":
+                case "view":
+                case "go":
+                case "run":
+                case "terminal":
+                case "help":
+                case "settings":
+                case "inbox":
+                case "planning":
+                case "fast":
+                case "ask":
+                case "send":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         static bool MicInUseByAntigravity()
