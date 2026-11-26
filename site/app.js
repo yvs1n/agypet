@@ -173,11 +173,9 @@
     const ox = (w - 11 * px) * 0.5 + shiftLeftProp;
     const oy = (h - 9 * px) * 0.5 + 1.3 * px;
 
-    const hops = mood === 'Speaking' || mood === 'Done';
-    const wiggles = mood === 'Alert' || mood === 'Question';
-    const baseBob = hops ? -Math.round(Math.abs(Math.sin(tick * 0.55)) * 1.4) * px
-      : mood === 'Sleeping' ? Math.round(Math.sin(tick * 0.05)) * px * 0.5
-      : Math.round(Math.sin(tick * 0.09)) * px * 0.7;
+    const hops = mood === 'Done' || mood === 'Happy';
+    const wiggles = mood === 'Alert' || mood === 'Question' || mood === 'Error';
+    const baseBob = hops ? -Math.round(Math.abs(Math.sin(tick * 0.55)) * 1.4) * px : 0;
     const bobY = hurt && hurtTicks >= 4 ? baseBob + px * 0.45 : baseBob;
     const wigX = hurt && hurtTicks >= 4 ? ((hurtTicks % 2 === 0 ? -0.3 : 0.3) * px)
       : (wiggles && tick % 12 < 4 ? (tick % 2 === 0 ? -px * 0.45 : px * 0.45) : 0);

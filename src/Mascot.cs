@@ -443,12 +443,10 @@ namespace AgyPet
                                  mood != MascotMood.Sleeping && mood != MascotMood.Done &&
                                  mood != MascotMood.Happy && mood != MascotMood.Error;
 
-            bool hops = dancing || mood == MascotMood.Speaking || mood == MascotMood.Done || mood == MascotMood.Happy;
+            bool hops = dancing || mood == MascotMood.Done || mood == MascotMood.Happy;
             bool wiggles = mood == MascotMood.Alert || mood == MascotMood.Question || mood == MascotMood.Error;
 
-            double baseBob = hops ? -Math.Round(Math.Abs(Math.Sin(tick * 0.55)) * 1.6) * px
-                : mood == MascotMood.Sleeping ? Math.Round(Math.Sin(tick * 0.04)) * px * 0.6
-                : Math.Round(Math.Sin(tick * 0.08)) * px * 0.8;
+            double baseBob = hops ? -Math.Round(Math.Abs(Math.Sin(tick * 0.55)) * 1.6) * px : 0;
             double y = hurt && hurtTicks >= 4 ? baseBob + px * 0.45 : baseBob;
             SetTop(sprite, y);
 
