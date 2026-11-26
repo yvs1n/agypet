@@ -34,7 +34,7 @@ namespace AgyPet.Tools
             if (!string.IsNullOrEmpty(gifDir))
             {
                 Directory.CreateDirectory(gifDir);
-                const int FrameCount = 24;
+                const int FrameCount = 40;
                 for (int f = 0; f < FrameCount; f++)
                 {
                     int tick = f * 2;
@@ -263,7 +263,10 @@ namespace AgyPet.Tools
             composer.Child = compStack;
             composerWrap.Children.Add(composer);
 
-            var perchMood = frameTick >= 24 ? MascotMood.Happy : MascotMood.Typing;
+            var perchMood = frameTick >= 60 ? MascotMood.Happy
+                : frameTick >= 40 ? MascotMood.Working
+                : frameTick >= 20 ? MascotMood.Thinking
+                : MascotMood.Typing;
             var perchMascot = new Mascot(5.8, Mascot.ClassicSkin) { Mood = perchMood };
             perchMascot.Snap(6 + frameTick);
             perchMascot.HorizontalAlignment = HorizontalAlignment.Right;
@@ -653,23 +656,23 @@ namespace AgyPet.Tools
 
         static void RenderSheet(string outPath, string skin, string title, string subtitle, int frameTick)
         {
-            const int W = 1300, H = 748;
+            const int W = 1280, H = 720;
             var root = new Border
             {
                 Width = W,
                 Height = H,
                 Background = BrushHex(0x0B, 0x0D, 0x12),
-                Padding = new Thickness(30, 24, 30, 24),
+                Padding = new Thickness(28, 20, 28, 20),
             };
 
             var stack = new StackPanel();
-            var header = new Grid { Margin = new Thickness(0, 0, 0, 18) };
+            var header = new Grid { Margin = new Thickness(0, 0, 0, 14) };
             var titleStack = new StackPanel();
             titleStack.Children.Add(new TextBlock
             {
                 Text = title,
                 Foreground = BrushHex(0xF8, 0xFA, 0xFC),
-                FontSize = 23,
+                FontSize = 22,
                 FontWeight = FontWeights.Bold,
                 FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
             });
@@ -706,7 +709,7 @@ namespace AgyPet.Tools
 
             var grid = new Grid();
             for (int c = 0; c < 5; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int r = 0; r < 4; r++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(154) });
+            for (int r = 0; r < 4; r++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(150) });
 
             var moods = All20ShowcaseItems(frameTick);
 

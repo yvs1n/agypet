@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.2 (2026-11-26)
+- **Rock-Steady Mascot Posture**: Removed continuous vertical sine-wave oscillation across resting and active states so AgyPet stays planted cleanly on the chatbox border, corner edge, and taskbar (while keeping celebratory hops for `Done`, `Happy`, and double-click `Dance`).
+- **Mobile Carousel Swiping & Refreshed Media**: Fixed horizontal touch swiping (`touch-action: pan-x pan-y`) on the landing page reactions strip and refreshed animated showcases (`docs/agypet-preview.gif`, `docs/showcase-classic.gif`, `docs/showcase-dark.gif`, and `docs/agypet-demo.mp4`).
+
 ## 0.2.1 (2026-11-26)
 - **Along-the-Taskbar & Bottom-Middle Dock Locations** (suggested by `@Bobdo-b` in #1):
   - Added **Taskbar · Left**, **Taskbar · Middle**, and **Taskbar · Right** — docks AgyPet vertically centered directly inside the Windows taskbar strip (works for bottom, top, and auto-hide taskbars, with automatic `HWND_TOPMOST` layering).
