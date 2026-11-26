@@ -20,6 +20,11 @@ namespace AgyPet
 
         public bool IsOpen { get; private set; }
         public bool IsMinimized { get; private set; }
+        public bool IsAppOpen { get; private set; }
+        public bool IsAppMinimized { get; private set; }
+        public bool HasActiveCli { get; private set; }
+        public bool HasVisibleCli { get; private set; }
+        public bool IsCliMinimized { get; private set; }
         public bool IsInFront { get; private set; }
         public bool IsCliInFront { get; private set; }
         public bool TrackCliWindows { get; set; }
@@ -220,6 +225,11 @@ namespace AgyPet
 
             IsOpen = visible != IntPtr.Zero || minimized != IntPtr.Zero;
             IsMinimized = IsOpen && visible == IntPtr.Zero;
+            IsAppOpen = visibleApp != IntPtr.Zero || minApp != IntPtr.Zero;
+            IsAppMinimized = minApp != IntPtr.Zero && visibleApp == IntPtr.Zero;
+            HasActiveCli = hasActiveCliProcess;
+            HasVisibleCli = visibleCli != IntPtr.Zero;
+            IsCliMinimized = minCli != IntPtr.Zero && visibleCli == IntPtr.Zero;
             WindowHandle = visible != IntPtr.Zero ? visible : minimized;
 
             bool fgTransient = fg == IntPtr.Zero;

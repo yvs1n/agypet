@@ -69,6 +69,8 @@ namespace AgyPet
         public double FreeY { get; set; }
 
         public bool ShowHoverCard { get; set; }
+        public bool HideWhenInactive { get; set; }
+        public bool HideWhenMinimized { get; set; }
         public bool StartWithWindows { get; set; }
         public bool AutoUpdate { get; set; }
 
@@ -86,6 +88,8 @@ namespace AgyPet
             FreeX = -1;
             FreeY = -1;
             ShowHoverCard = true;
+            HideWhenInactive = false;
+            HideWhenMinimized = false;
             StartWithWindows = false;
             AutoUpdate = true;
         }

@@ -252,6 +252,26 @@ namespace AgyPet.Tests
                 AssertTrue(!Updater.IsNewer("v0.1.0", new Version(0, 1, 0, 0)), "0.1.0 should not be newer than 0.1.0");
             });
 
+            Run("Auto-hide visibility handles inactive, minimized, CLI fallback, preview, and active menus", () =>
+            {
+                var defaults = new PetSettings();
+                AssertTrue(!defaults.HideWhenInactive, "HideWhenInactive should default to false");
+                AssertTrue(!defaults.HideWhenMinimized, "HideWhenMinimized should default to false");
+
+                AssertTrue(!PetWindow.ShouldHideMascot(false, false, false, false, false, false, false, false, false), "Stay visible when both options are off");
+                AssertTrue(PetWindow.ShouldHideMascot(true, false, false, false, false, false, false, false, false), "Hide when inactive and neither app nor CLI is running");
+                AssertTrue(!PetWindow.ShouldHideMascot(true, false, true, false, false, false, false, false, false), "Stay visible when Antigravity app is open");
+                AssertTrue(!PetWindow.ShouldHideMascot(true, false, false, false, true, false, false, false, false), "Stay visible when agy CLI is running");
+
+                AssertTrue(PetWindow.ShouldHideMascot(false, true, true, true, false, false, false, false, false), "Hide when app is minimized and no CLI terminal is visible");
+                AssertTrue(!PetWindow.ShouldHideMascot(false, true, true, true, true, true, false, false, false), "Stay visible when app is minimized but CLI terminal is visible");
+                AssertTrue(!PetWindow.ShouldHideMascot(false, true, true, false, false, false, false, false, false), "Stay visible when app is open and unminimized");
+                AssertTrue(PetWindow.ShouldHideMascot(false, true, false, false, true, false, true, false, false), "Hide when only CLI terminal exists and it is minimized");
+
+                AssertTrue(!PetWindow.ShouldHideMascot(true, true, false, true, false, false, false, true, false), "Preview mode must keep mascot visible");
+                AssertTrue(!PetWindow.ShouldHideMascot(true, true, false, true, false, false, false, false, true), "Open menu must keep mascot visible");
+            });
+
             Console.WriteLine("Tests complete: " + passed + " passed, " + failed + " failed.");
             return failed == 0 ? 0 : 1;
         }

@@ -13,6 +13,8 @@ namespace AgyPet
         ToolStripMenuItem updateItem;
         ToolStripMenuItem locationMenu;
         ToolStripMenuItem cliLocationMenu;
+        ToolStripMenuItem hideInactiveItem;
+        ToolStripMenuItem hideMinimizedItem;
 
         public TrayMenu(PetWindow window, PetSettings settings, Updater updater)
         {
@@ -69,6 +71,10 @@ namespace AgyPet
                         mi.Checked = settings.CliPlacement == (string)mi.Tag;
                 }
             }
+            if (hideInactiveItem != null)
+                hideInactiveItem.Checked = settings.HideWhenInactive;
+            if (hideMinimizedItem != null)
+                hideMinimizedItem.Checked = settings.HideWhenMinimized;
         }
 
         ContextMenuStrip BuildMenu()
@@ -105,6 +111,12 @@ namespace AgyPet
                 cliLocationMenu.DropDownItems.Add(mi);
             }
             menu.Items.Add(cliLocationMenu);
+
+            var autoHideMenu = new ToolStripMenuItem("Auto-Hide");
+            hideInactiveItem = new ToolStripMenuItem("Hide When Inactive (App & CLI Closed)", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.SetHideWhenInactive(!settings.HideWhenInactive))));
+            hideMinimizedItem = new ToolStripMenuItem("Hide When Minimized", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.SetHideWhenMinimized(!settings.HideWhenMinimized))));
+            autoHideMenu.DropDownItems.AddRange(new ToolStripItem[] { hideInactiveItem, hideMinimizedItem });
+            menu.Items.Add(autoHideMenu);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Reset Position", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(window.ResetPosition)));
             updateItem = new ToolStripMenuItem("Check for Updates", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => { if (updater != null) updater.CheckNow(); })));
