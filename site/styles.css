@@ -1065,7 +1065,10 @@ html.js .stage-hover-card.is-open {
   overflow-x: auto;
   padding-block: 8px 16px;
   padding-inline: 24px;
-  touch-action: pan-y;
+  touch-action: pan-x pan-y;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
   cursor: grab;
   scrollbar-width: thin;
   mask-image: linear-gradient(90deg, transparent, black 6% 94%, transparent);
@@ -1074,6 +1077,7 @@ html.js .stage-hover-card.is-open {
 
 .mood-strip.is-dragging {
   cursor: grabbing;
+  scroll-snap-type: none;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -1092,6 +1096,8 @@ html.js .stage-hover-card.is-open {
   align-items: center;
   text-align: center;
   cursor: pointer;
+  touch-action: pan-x pan-y;
+  scroll-snap-align: start;
   font-family: var(--font-sans);
   color: var(--ink-primary);
   transition:
