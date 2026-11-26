@@ -98,14 +98,16 @@ namespace AgyPet
             AutoUpdate = true;
         }
 
+        public static double PixelSizeFor(string size)
+        {
+            if (size == "small") return 3.2;
+            if (size == "large") return 5.2;
+            return 4.2;
+        }
+
         public double PixelSize
         {
-            get
-            {
-                if (Size == "small") return 3.2;
-                if (Size == "large") return 5.2;
-                return 4.2;
-            }
+            get { return PixelSizeFor(Size); }
         }
 
         public static PetSettings Load()

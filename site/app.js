@@ -207,8 +207,8 @@
     const isDark = skin === 'dark';
     const compact = mood === 'Sleeping';
     const isIdle = mood === 'Idle';
-    const hurt = isIdle && (typeof state === 'object' ? (state.hurt > 0) : state > 0);
-    const hurtT = isIdle ? (typeof state === 'object' ? (state.hurt || 0) : (state || 0)) : 0;
+    const hurt = !compact && (typeof state === 'object' ? (state.hurt > 0) : state > 0);
+    const hurtT = !compact ? (typeof state === 'object' ? (state.hurt || 0) : (state || 0)) : 0;
     const dancing = isIdle && typeof state === 'object' && (state.dance > 0) && !hurt;
 
     const shiftLeftProp = (mood === 'Working' || mood === 'Terminal') ? 1.4 * px : 0;
@@ -736,10 +736,10 @@
 
   function setHeroMood(m) {
     heroMood = m;
-    if (m !== 'Idle') {
+    if (m !== 'Idle') danceTicks = 0;
+    if (m === 'Sleeping') {
       clickStreak = 0;
       hurtTicks = 0;
-      danceTicks = 0;
     }
     cycleMoodBtn.textContent = `Mood: ${heroMood}`;
     const info = MOODS.find((item) => item.id === m);
@@ -864,17 +864,11 @@
     }
   }
 
-  // Idle only: single-click hops from leg to leg; rapid clicks (3+ within 2.2s) trigger the original wince; Sleeping wakes up first!
+  // Single-click hops from leg to leg when Idle; rapid clicks (3+ within 2.2s) wince in Idle or working states; Sleeping wakes up!
   stagePet.addEventListener('click', () => {
     if (heroMood === 'Sleeping') {
       setHeroMood('Idle');
       chatStatus.textContent = 'Woke up from sleep (At rest)';
-    }
-    if (heroMood !== 'Idle') {
-      clickStreak = 0;
-      hurtTicks = 0;
-      danceTicks = 0;
-      return;
     }
     const nowMs = performance.now();
     if (nowMs - lastClickMs > 2200) clickStreak = 0;
@@ -883,7 +877,7 @@
     if (clickStreak >= 3) {
       danceTicks = 0;
       hurtTicks = 6;
-    } else {
+    } else if (heroMood === 'Idle') {
       hurtTicks = 0;
       danceTicks = 24;
     }

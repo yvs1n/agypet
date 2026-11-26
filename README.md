@@ -29,7 +29,7 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 - **Alt+Tab, Corner & Taskbar Dock (with Auto-Hide)**: Leaves the chatbox when you switch apps or open Settings, gliding calmly to `Top-Right`, `Top-Left`, above the taskbar (`Bottom-Left` / `Bottom-Middle` / `Bottom-Right`), or directly along the taskbar (`Taskbar · Left` / `Taskbar · Middle` / `Taskbar · Right`), with optional **Auto-Hide** toggles (`Hide When Inactive` / `Hide When Minimized`). Return to Antigravity or an active `agy` terminal and he snaps right back.
 - **Multitasking & Live Server States**: Juggles orbiting orbs when minimized with 2+ active sessions, follows a single session directly, and displays a calm pulsing server rack when a finished chat still has a live server running.
 - **Scrollable Multi-Session Hover Card**: Outside Antigravity, hover over the mascot to view every active App, IDE, and CLI session with exact `% done / % left` step progress (automatically scrollable at > 2 sessions).
-- **Idle Leg-Hop & Rapid-Click Wince**: When `Idle`, left-clicking hops playfully from one leg to the other, while clicking rapidly (3+ times) triggers the original brief wince (`> <`); left-drag anywhere freely.
+- **Idle Leg-Hop & Rapid-Click Wince**: Left-clicking when `Idle` hops playfully from one leg to the other; rapid clicking (3+ times) while `Idle` or working triggers the original brief wince (`> <`); left-drag anywhere freely.
 - **Two Official Skins**:
   - **Classic Official** — Refined CLI pixel-art arch in the official Antigravity radial logo colors.
   - **Dark Remake** — Monochrome obsidian & graphite remake with luminous white eyes.
@@ -69,7 +69,7 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 
 ## Controls
 
-- **Left-click mascot**: When `Idle`, single-click hops from one leg to the other (or wakes up first if `Sleeping`), while clicking rapidly (3+ times) triggers the original wince (`> <`). Click animations stay inactive while working or in other non-Idle states.
+- **Left-click mascot**: When `Idle`, single-click hops from one leg to the other (or wakes up first if `Sleeping`). Rapid clicks (3+ times) trigger the original wince (`> <`) whether `Idle` or working; single-clicking while busy stays calm.
 - **Double-click mascot**: Continues the Idle click cadence.
 - **Left-drag**: Move freely anywhere on screen (always returns above chatbox when returning to Antigravity).
 - **Hover (when outside Antigravity)**: View live status & scrollable multi-session progress card.

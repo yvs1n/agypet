@@ -30,9 +30,23 @@ namespace AgyPet
         readonly Canvas stage = new Canvas { ClipToBounds = false };
         readonly Border petHitArea;
 
-        // Independent Popup for the hover status card (never shifts PetWindow's Left/Top!)
-        readonly Popup hoverPopup;
+        // Independent non-activating transparent Window for the hover status card (immune to WPF Popup MenuDropAlignment)
+        readonly Window hoverWindow;
         readonly Border hoverCard;
+        readonly ScaleTransform cardScale = new ScaleTransform(0.96, 0.96);
+        readonly TranslateTransform cardSlide = new TranslateTransform(0, 4);
+        bool isHoverOpen;
+
+        // Website design system tokens (site/styles.css OKLCH hue-250 dark surfaces + alpha borders)
+        static readonly FontFamily UiFont = new FontFamily("Plus Jakarta Sans, Segoe UI Variable, Segoe UI");
+        static readonly Brush SiteBgPopover = FrozenArgb(0xF5, 0x24, 0x29, 0x34);
+        static readonly Brush SiteBgPillHover = FrozenArgb(0x14, 0xF4, 0xF6, 0xFA);
+        static readonly Brush SiteBorderSubtle = FrozenArgb(0x1C, 0xF5, 0xF7, 0xFC);
+        static readonly Brush SiteBorderStrong = FrozenArgb(0x30, 0xF5, 0xF7, 0xFC);
+        static readonly Brush SiteInkPrimary = FrozenRgb(0xF1, 0xF3, 0xF7);
+        static readonly Brush SiteInkSecondary = FrozenRgb(0xAD, 0xB4, 0xC2);
+        static readonly Brush SiteInkMuted = FrozenRgb(0x8C, 0x94, 0xA4);
+        static readonly Brush SiteAccentBlueHi = FrozenRgb(0x42, 0x7A, 0xF2);
         readonly StackPanel cardHeaderWrap = new StackPanel();
         readonly ScrollViewer sessionScroll;
         readonly StackPanel sessionList = new StackPanel();
@@ -58,6 +72,7 @@ namespace AgyPet
         readonly ContextMenu contextMenu = new ContextMenu();
 
         bool previewMode;
+        string activeRenderSize = "medium";
         MascotMood previewMood = MascotMood.Idle;
         MascotMood lastAppliedMood = MascotMood.Idle;
         string lastFocusedSessionId = "";
@@ -67,10 +82,10 @@ namespace AgyPet
 
         const int MinBusyDwellMs = 1200;
 
-        const double StagePadX = 32;
+        const double StagePadX = 52; // keeps total width above Win32 SM_CXMINTRACK (~136 DIP) on Small/Medium/Large
         const double StagePadY = 24;
         const double StagePadBottom = 4;
-        const double CardWidth = 264;
+        const double CardWidth = 268;
         const double DragThresholdPx = 5.0;
 
         public PetWindow(PetSettings settings, ActivityMonitor monitor, Updater updater)
@@ -110,28 +125,47 @@ namespace AgyPet
             cardRoot.Children.Add(cardHeaderWrap);
             cardRoot.Children.Add(sessionScroll);
 
+            var cardTransform = new TransformGroup();
+            cardTransform.Children.Add(cardScale);
+            cardTransform.Children.Add(cardSlide);
+
             hoverCard = new Border
             {
                 Width = CardWidth,
-                Background = new SolidColorBrush(Color.FromArgb(0xF0, 0x11, 0x13, 0x18)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF)),
+                Background = SiteBgPopover,
+                BorderBrush = SiteBorderStrong,
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(12),
-                Padding = new Thickness(13, 10, 13, 10),
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(12),
                 Child = cardRoot,
                 Opacity = 0,
                 Margin = new Thickness(6),
+                RenderTransformOrigin = new Point(0.5, 0.9),
+                RenderTransform = cardTransform,
             };
 
-            hoverPopup = new Popup
+            hoverWindow = new Window
             {
-                PlacementTarget = petHitArea,
-                Placement = PlacementMode.Left,
+                Title = "AgyPet Card",
+                WindowStyle = WindowStyle.None,
                 AllowsTransparency = true,
-                StaysOpen = true,
-                PopupAnimation = PopupAnimation.None,
-                Child = hoverCard,
+                Background = Brushes.Transparent,
+                Topmost = true,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+                ResizeMode = ResizeMode.NoResize,
+                SizeToContent = SizeToContent.WidthAndHeight,
+                Content = hoverCard,
             };
+            hoverWindow.SourceInitialized += (s, e) =>
+            {
+                IntPtr hh = new WindowInteropHelper(hoverWindow).Handle;
+                int ex = GetWindowLong(hh, GWL_EXSTYLE);
+                SetWindowLong(hh, GWL_EXSTYLE, ex | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+                var src = HwndSource.FromHwnd(hh);
+                if (src != null) src.AddHook(OnWndProc);
+            };
+            hoverWindow.SizeChanged += (s, e) => { if (isHoverOpen) UpdateHoverPopupPosition(); };
 
             RebuildMascot();
             AutomationProperties.SetName(petHitArea, "AgyPet companion");
@@ -144,11 +178,16 @@ namespace AgyPet
             contextMenu.Opened += (s, e) =>
             {
                 contextMenuOpen = true;
-                hoverPopup.IsOpen = false;
+                CloseHoverWindow();
                 PopulateContextMenu();
                 menuOpenedAtUtc = DateTime.UtcNow;
                 prevMenuMouseMask = CurrentMouseMask();
                 menuDismissTimer.Start();
+                contextMenu.Opacity = 0;
+                contextMenu.BeginAnimation(OpacityProperty, new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(140))
+                {
+                    EasingFunction = new QuarticEase { EasingMode = EasingMode.EaseOut }
+                });
             };
             contextMenu.Closed += (s, e) =>
             {
@@ -156,6 +195,7 @@ namespace AgyPet
                 menuDismissTimer.Stop();
                 menuCooldownUntil = DateTime.UtcNow.AddMilliseconds(220);
             };
+            ApplyWebsiteMenuTheme(contextMenu);
             PopulateContextMenu();
             petHitArea.ContextMenu = contextMenu;
 
@@ -187,6 +227,8 @@ namespace AgyPet
             Closed += (s, e) =>
             {
                 menuDismissTimer.Stop();
+                CloseHoverWindow();
+                try { hoverWindow.Close(); } catch { }
                 if (selfHwndSource != null)
                 {
                     selfHwndSource.RemoveHook(OnWndProc);
@@ -225,13 +267,103 @@ namespace AgyPet
             return IntPtr.Zero;
         }
 
-        public void RebuildMascot()
+        double ActivePixelSize
         {
+            get { return PetSettings.PixelSizeFor(string.IsNullOrEmpty(activeRenderSize) ? settings.Size : activeRenderSize); }
+        }
+
+        public static string ResolveEffectiveSize(
+            string userSize,
+            string corner,
+            bool pinAboveTaskbar,
+            bool hasCustomFreePos,
+            bool outsideApp,
+            bool previewMode,
+            Rect workArea,
+            Rect screenBounds)
+        {
+            string normalizedSize = (userSize == "small" || userSize == "large") ? userSize : "medium";
+            if (previewMode || !outsideApp || hasCustomFreePos)
+                return normalizedSize;
+
+            string effectiveCorner = PetSettings.ResolvePinnedCorner(corner, pinAboveTaskbar);
+            if (!effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
+                return normalizedSize;
+
+            double bottomGap = screenBounds.Bottom - workArea.Bottom;
+            double topGap = workArea.Top - screenBounds.Top;
+            double taskbarHeight = bottomGap >= 16.0 ? bottomGap : (topGap >= 16.0 ? topGap : 0.0);
+            if (taskbarHeight < 16.0)
+                return normalizedSize;
+
+            double largeSpriteH = 9.0 * PetSettings.PixelSizeFor("large");
+            double mediumSpriteH = 9.0 * PetSettings.PixelSizeFor("medium");
+            const double TaskbarMinBufferDip = 6.0;
+            if (taskbarHeight >= largeSpriteH + TaskbarMinBufferDip)
+                return "large";
+            if (taskbarHeight >= mediumSpriteH + TaskbarMinBufferDip)
+                return "medium";
+            return "small";
+        }
+
+        bool IsInTaskbarMode(out double barTop, out double barHeight)
+        {
+            barTop = 0;
+            barHeight = 0;
+            if (settings.HasCustomFreePos) return false;
+            if (tracker.IsInFront && !settings.PinAboveTaskbar) return false;
+            string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
+            if (!effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase)) return false;
+
+            Rect work = SystemParameters.WorkArea;
+            Rect screen = new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
+            double bottomGap = screen.Bottom - work.Bottom;
+            double topGap = work.Top - screen.Top;
+            if (bottomGap >= 16.0)
+            {
+                barTop = work.Bottom;
+                barHeight = bottomGap;
+                return true;
+            }
+            if (topGap >= 16.0)
+            {
+                barTop = screen.Top;
+                barHeight = topGap;
+                return true;
+            }
+            return false;
+        }
+
+        string ResolveCurrentEffectiveSize()
+        {
+            Rect work = SystemParameters.WorkArea;
+            Rect screen = new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
+            bool outsideApp = !tracker.IsInFront || tracker.IsMinimized;
+            return ResolveEffectiveSize(
+                settings.Size,
+                settings.MinimizedCorner,
+                settings.PinAboveTaskbar,
+                settings.HasCustomFreePos,
+                outsideApp,
+                previewMode,
+                work,
+                screen);
+        }
+
+        void EnsureEffectiveSize()
+        {
+            string nextSize = ResolveCurrentEffectiveSize();
+            if (!string.Equals(nextSize, activeRenderSize, StringComparison.Ordinal))
+                RebuildMascot(nextSize);
+        }
+
+        public void RebuildMascot(string targetSize = null)
+        {
+            string resolved = string.IsNullOrEmpty(targetSize) ? ResolveCurrentEffectiveSize() : targetSize;
+            activeRenderSize = resolved;
             stage.Children.Clear();
-            mascot = new Mascot(settings.PixelSize, settings.Skin);
-            mascot.Mood = previewMode ? previewMood : monitor.Latest.Mood;
-            lastAppliedMood = mascot.Mood;
-            lastBusySwitchAt = DateTime.UtcNow;
+            mascot = new Mascot(ActivePixelSize, settings.Skin);
+            ApplyResolvedMascotState();
             stage.Width = mascot.Width;
             stage.Height = mascot.Height;
             stage.Children.Add(mascot);
@@ -267,9 +399,9 @@ namespace AgyPet
 
         public void ApplySize(string size)
         {
-            settings.Size = size;
+            settings.Size = (size == "small" || size == "large") ? size : "medium";
             settings.Save();
-            RebuildMascot();
+            RebuildMascot(ResolveCurrentEffectiveSize());
             SnapToTarget();
         }
 
@@ -340,7 +472,7 @@ namespace AgyPet
             if (shouldHide)
             {
                 hoverLeaveTimer.Stop();
-                hoverPopup.IsOpen = false;
+                CloseHoverWindow();
                 if (Visibility != Visibility.Hidden)
                     Visibility = Visibility.Hidden;
                 return true;
@@ -348,6 +480,7 @@ namespace AgyPet
 
             if (Visibility != Visibility.Visible)
             {
+                if (!dragging) EnsureEffectiveSize();
                 Point desired = ComputeDesiredPosition();
                 Left = targetLeft = desired.X;
                 Top = targetTop = desired.Y;
@@ -367,6 +500,9 @@ namespace AgyPet
             settings.HasCustomFreePos = false;
             settings.MinimizedCorner = PetSettings.NormalizeCorner(corner);
             settings.Save();
+            bool isTaskbar = settings.MinimizedCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase);
+            tracker.TrackTaskbarItems = isTaskbar;
+            if (isTaskbar) tracker.RefreshTaskbarSpansNow();
             if (!tracker.IsInFront || settings.PinAboveTaskbar) SnapToTarget();
         }
 
@@ -494,7 +630,7 @@ namespace AgyPet
                 AutomationProperties.SetName(petHitArea, "AgyPet: " + mascot.Mood + " — " + label);
             }
 
-            if (hoverPopup.IsOpen || !previewMode)
+            if (isHoverOpen || !previewMode)
                 RenderHoverContent();
         }
 
@@ -527,10 +663,10 @@ namespace AgyPet
                 var countBadge = new TextBlock
                 {
                     Text = actives.Count + " active sessions",
-                    Foreground = BrushHex(0xF8, 0xFA, 0xFC),
+                    Foreground = SiteInkPrimary,
                     FontSize = 11.5,
                     FontWeight = FontWeights.SemiBold,
-                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                    FontFamily = UiFont,
                 };
                 hdr.Children.Add(countBadge);
 
@@ -539,10 +675,10 @@ namespace AgyPet
                     var scrollHint = new TextBlock
                     {
                         Text = "Scroll ↕",
-                        Foreground = BrushHex(0x94, 0xA3, 0xB8),
+                        Foreground = SiteInkMuted,
                         FontSize = 10.5,
                         HorizontalAlignment = HorizontalAlignment.Right,
-                        FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                        FontFamily = UiFont,
                     };
                     DockPanel.SetDock(scrollHint, Dock.Right);
                     hdr.Children.Insert(0, scrollHint);
@@ -572,7 +708,7 @@ namespace AgyPet
                 stack.Children.Add(new Border
                 {
                     Height = 1,
-                    Background = new SolidColorBrush(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF)),
+                    Background = SiteBorderSubtle,
                     Margin = new Thickness(0, 8, 0, 8),
                 });
             }
@@ -589,10 +725,10 @@ namespace AgyPet
             var title = new TextBlock
             {
                 Text = string.IsNullOrWhiteSpace(snap.SessionTitle) ? snap.Source : snap.SessionTitle,
-                Foreground = BrushHex(0x94, 0xA3, 0xB8),
+                Foreground = SiteInkSecondary,
                 FontSize = 11,
                 FontWeight = FontWeights.SemiBold,
-                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                FontFamily = UiFont,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 MaxWidth = innerW - 18,
             };
@@ -604,10 +740,10 @@ namespace AgyPet
             stack.Children.Add(new TextBlock
             {
                 Text = snap.ActionLabel,
-                Foreground = BrushHex(0xF8, 0xFA, 0xFC),
+                Foreground = SiteInkPrimary,
                 FontSize = 12.5,
                 FontWeight = FontWeights.SemiBold,
-                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                FontFamily = UiFont,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Margin = new Thickness(0, 4, 0, 0),
             });
@@ -619,9 +755,9 @@ namespace AgyPet
                 stack.Children.Add(new TextBlock
                 {
                     Text = snap.FocusDetail,
-                    Foreground = BrushHex(0xA1, 0xA1, 0xAA),
+                    Foreground = SiteInkMuted,
                     FontSize = 11,
-                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                    FontFamily = UiFont,
                     TextTrimming = TextTrimming.CharacterEllipsis,
                     Margin = new Thickness(0, 2, 0, 0),
                 });
@@ -639,32 +775,32 @@ namespace AgyPet
                 {
                     barRow.Children.Add(new Border
                     {
-                        Height = 5,
+                        Height = 4,
                         Width = Math.Max(3, doneW),
-                        CornerRadius = activeSliceW > 0 ? new CornerRadius(3, 0, 0, 3) : new CornerRadius(3),
+                        CornerRadius = activeSliceW > 0 ? new CornerRadius(2, 0, 0, 2) : new CornerRadius(2),
                         Background = darkSkin
-                            ? (Brush)BrushHex(0xF4, 0xF4, 0xF5)
-                            : new LinearGradientBrush(Color.FromRgb(0x34, 0xA8, 0x53), Color.FromRgb(0x25, 0x75, 0xFC), 0),
+                            ? (Brush)BrushHex(0xF1, 0xF3, 0xF7)
+                            : new LinearGradientBrush(Color.FromRgb(0x47, 0xB8, 0x66), Color.FromRgb(0x2E, 0x69, 0xE8), 0),
                     });
                 }
                 if (activeSliceW > 1)
                 {
                     barRow.Children.Add(new Border
                     {
-                        Height = 5,
+                        Height = 4,
                         Width = activeSliceW,
-                        CornerRadius = doneW > 0 ? new CornerRadius(0, 3, 3, 0) : new CornerRadius(3),
-                        Background = new SolidColorBrush(darkSkin ? Color.FromArgb(0x66, 0xE4, 0xE4, 0xE7) : Color.FromArgb(0x77, 0x38, 0xBD, 0xF8)),
+                        CornerRadius = doneW > 0 ? new CornerRadius(0, 2, 2, 0) : new CornerRadius(2),
+                        Background = new SolidColorBrush(darkSkin ? Color.FromArgb(0x66, 0xE4, 0xE4, 0xE7) : Color.FromArgb(0x77, 0x42, 0x7A, 0xF2)),
                     });
                 }
 
                 stack.Children.Add(new Border
                 {
-                    Height = 5,
+                    Height = 4,
                     Width = innerW,
                     HorizontalAlignment = HorizontalAlignment.Left,
-                    CornerRadius = new CornerRadius(3),
-                    Background = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+                    CornerRadius = new CornerRadius(2),
+                    Background = SiteBgPillHover,
                     Child = barRow,
                     Margin = new Thickness(0, 8, 0, 4),
                 });
@@ -673,36 +809,36 @@ namespace AgyPet
                 stack.Children.Add(new TextBlock
                 {
                     Text = snap.PercentDone + "% done  ·  " + snap.PercentLeft + "% left" + stepInfo,
-                    Foreground = BrushHex(0xCB, 0xD5, 0xE1),
+                    Foreground = SiteInkSecondary,
                     FontSize = 10.8,
-                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                    FontFamily = UiFont,
                 });
             }
             else if (snap.IsBusy)
             {
                 stack.Children.Add(new Border
                 {
-                    Height = 5,
+                    Height = 4,
                     Width = innerW,
                     HorizontalAlignment = HorizontalAlignment.Left,
-                    CornerRadius = new CornerRadius(3),
-                    Background = new SolidColorBrush(Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF)),
+                    CornerRadius = new CornerRadius(2),
+                    Background = SiteBgPillHover,
                     Child = new Border
                     {
-                        Height = 5,
+                        Height = 4,
                         Width = innerW * 0.28,
                         HorizontalAlignment = HorizontalAlignment.Left,
-                        CornerRadius = new CornerRadius(3),
-                        Background = new SolidColorBrush(darkSkin ? Color.FromArgb(0x88, 0xF4, 0xF4, 0xF5) : Color.FromArgb(0x99, 0x25, 0x75, 0xFC)),
+                        CornerRadius = new CornerRadius(2),
+                        Background = new SolidColorBrush(darkSkin ? Color.FromArgb(0x88, 0xF1, 0xF3, 0xF7) : Color.FromArgb(0xAA, 0x2E, 0x69, 0xE8)),
                     },
                     Margin = new Thickness(0, 8, 0, 4),
                 });
                 stack.Children.Add(new TextBlock
                 {
                     Text = "Running · No step checklist yet",
-                    Foreground = BrushHex(0x94, 0xA3, 0xB8),
+                    Foreground = SiteInkMuted,
                     FontSize = 10.5,
-                    FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                    FontFamily = UiFont,
                 });
             }
 
@@ -750,8 +886,8 @@ namespace AgyPet
             bool hasTargetBox = tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty;
             bool nowOnChatScreen = !settings.PinAboveTaskbar && nowInFront && !tracker.IsMinimized && hasTargetBox;
 
-            if (nowInFront && hoverPopup.IsOpen)
-                hoverPopup.IsOpen = false;
+            if (nowInFront && isHoverOpen)
+                CloseHoverWindow();
 
             // Whenever the user enters an Antigravity chat (from another app OR back from Antigravity Settings),
             // ALWAYS snap back cleanly above the chatbox!
@@ -763,11 +899,13 @@ namespace AgyPet
 
             // Keep AgyPet above Shell_TrayWnd when docked along the Windows taskbar itself.
             string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
-            if ((!nowInFront || settings.PinAboveTaskbar) && !settings.HasCustomFreePos &&
-                effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
-            {
+            bool usingTaskbar = (!nowInFront || settings.PinAboveTaskbar) && !settings.HasCustomFreePos &&
+                effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase);
+            tracker.TrackTaskbarItems = effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase) && !settings.HasCustomFreePos;
+            if (usingTaskbar)
                 EnsureTopmost();
-            }
+
+            if (!dragging) EnsureEffectiveSize();
 
             Point desired = ComputeDesiredPosition();
             targetLeft = desired.X;
@@ -782,8 +920,8 @@ namespace AgyPet
             if (!GetCursorPos(out cur)) return;
             double dpiX, dpiY;
             GetDpiScale(out dpiX, out dpiY);
-            double eyeCenterX = (Left + StagePadX + 5.5 * settings.PixelSize) * dpiX;
-            double eyeCenterY = (Top + StagePadY + 3.4 * settings.PixelSize) * dpiY;
+            double eyeCenterX = (Left + StagePadX + 5.5 * ActivePixelSize) * dpiX;
+            double eyeCenterY = (Top + StagePadY + 3.4 * ActivePixelSize) * dpiY;
             double nx, ny;
             Mascot.NormalizeLookOffset(cur.X - eyeCenterX, cur.Y - eyeCenterY, out nx, out ny);
             mascot.SetLookOffset(nx, ny);
@@ -817,9 +955,13 @@ namespace AgyPet
         void SnapToTarget()
         {
             tracker.TrackCliWindows = settings.CliPlacement != "off";
+            string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
+            tracker.TrackTaskbarItems = effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase) && !settings.HasCustomFreePos;
+            if (tracker.TrackTaskbarItems) tracker.RefreshTaskbarSpansNow();
             tracker.Poll();
             bool hasTargetBox = tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty;
             wasOnChatScreen = !settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && hasTargetBox;
+            if (!dragging) EnsureEffectiveSize();
             Point desired = ComputeDesiredPosition();
             Left = targetLeft = desired.X;
             Top = targetTop = desired.Y;
@@ -909,6 +1051,167 @@ namespace AgyPet
             return new Point(left, top);
         }
 
+        public static double ResolveTaskbarVisualLeft(
+            string corner,
+            Rect workArea,
+            TaskbarSpan[] occupiedDip,
+            double spriteW,
+            out TaskbarSpan chosenGap)
+        {
+            const double EdgePad = 8.0;
+            const double ItemMargin = 8.0;
+            double minStart = workArea.Left + EdgePad;
+            double maxEnd = workArea.Right - EdgePad;
+            if (maxEnd <= minStart + spriteW)
+            {
+                chosenGap = new TaskbarSpan(workArea.Left, workArea.Right);
+                return workArea.Left + Math.Max(0, (workArea.Width - spriteW) * 0.5);
+            }
+
+            var merged = new List<TaskbarSpan>();
+            if (occupiedDip != null && occupiedDip.Length > 0)
+            {
+                var expanded = new List<TaskbarSpan>(occupiedDip.Length);
+                for (int i = 0; i < occupiedDip.Length; i++)
+                {
+                    double s = Math.Max(workArea.Left, occupiedDip[i].Start - ItemMargin);
+                    double e = Math.Min(workArea.Right, occupiedDip[i].End + ItemMargin);
+                    if (e > s + 1.0) expanded.Add(new TaskbarSpan(s, e));
+                }
+                expanded.Sort((a, b) => a.Start.CompareTo(b.Start));
+                for (int i = 0; i < expanded.Count; i++)
+                {
+                    var cur = expanded[i];
+                    if (merged.Count == 0 || cur.Start > merged[merged.Count - 1].End)
+                        merged.Add(cur);
+                    else
+                        merged[merged.Count - 1] = new TaskbarSpan(
+                            merged[merged.Count - 1].Start,
+                            Math.Max(merged[merged.Count - 1].End, cur.End));
+                }
+            }
+
+            var freeGaps = new List<TaskbarSpan>();
+            double cursor = minStart;
+            for (int i = 0; i < merged.Count; i++)
+            {
+                var occ = merged[i];
+                if (occ.Start > cursor)
+                {
+                    double ge = Math.Min(occ.Start, maxEnd);
+                    if (ge > cursor) freeGaps.Add(new TaskbarSpan(cursor, ge));
+                }
+                if (occ.End > cursor) cursor = occ.End;
+                if (cursor >= maxEnd) break;
+            }
+            if (cursor < maxEnd)
+                freeGaps.Add(new TaskbarSpan(cursor, maxEnd));
+
+            var qualifying = new List<TaskbarSpan>();
+            for (int i = 0; i < freeGaps.Count; i++)
+            {
+                if (freeGaps[i].End - freeGaps[i].Start >= spriteW)
+                    qualifying.Add(freeGaps[i]);
+            }
+
+            string normalized = PetSettings.NormalizeCorner(corner);
+            if (qualifying.Count == 0)
+            {
+                if (freeGaps.Count > 0)
+                {
+                    TaskbarSpan widest = freeGaps[0];
+                    for (int i = 1; i < freeGaps.Count; i++)
+                        if (freeGaps[i].End - freeGaps[i].Start > widest.End - widest.Start)
+                            widest = freeGaps[i];
+                    chosenGap = widest;
+                    return widest.Start + Math.Max(0, (widest.End - widest.Start - spriteW) * 0.5);
+                }
+                chosenGap = new TaskbarSpan(minStart, maxEnd);
+                if (normalized.EndsWith("-left", StringComparison.Ordinal)) return minStart;
+                if (normalized.EndsWith("-right", StringComparison.Ordinal)) return maxEnd - spriteW;
+                return workArea.Left + (workArea.Width - spriteW) * 0.5;
+            }
+
+            if (normalized.EndsWith("-left", StringComparison.Ordinal))
+            {
+                chosenGap = qualifying[0];
+                return chosenGap.Start;
+            }
+            if (normalized.EndsWith("-right", StringComparison.Ordinal))
+            {
+                chosenGap = qualifying[qualifying.Count - 1];
+                return chosenGap.End - spriteW;
+            }
+
+            double idealLeft = workArea.Left + (workArea.Width - spriteW) * 0.5;
+            double bestLeft = qualifying[0].Start;
+            TaskbarSpan bestGap = qualifying[0];
+            double bestDist = double.MaxValue;
+            for (int i = 0; i < qualifying.Count; i++)
+            {
+                var g = qualifying[i];
+                double clamped = Math.Max(g.Start, Math.Min(g.End - spriteW, idealLeft));
+                double dist = Math.Abs(clamped - idealLeft);
+                if (dist < bestDist)
+                {
+                    bestDist = dist;
+                    bestLeft = clamped;
+                    bestGap = g;
+                }
+            }
+            chosenGap = bestGap;
+            return bestLeft;
+        }
+
+        public static Point PlaceInTaskbar(
+            string corner,
+            Rect workArea,
+            Rect screenBounds,
+            TaskbarSpan[] occupiedDip,
+            double spriteW,
+            double spriteH,
+            double padX,
+            double padY,
+            out TaskbarSpan chosenGap)
+        {
+            double visualLeft = ResolveTaskbarVisualLeft(corner, workArea, occupiedDip, spriteW, out chosenGap);
+            Point vertical = PlaceInCorner(corner, workArea, screenBounds, spriteW, spriteH, padX, padY);
+            return new Point(visualLeft - padX, vertical.Y);
+        }
+
+        public static Point ComputePopupScreenPos(
+            double winLeft,
+            double winTop,
+            double padX,
+            double padY,
+            double spriteW,
+            double spriteH,
+            double popupW,
+            double popupH,
+            Rect workArea,
+            bool centerHorizontal,
+            bool dockTopEdge)
+        {
+            if (centerHorizontal)
+            {
+                double desiredX = winLeft + padX + spriteW * 0.5 - popupW * 0.5;
+                double clampedX = Math.Max(workArea.Left + 4.0, Math.Min(workArea.Right - popupW - 4.0, desiredX));
+                double posY = dockTopEdge
+                    ? (winTop + padY + spriteH)
+                    : (winTop + padY - popupH);
+                if (posY < workArea.Top + 4.0 && !dockTopEdge)
+                    posY = winTop + padY + spriteH;
+                return new Point(clampedX, posY);
+            }
+
+            bool openOnRight = winLeft < workArea.Left + popupW + 24.0;
+            double sideX = openOnRight
+                ? (winLeft + padX + spriteW + 4.0)
+                : Math.Max(workArea.Left + 4.0, winLeft + padX - popupW - 4.0);
+            double sideY = Math.Max(workArea.Top + 4.0, Math.Min(workArea.Bottom - popupH - 4.0, winTop + padY * 0.35));
+            return new Point(sideX, sideY);
+        }
+
         public static Point ComputePinnedAwayPosition(
             string corner,
             bool pinAboveTaskbar,
@@ -935,9 +1238,9 @@ namespace AgyPet
             GetDpiScale(out dpiX, out dpiY);
             Rect work = SystemParameters.WorkArea;
             Rect screen = new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
-            double spriteW = 11.0 * settings.PixelSize;
-            double spriteH = 9.0 * settings.PixelSize;
-            double petW = petHitArea.ActualWidth > 10 ? petHitArea.ActualWidth : (spriteW + StagePadX * 2);
+            double spriteW = 11.0 * ActivePixelSize;
+            double spriteH = 9.0 * ActivePixelSize;
+            double petW = spriteW + StagePadX * 2;
 
             double petLeft, petTop;
             string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
@@ -968,20 +1271,39 @@ namespace AgyPet
             }
             else
             {
-                Point awayPt = ComputePinnedAwayPosition(
-                    settings.MinimizedCorner,
-                    settings.PinAboveTaskbar,
-                    settings.HasCustomFreePos,
-                    settings.FreeX,
-                    settings.FreeY,
-                    work,
-                    screen,
-                    spriteW,
-                    spriteH,
-                    StagePadX,
-                    StagePadY);
-                petLeft = awayPt.X;
-                petTop = awayPt.Y;
+                if (!settings.HasCustomFreePos && effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
+                {
+                    TaskbarSpan gap;
+                    Point tbPt = PlaceInTaskbar(
+                        effectiveCorner,
+                        work,
+                        screen,
+                        tracker.GetTaskbarOccupiedSpansDip(dpiX),
+                        spriteW,
+                        spriteH,
+                        StagePadX,
+                        StagePadY,
+                        out gap);
+                    petLeft = tbPt.X;
+                    petTop = tbPt.Y;
+                }
+                else
+                {
+                    Point awayPt = ComputePinnedAwayPosition(
+                        settings.MinimizedCorner,
+                        settings.PinAboveTaskbar,
+                        settings.HasCustomFreePos,
+                        settings.FreeX,
+                        settings.FreeY,
+                        work,
+                        screen,
+                        spriteW,
+                        spriteH,
+                        StagePadX,
+                        StagePadY);
+                    petLeft = awayPt.X;
+                    petTop = awayPt.Y;
+                }
             }
 
             bool pinnedAway = !tracker.IsInFront || settings.PinAboveTaskbar;
@@ -990,12 +1312,59 @@ namespace AgyPet
             double maxBottom = allowTaskbarBand ? Math.Max(work.Bottom, screen.Bottom) : work.Bottom;
             double minTop = allowTaskbarBand ? Math.Min(work.Top, screen.Top) : work.Top;
 
-            petLeft = Math.Max(work.Left - StagePadX * 0.5, Math.Min(work.Right - petW + StagePadX * 0.5, petLeft));
+            double minLeftBound = allowTaskbarBand && !settings.HasCustomFreePos ? (work.Left - StagePadX) : (work.Left - StagePadX * 0.5);
+            double maxLeftBound = allowTaskbarBand && !settings.HasCustomFreePos ? (work.Right - spriteW - StagePadX) : (work.Right - petW + StagePadX * 0.5);
+            petLeft = Math.Max(minLeftBound, Math.Min(maxLeftBound, petLeft));
             petTop = Math.Max(minTop - StagePadY * 0.4, Math.Min(maxBottom - spriteH - StagePadY, petTop));
             return new Point(petLeft, petTop);
         }
 
-        // ---- Hover Card Popup (active ONLY outside Antigravity) ----
+        // ---- Hover Card Window (active outside Antigravity; exact screen coordinates centered above mascot) ----
+
+        void CloseHoverWindow()
+        {
+            isHoverOpen = false;
+            if (hoverWindow != null && hoverWindow.IsVisible)
+                hoverWindow.Hide();
+        }
+
+        void UpdateHoverPopupPosition()
+        {
+            Rect work = SystemParameters.WorkArea;
+            double spriteW = 11.0 * ActivePixelSize;
+            double spriteH = 9.0 * ActivePixelSize;
+            double padX = StagePadX;
+            double padY = StagePadY;
+            if (mascot != null && mascot.IsLoaded)
+            {
+                try
+                {
+                    Point mascotCenterInWin = mascot.TransformToAncestor(this).Transform(new Point(mascot.Width * 0.5, 0));
+                    padX = mascotCenterInWin.X - spriteW * 0.5;
+                    padY = mascotCenterInWin.Y;
+                }
+                catch { }
+            }
+
+            hoverCard.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double popupW = hoverWindow.ActualWidth > 10
+                ? hoverWindow.ActualWidth
+                : Math.Max(CardWidth + 12.0, hoverCard.DesiredSize.Width);
+            double popupH = hoverWindow.ActualHeight > 10
+                ? hoverWindow.ActualHeight
+                : Math.Max(70.0, hoverCard.DesiredSize.Height);
+
+            double barTop, barHeight;
+            bool inTaskbar = IsInTaskbarMode(out barTop, out barHeight);
+            bool nearBottom = (Top + padY + spriteH) > (work.Bottom - 70.0);
+            bool dockTopEdge = inTaskbar && barTop < work.Top;
+
+            Point pt = ComputePopupScreenPos(
+                Left, Top, padX, padY, spriteW, spriteH, popupW, popupH,
+                work, inTaskbar || nearBottom, dockTopEdge);
+            hoverWindow.Left = pt.X;
+            hoverWindow.Top = pt.Y;
+        }
 
         void ShowCard()
         {
@@ -1003,33 +1372,25 @@ namespace AgyPet
             if (!settings.ShowHoverCard || dragging || IsAnyMenuActive || tracker.IsInFront || Visibility != Visibility.Visible) return;
             RenderHoverContent();
 
-            Rect work = SystemParameters.WorkArea;
-            double spriteH = 9.0 * settings.PixelSize;
-            bool nearBottom = Top + StagePadY + spriteH > work.Bottom - 70;
-            if (nearBottom)
-            {
-                hoverPopup.Placement = PlacementMode.Top;
-                hoverPopup.VerticalOffset = -4;
-                hoverPopup.HorizontalOffset = 0;
-            }
-            else
-            {
-                bool openOnRight = Left < work.Left + CardWidth + 24;
-                hoverPopup.Placement = openOnRight ? PlacementMode.Right : PlacementMode.Left;
-                hoverPopup.VerticalOffset = 6;
-                hoverPopup.HorizontalOffset = openOnRight ? -10 : 10;
-            }
-
-            if (!hoverPopup.IsOpen)
+            if (!isHoverOpen)
             {
                 hoverCard.Opacity = 0;
-                hoverPopup.IsOpen = true;
+                cardScale.ScaleX = 0.96;
+                cardScale.ScaleY = 0.96;
+                cardSlide.Y = 4.0;
+                isHoverOpen = true;
+                UpdateHoverPopupPosition();
+                hoverWindow.Show();
+                hoverWindow.Topmost = false;
+                hoverWindow.Topmost = true;
             }
-            var anim = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(140))
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
-            hoverCard.BeginAnimation(OpacityProperty, anim);
+            UpdateHoverPopupPosition();
+
+            var quartOut = new QuarticEase { EasingMode = EasingMode.EaseOut };
+            hoverCard.BeginAnimation(OpacityProperty, new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(160)) { EasingFunction = quartOut });
+            cardScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(180)) { EasingFunction = quartOut });
+            cardScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(180)) { EasingFunction = quartOut });
+            cardSlide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(180)) { EasingFunction = quartOut });
         }
 
         void ScheduleHideCard()
@@ -1040,14 +1401,18 @@ namespace AgyPet
 
         void HideCard()
         {
-            if (!hoverPopup.IsOpen) return;
-            var anim = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(120));
-            anim.Completed += (s, e) =>
+            if (!isHoverOpen) return;
+            var easeIn = new QuadraticEase { EasingMode = EasingMode.EaseIn };
+            var fade = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(130)) { EasingFunction = easeIn };
+            fade.Completed += (s, e) =>
             {
                 if (!petHitArea.IsMouseOver && !hoverCard.IsMouseOver)
-                    hoverPopup.IsOpen = false;
+                    CloseHoverWindow();
             };
-            hoverCard.BeginAnimation(OpacityProperty, anim);
+            hoverCard.BeginAnimation(OpacityProperty, fade);
+            cardScale.BeginAnimation(ScaleTransform.ScaleXProperty, new DoubleAnimation(0.97, TimeSpan.FromMilliseconds(130)) { EasingFunction = easeIn });
+            cardScale.BeginAnimation(ScaleTransform.ScaleYProperty, new DoubleAnimation(0.97, TimeSpan.FromMilliseconds(130)) { EasingFunction = easeIn });
+            cardSlide.BeginAnimation(TranslateTransform.YProperty, new DoubleAnimation(4.0, TimeSpan.FromMilliseconds(130)) { EasingFunction = easeIn });
         }
 
         // ---- Poke Easter Egg + Free Dragging ----
@@ -1085,7 +1450,7 @@ namespace AgyPet
                 if (Math.Abs(dxPx) < DragThresholdPx && Math.Abs(dyPx) < DragThresholdPx) return;
                 dragging = true;
                 if (mascot != null) mascot.CancelHurt();
-                hoverPopup.IsOpen = false;
+                CloseHoverWindow();
             }
 
             double dpiX, dpiY;
@@ -1187,7 +1552,7 @@ namespace AgyPet
             {
                 settings.ShowHoverCard = !settings.ShowHoverCard;
                 settings.Save();
-                if (!settings.ShowHoverCard) hoverPopup.IsOpen = false;
+                if (!settings.ShowHoverCard) CloseHoverWindow();
             }));
             contextMenu.Items.Add(CheckItem("Start with Windows", settings.StartWithWindows, () =>
             {
@@ -1224,6 +1589,163 @@ namespace AgyPet
         {
             try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); }
             catch { }
+        }
+
+        static Brush FrozenRgb(byte r, byte g, byte b)
+        {
+            var br = new SolidColorBrush(Color.FromRgb(r, g, b));
+            br.Freeze();
+            return br;
+        }
+
+        static Brush FrozenArgb(byte a, byte r, byte g, byte b)
+        {
+            var br = new SolidColorBrush(Color.FromArgb(a, r, g, b));
+            br.Freeze();
+            return br;
+        }
+
+        static void ApplyWebsiteMenuTheme(ContextMenu menu)
+        {
+            var cmTpl = new ControlTemplate(typeof(ContextMenu));
+            var cmBorder = new FrameworkElementFactory(typeof(Border));
+            cmBorder.SetValue(Border.BackgroundProperty, SiteBgPopover);
+            cmBorder.SetValue(Border.BorderBrushProperty, SiteBorderStrong);
+            cmBorder.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            cmBorder.SetValue(Border.CornerRadiusProperty, new CornerRadius(14));
+            cmBorder.SetValue(Border.PaddingProperty, new Thickness(5));
+            cmBorder.SetValue(Border.SnapsToDevicePixelsProperty, true);
+            var cmItems = new FrameworkElementFactory(typeof(ItemsPresenter));
+            cmItems.SetValue(KeyboardNavigation.DirectionalNavigationProperty, KeyboardNavigationMode.Cycle);
+            cmBorder.AppendChild(cmItems);
+            cmTpl.VisualTree = cmBorder;
+
+            var cmStyle = new Style(typeof(ContextMenu));
+            cmStyle.Setters.Add(new Setter(Control.TemplateProperty, cmTpl));
+            cmStyle.Setters.Add(new Setter(ContextMenu.HasDropShadowProperty, false));
+            cmStyle.Setters.Add(new Setter(Control.ForegroundProperty, SiteInkPrimary));
+            cmStyle.Setters.Add(new Setter(Control.FontFamilyProperty, UiFont));
+            cmStyle.Setters.Add(new Setter(Control.FontSizeProperty, 12.5));
+            menu.Style = cmStyle;
+
+            var miTpl = new ControlTemplate(typeof(MenuItem));
+            var root = new FrameworkElementFactory(typeof(Grid));
+
+            var pill = new FrameworkElementFactory(typeof(Border), "RowBg");
+            pill.SetValue(Border.CornerRadiusProperty, new CornerRadius(9));
+            pill.SetValue(Border.PaddingProperty, new Thickness(9, 5.5, 10, 5.5));
+            pill.SetValue(Border.MarginProperty, new Thickness(0, 0.5, 0, 0.5));
+            pill.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+            pill.SetValue(Border.BorderBrushProperty, Brushes.Transparent);
+            pill.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            pill.SetValue(Border.SnapsToDevicePixelsProperty, true);
+
+            var rowGrid = new FrameworkElementFactory(typeof(Grid));
+            var col0 = new FrameworkElementFactory(typeof(ColumnDefinition));
+            col0.SetValue(ColumnDefinition.WidthProperty, new GridLength(18));
+            var col1 = new FrameworkElementFactory(typeof(ColumnDefinition));
+            col1.SetValue(ColumnDefinition.WidthProperty, new GridLength(1, GridUnitType.Star));
+            var col2 = new FrameworkElementFactory(typeof(ColumnDefinition));
+            col2.SetValue(ColumnDefinition.WidthProperty, GridLength.Auto);
+            rowGrid.AppendChild(col0);
+            rowGrid.AppendChild(col1);
+            rowGrid.AppendChild(col2);
+
+            var check = new FrameworkElementFactory(typeof(TextBlock), "CheckMark");
+            check.SetValue(Grid.ColumnProperty, 0);
+            check.SetValue(TextBlock.TextProperty, "✓");
+            check.SetValue(TextBlock.FontSizeProperty, 11.0);
+            check.SetValue(TextBlock.FontWeightProperty, FontWeights.Bold);
+            check.SetValue(TextBlock.ForegroundProperty, SiteAccentBlueHi);
+            check.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            check.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            check.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
+
+            var header = new FrameworkElementFactory(typeof(ContentPresenter));
+            header.SetValue(Grid.ColumnProperty, 1);
+            header.SetValue(ContentPresenter.ContentSourceProperty, "Header");
+            header.SetValue(ContentPresenter.RecognizesAccessKeyProperty, true);
+            header.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+
+            var arrow = new FrameworkElementFactory(typeof(TextBlock), "SubArrow");
+            arrow.SetValue(Grid.ColumnProperty, 2);
+            arrow.SetValue(TextBlock.TextProperty, "›");
+            arrow.SetValue(TextBlock.FontSizeProperty, 14.0);
+            arrow.SetValue(TextBlock.ForegroundProperty, SiteInkMuted);
+            arrow.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            arrow.SetValue(FrameworkElement.MarginProperty, new Thickness(12, -1, 0, 0));
+            arrow.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
+
+            rowGrid.AppendChild(check);
+            rowGrid.AppendChild(header);
+            rowGrid.AppendChild(arrow);
+            pill.AppendChild(rowGrid);
+            root.AppendChild(pill);
+
+            var subPopup = new FrameworkElementFactory(typeof(Popup), "PART_Popup");
+            subPopup.SetValue(Popup.AllowsTransparencyProperty, true);
+            subPopup.SetValue(Popup.PlacementProperty, PlacementMode.Right);
+            subPopup.SetValue(Popup.HorizontalOffsetProperty, 2.0);
+            subPopup.SetValue(Popup.VerticalOffsetProperty, -5.0);
+            subPopup.SetValue(Popup.FocusableProperty, false);
+            subPopup.SetValue(Popup.PopupAnimationProperty, PopupAnimation.Fade);
+            subPopup.SetBinding(Popup.IsOpenProperty, new System.Windows.Data.Binding("IsSubmenuOpen")
+            {
+                RelativeSource = new System.Windows.Data.RelativeSource(System.Windows.Data.RelativeSourceMode.TemplatedParent)
+            });
+
+            var subBorder = new FrameworkElementFactory(typeof(Border));
+            subBorder.SetValue(Border.BackgroundProperty, SiteBgPopover);
+            subBorder.SetValue(Border.BorderBrushProperty, SiteBorderStrong);
+            subBorder.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            subBorder.SetValue(Border.CornerRadiusProperty, new CornerRadius(14));
+            subBorder.SetValue(Border.PaddingProperty, new Thickness(5));
+            subBorder.SetValue(Border.SnapsToDevicePixelsProperty, true);
+
+            var subScroll = new FrameworkElementFactory(typeof(ScrollViewer));
+            subScroll.SetValue(FrameworkElement.MaxHeightProperty, 420.0);
+            subScroll.SetValue(ScrollViewer.VerticalScrollBarVisibilityProperty, ScrollBarVisibility.Auto);
+            subScroll.SetValue(ScrollViewer.HorizontalScrollBarVisibilityProperty, ScrollBarVisibility.Disabled);
+            var subItems = new FrameworkElementFactory(typeof(ItemsPresenter));
+            subItems.SetValue(KeyboardNavigation.DirectionalNavigationProperty, KeyboardNavigationMode.Cycle);
+            subScroll.AppendChild(subItems);
+            subBorder.AppendChild(subScroll);
+            subPopup.AppendChild(subBorder);
+            root.AppendChild(subPopup);
+
+            miTpl.VisualTree = root;
+
+            var trHi = new Trigger { Property = MenuItem.IsHighlightedProperty, Value = true };
+            trHi.Setters.Add(new Setter(Border.BackgroundProperty, SiteBgPillHover, "RowBg"));
+            trHi.Setters.Add(new Setter(Border.BorderBrushProperty, SiteBorderSubtle, "RowBg"));
+            miTpl.Triggers.Add(trHi);
+
+            var trChk = new Trigger { Property = MenuItem.IsCheckedProperty, Value = true };
+            trChk.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Visible, "CheckMark"));
+            miTpl.Triggers.Add(trChk);
+
+            var trSub = new Trigger { Property = MenuItem.HasItemsProperty, Value = true };
+            trSub.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Visible, "SubArrow"));
+            miTpl.Triggers.Add(trSub);
+
+            var miStyle = new Style(typeof(MenuItem));
+            miStyle.Setters.Add(new Setter(Control.TemplateProperty, miTpl));
+            miStyle.Setters.Add(new Setter(Control.ForegroundProperty, SiteInkPrimary));
+            miStyle.Setters.Add(new Setter(Control.FontFamilyProperty, UiFont));
+            miStyle.Setters.Add(new Setter(Control.FontSizeProperty, 12.5));
+            miStyle.Setters.Add(new Setter(Control.FontWeightProperty, FontWeights.Medium));
+
+            var sepTpl = new ControlTemplate(typeof(Separator));
+            var sepLine = new FrameworkElementFactory(typeof(Border));
+            sepLine.SetValue(FrameworkElement.HeightProperty, 1.0);
+            sepLine.SetValue(Border.BackgroundProperty, SiteBorderSubtle);
+            sepLine.SetValue(FrameworkElement.MarginProperty, new Thickness(8, 4, 8, 4));
+            sepTpl.VisualTree = sepLine;
+            var sepStyle = new Style(typeof(Separator));
+            sepStyle.Setters.Add(new Setter(Control.TemplateProperty, sepTpl));
+
+            menu.Resources[typeof(MenuItem)] = miStyle;
+            menu.Resources[typeof(Separator)] = sepStyle;
         }
 
         static MenuItem CheckItem(string text, bool isChecked, Action onClick)

@@ -10,6 +10,12 @@ using Microsoft.Win32;
 
 namespace AgyPet
 {
+    public struct TaskbarSpan
+    {
+        public readonly double Start, End;
+        public TaskbarSpan(double start, double end) { Start = start; End = end; }
+    }
+
     // Tracks Antigravity App and Antigravity IDE windows, active chat title,
     // outer composer card bounds, user typing state, dictation, and voice mode (listening vs speaking).
     class WindowTracker
@@ -28,6 +34,7 @@ namespace AgyPet
         public bool IsInFront { get; private set; }
         public bool IsCliInFront { get; private set; }
         public bool TrackCliWindows { get; set; }
+        public volatile bool TrackTaskbarItems;
         public Rect WindowBoundsPx { get; private set; }
         public Rect ChatBoxBoundsPx { get; private set; }
         public IntPtr WindowHandle { get; private set; }
@@ -51,6 +58,8 @@ namespace AgyPet
         volatile bool probedVoice, probedDictation, probedAgentSpeaking;
         Rect probedChatBox = Rect.Empty;
         string[] probedChatCandidates = new string[0];
+        TaskbarSpan[] probedTaskbarSpansPx = new TaskbarSpan[0];
+        DateTime lastTaskbarProbeUtc = DateTime.MinValue;
         readonly object chatLock = new object();
         bool uiaStarted;
 
@@ -376,6 +385,15 @@ namespace AgyPet
                 new PropertyCondition(AutomationElement.NameProperty, "Stop recording"),
                 new PropertyCondition(AutomationElement.NameProperty, "Dictating"));
 
+            var taskbarItemCond = new OrCondition(
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.CheckBox),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ComboBox),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
+                new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.SplitButton));
+
             while (true)
             {
                 try
@@ -402,13 +420,120 @@ namespace AgyPet
                         probedAgentSpeaking = false;
                         lock (chatLock) { probedChatCandidates = new string[0]; }
                     }
+
+                    if (TrackTaskbarItems && (DateTime.UtcNow - lastTaskbarProbeUtc).TotalMilliseconds >= 450)
+                    {
+                        lastTaskbarProbeUtc = DateTime.UtcNow;
+                        TaskbarSpan[] spans = ScanTaskbarOccupiedSpansPx(taskbarItemCond);
+                        lock (chatLock) { probedTaskbarSpansPx = spans; }
+                    }
                 }
                 catch
                 {
                     cachedInputEl = null;
                 }
-                Thread.Sleep(probeActive ? 140 : 600);
+                Thread.Sleep(probeActive ? 140 : (TrackTaskbarItems ? 250 : 600));
             }
+        }
+
+        public TaskbarSpan[] GetTaskbarOccupiedSpansDip(double dpiX)
+        {
+            double scale = dpiX > 0.1 ? dpiX : 1.0;
+            TaskbarSpan[] px;
+            lock (chatLock) { px = probedTaskbarSpansPx; }
+            if (px == null || px.Length == 0) return new TaskbarSpan[0];
+            var result = new TaskbarSpan[px.Length];
+            for (int i = 0; i < px.Length; i++)
+                result[i] = new TaskbarSpan(px[i].Start / scale, px[i].End / scale);
+            return result;
+        }
+
+        public void RefreshTaskbarSpansNow()
+        {
+            try
+            {
+                var taskbarItemCond = new OrCondition(
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button),
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.MenuItem),
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.CheckBox),
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Edit),
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.ComboBox),
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Hyperlink),
+                    new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.SplitButton));
+                lastTaskbarProbeUtc = DateTime.UtcNow;
+                TaskbarSpan[] spans = ScanTaskbarOccupiedSpansPx(taskbarItemCond);
+                lock (chatLock) { probedTaskbarSpansPx = spans; }
+            }
+            catch { }
+        }
+
+        static TaskbarSpan[] ScanTaskbarOccupiedSpansPx(System.Windows.Automation.Condition itemCond)
+        {
+            var list = new List<TaskbarSpan>();
+            try
+            {
+                IntPtr tray = FindWindow("Shell_TrayWnd", null);
+                if (tray == IntPtr.Zero) return new TaskbarSpan[0];
+
+                RECT trayRect;
+                if (!GetWindowRect(tray, out trayRect)) return new TaskbarSpan[0];
+                double barW = trayRect.Right - trayRect.Left;
+                if (barW < 80) return new TaskbarSpan[0];
+
+                // 1. UIA controls inside Shell_TrayWnd (Widgets, Start, Search, Apps, Tray Icons, Clock, ShowDesktop)
+                try
+                {
+                    var root = AutomationElement.FromHandle(tray);
+                    if (root != null)
+                    {
+                        var els = root.FindAll(TreeScope.Descendants, itemCond);
+                        for (int i = 0; i < els.Count; i++)
+                        {
+                            try
+                            {
+                                var cur = els[i].Current;
+                                if (cur.IsOffscreen) continue;
+                                Rect r = cur.BoundingRectangle;
+                                if (r.IsEmpty || r.Width < 6 || r.Height < 6) continue;
+                                if (r.Width > barW * 0.42) continue; // skip full-bar container panels
+                                if (r.Bottom < trayRect.Top - 8 || r.Top > trayRect.Bottom + 8) continue;
+                                list.Add(new TaskbarSpan(r.Left, r.Right));
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                catch { }
+
+                // 2. Classic Win32 child HWNDs (TrayNotifyWnd, TrayClockWClass, Start, ShowDesktop)
+                try
+                {
+                    EnumChildWindows(tray, (ch, l) =>
+                    {
+                        if (!IsWindowVisible(ch)) return true;
+                        var sb = new StringBuilder(64);
+                        GetClassName(ch, sb, sb.Capacity);
+                        string cls = sb.ToString();
+                        bool want = cls.IndexOf("TrayNotifyWnd", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                    cls.IndexOf("TrayClock", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                    cls.IndexOf("TrayShowDesktop", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                                    cls.Equals("Start", StringComparison.OrdinalIgnoreCase);
+                        if (!want) return true;
+
+                        RECT cr;
+                        if (GetWindowRect(ch, out cr))
+                        {
+                            double w = cr.Right - cr.Left;
+                            if (w >= 6 && w <= barW * 0.42 && cr.Bottom >= trayRect.Top - 8 && cr.Top <= trayRect.Bottom + 8)
+                                list.Add(new TaskbarSpan(cr.Left, cr.Right));
+                        }
+                        return true;
+                    }, IntPtr.Zero);
+                }
+                catch { }
+            }
+            catch { }
+            return list.ToArray();
         }
 
         void ProbeVoiceAndDictation(IntPtr hwnd, System.Windows.Automation.Condition voiceCond, System.Windows.Automation.Condition dictationCond)
@@ -1005,6 +1130,9 @@ namespace AgyPet
         static readonly IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1);
         delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
         [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc fn, IntPtr l);
+        [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr hParent, EnumWindowsProc fn, IntPtr l);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string cls, string title);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr h, StringBuilder s, int n);
         [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
         [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
         [DllImport("user32.dll")] static extern IntPtr GetWindow(IntPtr h, uint cmd);

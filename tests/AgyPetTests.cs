@@ -208,7 +208,7 @@ namespace AgyPet.Tests
                 }
             });
 
-            Run("Click dances on Idle, winces on 3+ rapid clicks, ignores non-Idle clicks, and matches body limb colors", () =>
+            Run("Click dances on Idle, winces on 3+ rapid clicks in Idle or Working, ignores 1-2 clicks while Working", () =>
             {
                 var m = new Mascot(4.0, Mascot.ClassicSkin) { Mood = MascotMood.Idle };
                 m.Poke();
@@ -227,18 +227,19 @@ namespace AgyPet.Tests
                 m.RegisterClickAt(t0.AddSeconds(4));
                 AssertTrue(m.IsDancing && !m.IsHurt, "Cooldown resets streak so later single click hops again");
 
-                // Clicking once or multiple times outside Idle should do nothing
+                // While Working: 1-2 clicks stay calm (no dance), 3+ rapid clicks trigger the wince!
                 m.Mood = MascotMood.Working;
                 m.Snap(1);
-                AssertTrue(!m.IsDancing && !m.IsHurt, "Transitioning out of Idle clears active click animation");
+                AssertTrue(!m.IsDancing, "Transitioning to Working clears active leg-hop dance");
                 m.RegisterClickAt(t0.AddSeconds(6));
-                AssertTrue(!m.IsDancing && !m.IsHurt, "Single click while Working must not animate");
+                AssertTrue(!m.IsDancing && !m.IsHurt, "Single click while Working must not dance or wince");
                 m.RegisterClickAt(t0.AddSeconds(6.2));
+                AssertTrue(!m.IsDancing && !m.IsHurt, "Two clicks while Working stay calm");
                 m.RegisterClickAt(t0.AddSeconds(6.4));
-                AssertTrue(!m.IsDancing && !m.IsHurt, "Rapid clicks while Working must not animate");
-                m.Poke();
+                AssertTrue(m.IsHurt && !m.IsDancing, "3rd rapid click while Working should wince just like Idle");
+                m.CancelHurt();
                 m.Dance();
-                AssertTrue(!m.IsDancing && !m.IsHurt, "Poke and Dance are ignored outside Idle");
+                AssertTrue(!m.IsDancing, "Dance remains ignored outside Idle");
 
                 var leftArmSample = m.BodyColorAt(1.5, 4.8);
                 AssertEq(Mascot.OfficialArchPixelColor((1.5 - 0.5) / 9.5, 4.8 / 8.5, false, false, false), leftArmSample);
@@ -361,6 +362,75 @@ namespace AgyPet.Tests
                     "Should exclude compact interactive project bar above inner composer with bottom toolbar");
                 AssertTrue(!WindowTracker.IsProjectHeaderBand(band, inner, outer, input, true, false, true),
                     "Must keep band when attachment signal (thumbnail/remove/file) is present");
+            });
+
+            Run("Taskbar placement auto-sizes mascot with buffer space, picks empty gaps, and keeps hover box in taskbar", () =>
+            {
+                var screen = new System.Windows.Rect(0, 0, 1920, 1080);
+                var tallBarWork = new System.Windows.Rect(0, 0, 1920, 1024); // 56 DIP tall taskbar (large + buffer)
+                var win11Work = new System.Windows.Rect(0, 0, 1920, 1032);   // 48 DIP taskbar (medium + buffer)
+                var win10Work = new System.Windows.Rect(0, 0, 1920, 1040);   // 40 DIP taskbar (small + buffer)
+
+                // Tall taskbar (56 DIP): big enough for large with >= 6 DIP buffer, only outside app
+                AssertEq("large", PetWindow.ResolveEffectiveSize("small", "taskbar-right", false, false, true, false, tallBarWork, screen));
+                AssertEq("small", PetWindow.ResolveEffectiveSize("small", "taskbar-right", false, false, false, false, tallBarWork, screen));
+
+                // Standard 48 DIP Win11 taskbar: avoids edge-to-edge large, uses medium with comfortable buffer outside app
+                AssertEq("medium", PetWindow.ResolveEffectiveSize("small", "taskbar-right", false, false, true, false, win11Work, screen));
+                AssertEq("medium", PetWindow.ResolveEffectiveSize("large", "taskbar-center", false, false, true, false, win11Work, screen));
+                AssertEq("large", PetWindow.ResolveEffectiveSize("large", "taskbar-center", false, false, false, false, win11Work, screen));
+                AssertEq("small", PetWindow.ResolveEffectiveSize("small", "taskbar-right", true, false, false, false, win11Work, screen));
+
+                // 40 DIP Win10 taskbar: uses small so vertical buffer isn't edge-to-edge, restores user size inside app
+                AssertEq("small", PetWindow.ResolveEffectiveSize("large", "taskbar-left", false, false, true, false, win10Work, screen));
+                AssertEq("large", PetWindow.ResolveEffectiveSize("large", "taskbar-left", false, false, false, false, win10Work, screen));
+
+                // Non-taskbar placements and custom dragged positions keep user selection
+                AssertEq("small", PetWindow.ResolveEffectiveSize("small", "bottom-right", false, false, true, false, tallBarWork, screen));
+                AssertEq("small", PetWindow.ResolveEffectiveSize("small", "taskbar-right", false, true, true, false, tallBarWork, screen));
+
+                double spriteW = 11.0 * 4.2;
+                double spriteH = 9.0 * 4.2;
+
+                // Centered Win11 taskbar: Widgets [0..140], Centered Apps [700..1220], Clock/Tray [1660..1920]
+                var centeredItems = new[]
+                {
+                    new TaskbarSpan(0, 140),
+                    new TaskbarSpan(700, 1220),
+                    new TaskbarSpan(1660, 1920),
+                };
+                TaskbarSpan gapL, gapR, gapC;
+                double xL = PetWindow.ResolveTaskbarVisualLeft("taskbar-left", win11Work, centeredItems, spriteW, out gapL);
+                double xR = PetWindow.ResolveTaskbarVisualLeft("taskbar-right", win11Work, centeredItems, spriteW, out gapR);
+                double xC = PetWindow.ResolveTaskbarVisualLeft("taskbar-center", win11Work, centeredItems, spriteW, out gapC);
+
+                AssertTrue(xL >= 148.0 && xL + spriteW <= 692.0, "taskbar-left must sit in empty gap after Widgets and clear of centered apps");
+                AssertTrue(xR >= 1228.0 && xR + spriteW <= 1652.0, "taskbar-right must sit in empty gap clear of centered apps and clock/tray");
+                AssertTrue(xC + spriteW <= 692.0 || xC >= 1228.0, "taskbar-center must dodge centered app cluster instead of overlapping icons");
+
+                // Left-aligned taskbar: Start + App Icons [0..480], Clock/Tray [1660..1920]
+                var leftItems = new[]
+                {
+                    new TaskbarSpan(0, 480),
+                    new TaskbarSpan(1660, 1920),
+                };
+                TaskbarSpan gapLeftAlignedL, gapLeftAlignedR;
+                double lxL = PetWindow.ResolveTaskbarVisualLeft("taskbar-left", win11Work, leftItems, spriteW, out gapLeftAlignedL);
+                double lxR = PetWindow.ResolveTaskbarVisualLeft("taskbar-right", win11Work, leftItems, spriteW, out gapLeftAlignedR);
+                AssertTrue(lxL >= 488.0 && lxL < 540.0, "Left-aligned taskbar-left should sit immediately after app icons");
+                AssertTrue(lxR + spriteW <= 1652.0 && lxR + spriteW > 1600.0, "Left-aligned taskbar-right should sit just clear of clock/tray");
+
+                // Hover popup centers horizontally over mascot's visual midpoint in taskbar & bottom corners
+                var tbRightPt = PetWindow.PlaceInTaskbar("taskbar-right", win11Work, screen, centeredItems, spriteW, spriteH, 32, 24, out gapR);
+                var cardPos = PetWindow.ComputePopupScreenPos(tbRightPt.X, tbRightPt.Y, 32, 24, spriteW, spriteH, 280.0, 108.0, win11Work, true, false);
+                double popupCenterX = cardPos.X + 140.0;
+                double mascotCenterX = (tbRightPt.X + 32.0) + spriteW * 0.5;
+                AssertTrue(Math.Abs(popupCenterX - mascotCenterX) < 0.01, "Hover card should sit dead center over taskbar mascot");
+                AssertTrue(Math.Abs((cardPos.Y + 108.0) - (tbRightPt.Y + 24.0)) < 0.01, "Hover card bottom should sit right above mascot head");
+
+                // Near screen edges clamps cleanly inside workArea without overflowing
+                var cardEdge = PetWindow.ComputePopupScreenPos(-24.0, tbRightPt.Y, 32, 24, spriteW, spriteH, 280.0, 108.0, win11Work, true, false);
+                AssertTrue(cardEdge.X >= win11Work.Left + 4.0 - 0.01, "Centered hover card should clamp cleanly inside left work area");
             });
 
             Console.WriteLine("Tests complete: " + passed + " passed, " + failed + " failed.");

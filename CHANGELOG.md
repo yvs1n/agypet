@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.8 (2026-11-27)
+- **Website Design System Across Desktop UI**: Styled the right-click context menu (including nested submenus) and updated the hover progress card and feedback dialog to match the website's OKLCH hue-250 dark surfaces, alpha borders, concentric `14px`/`9px` radii, and `QuarticEase` hover scale + lift entrance/exit motion.
+- **Taskbar Auto-Sizing with Breathing Room & Empty-Space Placement**: Automatically sizes the mascot to fit the Windows taskbar height with `>= 6` DIP buffer (`large` on `>= 52.8`-DIP bars, `medium` on `48`-DIP Windows 11 bars, `small` on thinner bars) when outside the app and restores your saved size inside Antigravity. Scans `Shell_TrayWnd` so `taskbar-left`, `taskbar-center`, and `taskbar-right` sit in open taskbar space clear of Widgets, app icons, system tray icons, and the clock.
+- **Dead-Center Hover Card**: Replaced WPF `Popup` with a non-activating transparent `Window` (`WS_EX_NOACTIVATE`) immune to Windows `MenuDropAlignment` flipping and `SM_CXMINTRACK` width stretching so hover cards sit dead-center above the mascot.
+- **Working Multi-Press Wince**: Rapid multi-clicks (`3+` within `2.2s`) now trigger the brief `> <` wince while working as well as when `Idle`, while `1–2` clicks stay calm when busy and hop playfully only when `Idle`.
+
 ## 0.3.7 (2026-11-27)
 - **Leg-Hop Dance & Original Rapid-Click Wince (Idle Only)**: Replaced the swaying click dance with an alternating leg-hop animation on single-click, restored the original brief wince (`> <` + subtle squish) on 3+ rapid clicks instead of the annoyed glare, and restricted both click animations strictly to when AgyPet is `Idle`.
 - **Body-Matched Animated Limbs**: Updated every animated hand, raised arm, and lifted leg across moods (`Idle` hop, `Thinking`, `Question`, `Typing`, `Working`, `Terminal`, `Delegating`, `Multitasking`, `Alert`, `Done`, `Error`) so they sample the exact `Idle` body gradient color at each limb position in both `Classic` and `Dark Remake` skins.

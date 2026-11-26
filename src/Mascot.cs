@@ -195,6 +195,7 @@ namespace AgyPet
         int danceTicks;
         int clickStreak;
         DateTime lastClickUtc = DateTime.MinValue;
+        MascotMood lastClickMood = MascotMood.Idle;
         double lookX, lookY, lookTargetX, lookTargetY;
         int activeSessionCount = 3;
 
@@ -257,10 +258,10 @@ namespace AgyPet
             Step();
         }
 
-        // Subtle tactile press wince on rapid clicks (Idle only): keeps the Idle scene intact with a brief micro-squish and "> <" eyes.
+        // Subtle tactile press wince on rapid clicks (awake states: Idle or Working): keeps current scene intact with "> <" eyes.
         public void Poke()
         {
-            if (Mood != MascotMood.Idle) return;
+            if (Mood == MascotMood.Sleeping) return;
             danceTicks = 0;
             hurtTicks = 6;
             Step(false);
@@ -273,7 +274,7 @@ namespace AgyPet
             recoilTransform.ScaleY = 1.0;
         }
 
-        // Only active when Idle: single click hops from one leg to the other; rapid clicks (3+ within 2.2s) trigger the original wince!
+        // Single/double click hops playfully when Idle; rapid clicks (3+ within 2.2s) trigger the original wince even while working!
         public void RegisterClick()
         {
             RegisterClickAt(DateTime.UtcNow);
@@ -281,7 +282,7 @@ namespace AgyPet
 
         internal void RegisterClickAt(DateTime nowUtc)
         {
-            if (Mood != MascotMood.Idle)
+            if (Mood == MascotMood.Sleeping)
             {
                 clickStreak = 0;
                 hurtTicks = 0;
@@ -289,15 +290,18 @@ namespace AgyPet
                 return;
             }
 
-            if (lastClickUtc == DateTime.MinValue || (nowUtc - lastClickUtc).TotalSeconds > 2.2)
+            if (lastClickUtc == DateTime.MinValue || (nowUtc - lastClickUtc).TotalSeconds > 2.2 || lastClickMood != Mood)
                 clickStreak = 0;
 
             clickStreak++;
             lastClickUtc = nowUtc;
+            lastClickMood = Mood;
 
             if (clickStreak >= 3)
+            {
                 Poke();
-            else
+            }
+            else if (Mood == MascotMood.Idle)
             {
                 hurtTicks = 0;
                 danceTicks = 24;
@@ -501,12 +505,13 @@ namespace AgyPet
             air.Children.Clear();
             var mood = Mood;
             if (mood != MascotMood.Idle)
+                danceTicks = 0;
+            if (mood == MascotMood.Sleeping)
             {
                 hurtTicks = 0;
-                danceTicks = 0;
                 clickStreak = 0;
             }
-            bool hurt = mood == MascotMood.Idle && hurtTicks > 0;
+            bool hurt = mood != MascotMood.Sleeping && hurtTicks > 0;
             if (advanceTick && hurtTicks > 0) hurtTicks--;
             bool dancing = mood == MascotMood.Idle && danceTicks > 0 && !hurt;
             if (advanceTick && danceTicks > 0) danceTicks--;

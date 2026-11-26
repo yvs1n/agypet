@@ -50,10 +50,10 @@ namespace AgyPet
 
             var outer = new Border
             {
-                Background = BrushHex(0x11, 0x13, 0x18),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0x28, 0xFF, 0xFF, 0xFF)),
+                Background = BrushHex(0x1B, 0x1E, 0x26),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x30, 0xF5, 0xF7, 0xFC)),
                 BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(16),
+                CornerRadius = new CornerRadius(18),
                 Padding = new Thickness(20, 18, 20, 18),
             };
 
@@ -143,14 +143,14 @@ namespace AgyPet
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.Wrap,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Background = BrushHex(0x18, 0x1B, 0x23),
-                Foreground = BrushHex(0xF8, 0xFA, 0xFC),
-                CaretBrush = BrushHex(0xF8, 0xFA, 0xFC),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0x28, 0xFF, 0xFF, 0xFF)),
+                Background = BrushHex(0x12, 0x14, 0x1A),
+                Foreground = BrushHex(0xF1, 0xF3, 0xF7),
+                CaretBrush = BrushHex(0xF1, 0xF3, 0xF7),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x1C, 0xF5, 0xF7, 0xFC)),
                 BorderThickness = new Thickness(1),
                 Padding = new Thickness(10, 8, 10, 8),
                 FontSize = 13,
-                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                FontFamily = new FontFamily("Plus Jakarta Sans, Segoe UI Variable, Segoe UI"),
             };
             AutomationProperties.SetName(messageBox, "Feedback message");
             stack.Children.Add(messageBox);
@@ -172,14 +172,14 @@ namespace AgyPet
                 Content = "Copy & Visit yassinr.me",
                 Padding = new Thickness(12, 7, 12, 7),
                 Margin = new Thickness(0, 0, 8, 0),
-                Background = BrushHex(0x1E, 0x22, 0x2C),
-                Foreground = BrushHex(0xE2, 0xE8, 0xF0),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF)),
+                Background = BrushHex(0x25, 0x29, 0x34),
+                Foreground = BrushHex(0xAD, 0xB4, 0xC2),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x1C, 0xF5, 0xF7, 0xFC)),
                 BorderThickness = new Thickness(1),
                 FontSize = 12.5,
                 FontWeight = FontWeights.SemiBold,
                 Cursor = Cursors.Hand,
-                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                FontFamily = new FontFamily("Plus Jakarta Sans, Segoe UI Variable, Segoe UI"),
             };
             copyBtn.Click += (s, e) => SubmitFeedback(openGitHub: false);
 
@@ -187,13 +187,13 @@ namespace AgyPet
             {
                 Content = "Submit via GitHub",
                 Padding = new Thickness(14, 7, 14, 7),
-                Background = BrushHex(0x1E, 0x78, 0xFF),
-                Foreground = BrushHex(0xFF, 0xFF, 0xFF),
+                Background = BrushHex(0x2E, 0x69, 0xE8),
+                Foreground = BrushHex(0xF1, 0xF3, 0xF7),
                 BorderThickness = new Thickness(0),
                 FontSize = 12.5,
                 FontWeight = FontWeights.SemiBold,
                 Cursor = Cursors.Hand,
-                FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+                FontFamily = new FontFamily("Plus Jakarta Sans, Segoe UI Variable, Segoe UI"),
             };
             sendBtn.Click += (s, e) => SubmitFeedback(openGitHub: true);
 
