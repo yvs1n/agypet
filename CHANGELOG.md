@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.7 (2026-11-27)
+- **Leg-Hop Dance & Original Rapid-Click Wince (Idle Only)**: Replaced the swaying click dance with an alternating leg-hop animation on single-click, restored the original brief wince (`> <` + subtle squish) on 3+ rapid clicks instead of the annoyed glare, and restricted both click animations strictly to when AgyPet is `Idle`.
+- **Body-Matched Animated Limbs**: Updated every animated hand, raised arm, and lifted leg across moods (`Idle` hop, `Thinking`, `Question`, `Typing`, `Working`, `Terminal`, `Delegating`, `Multitasking`, `Alert`, `Done`, `Error`) so they sample the exact `Idle` body gradient color at each limb position in both `Classic` and `Dark Remake` skins.
+
 ## 0.3.6 (2026-11-27)
 - **Single-Click Dance & Rapid-Click Annoyed Reaction**: Single-clicking AgyPet triggers a calmer, gentle dance groove (without stacking frame speedups), while clicking rapidly 4+ times makes him annoyed (`\ /` glare + pulsing mark).
 - **Cursor-Following Idle Eyes**: When `Idle`, AgyPet's pupils subtly track your mouse cursor smoothly across the screen while still blinking naturally.

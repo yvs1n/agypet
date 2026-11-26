@@ -83,8 +83,6 @@ namespace AgyPet
         static readonly Color DarkMid = Color.FromRgb(0x2C, 0x2C, 0x31);
         static readonly Color DarkLeg = Color.FromRgb(0x18, 0x18, 0x1B);
         static readonly Color DarkRim = Color.FromRgb(0x6E, 0x6E, 0x78);
-        static readonly Brush DarkArmLight = Frozen(Color.FromRgb(0x52, 0x52, 0x5B));
-        static readonly Brush DarkArmMid = Frozen(Color.FromRgb(0x3A, 0x3A, 0x40));
         static readonly Brush MonoBright = Frozen(Color.FromRgb(0xF4, 0xF4, 0xF5));
         static readonly Brush MonoMid = Frozen(Color.FromRgb(0xA1, 0xA1, 0xAA));
         static readonly Brush MonoDim = Frozen(Color.FromRgb(0x52, 0x52, 0x5B));
@@ -112,7 +110,52 @@ namespace AgyPet
             "##................##",
         };
 
-        // Compact rounded capsule for Thinking (atomic orbital state) and Sleeping
+        // Alternating one-leg hop masks preserving 100% exact Idle body colors per pixel
+        static readonly string[] AgyDanceLeftMask =
+        {
+            "........####........",
+            ".......######.......",
+            "......########......",
+            "......########......",
+            ".....##########.....",
+            ".....##########.....",
+            ".....##########.....",
+            "....############....",
+            "....############....",
+            "....############....",
+            "....####....####....",
+            "...####......####...",
+            "...###........###...",
+            "...###........###...",
+            "..###..........####.",
+            ".###...........###..",
+            ".##.................",
+            "##..................",
+        };
+
+        static readonly string[] AgyDanceRightMask =
+        {
+            "........####........",
+            ".......######.......",
+            "......########......",
+            "......########......",
+            ".....##########.....",
+            ".....##########.....",
+            ".....##########.....",
+            "....############....",
+            "....############....",
+            "....############....",
+            "....####....####....",
+            "...####......####...",
+            "...###........###...",
+            "...###........###...",
+            ".####..........###..",
+            "..###...........###.",
+            ".................##.",
+            "..................##",
+        };
+
+        // Compact rounded capsule for Sleeping
         static readonly string[] AgyCompactMask =
         {
             "....................",
@@ -138,6 +181,8 @@ namespace AgyPet
         readonly double px;
         readonly Canvas sprite = new Canvas();
         readonly Canvas archNormalLayer = new Canvas();
+        readonly Canvas archDanceLeftLayer = new Canvas();
+        readonly Canvas archDanceRightLayer = new Canvas();
         readonly Canvas archCompactLayer = new Canvas();
         readonly Canvas gear = new Canvas();
         readonly Canvas air = new Canvas();
@@ -148,7 +193,6 @@ namespace AgyPet
         int tick, blinkAt, blinkLeft, glanceAt, glance;
         int hurtTicks;
         int danceTicks;
-        int annoyedTicks;
         int clickStreak;
         DateTime lastClickUtc = DateTime.MinValue;
         double lookX, lookY, lookTargetX, lookTargetY;
@@ -163,7 +207,6 @@ namespace AgyPet
         public string SkinName { get; private set; }
         public bool IsHurt { get { return hurtTicks > 0; } }
         public bool IsDancing { get { return danceTicks > 0; } }
-        public bool IsAnnoyed { get { return annoyedTicks > 0; } }
 
         public Mascot(double pixelSize, string skin = ClassicSkin)
         {
@@ -214,9 +257,10 @@ namespace AgyPet
             Step();
         }
 
-        // Subtle tactile press wince: keeps the current mood scene intact with a brief micro-squish and "> <" eyes.
+        // Subtle tactile press wince on rapid clicks (Idle only): keeps the Idle scene intact with a brief micro-squish and "> <" eyes.
         public void Poke()
         {
+            if (Mood != MascotMood.Idle) return;
             danceTicks = 0;
             hurtTicks = 6;
             Step(false);
@@ -229,7 +273,7 @@ namespace AgyPet
             recoilTransform.ScaleY = 1.0;
         }
 
-        // Single click dances gently; clicking repeatedly (>=4 within 2.2s) makes him annoyed!
+        // Only active when Idle: single click hops from one leg to the other; rapid clicks (3+ within 2.2s) trigger the original wince!
         public void RegisterClick()
         {
             RegisterClickAt(DateTime.UtcNow);
@@ -237,34 +281,34 @@ namespace AgyPet
 
         internal void RegisterClickAt(DateTime nowUtc)
         {
-            if (lastClickUtc == DateTime.MinValue || (nowUtc - lastClickUtc).TotalSeconds > 2.2)
+            if (Mood != MascotMood.Idle)
             {
                 clickStreak = 0;
-                annoyedTicks = 0;
+                hurtTicks = 0;
+                danceTicks = 0;
+                return;
             }
+
+            if (lastClickUtc == DateTime.MinValue || (nowUtc - lastClickUtc).TotalSeconds > 2.2)
+                clickStreak = 0;
+
             clickStreak++;
             lastClickUtc = nowUtc;
 
-            if (clickStreak >= 4)
-            {
-                danceTicks = 0;
-                hurtTicks = 0;
-                annoyedTicks = 28;
-                Step(false);
-            }
+            if (clickStreak >= 3)
+                Poke();
             else
             {
-                annoyedTicks = 0;
                 hurtTicks = 0;
                 danceTicks = 24;
                 Step(false);
             }
         }
 
-        // Playful gentle dance groove on click
+        // Playful alternating leg-hop dance on click (Idle only)
         public void Dance()
         {
-            if (hurtTicks > 0 || annoyedTicks > 0) return;
+            if (Mood != MascotMood.Idle || hurtTicks > 0) return;
             danceTicks = 24;
             Step(false);
         }
@@ -295,14 +339,22 @@ namespace AgyPet
 
             sprite.Children.Clear();
             archNormalLayer.Children.Clear();
+            archDanceLeftLayer.Children.Clear();
+            archDanceRightLayer.Children.Clear();
             archCompactLayer.Children.Clear();
             gear.Children.Clear();
             air.Children.Clear();
 
             RenderPixelMask(archNormalLayer, AgyArchMask, false);
+            RenderPixelMask(archDanceLeftLayer, AgyDanceLeftMask, false);
+            RenderPixelMask(archDanceRightLayer, AgyDanceRightMask, false);
             RenderPixelMask(archCompactLayer, AgyCompactMask, true);
+            archDanceLeftLayer.Visibility = Visibility.Collapsed;
+            archDanceRightLayer.Visibility = Visibility.Collapsed;
             archCompactLayer.Visibility = Visibility.Collapsed;
             sprite.Children.Add(archNormalLayer);
+            sprite.Children.Add(archDanceLeftLayer);
+            sprite.Children.Add(archDanceRightLayer);
             sprite.Children.Add(archCompactLayer);
             sprite.Children.Add(gear);
         }
@@ -448,27 +500,32 @@ namespace AgyPet
             gear.Children.Clear();
             air.Children.Clear();
             var mood = Mood;
-            bool hurt = hurtTicks > 0;
+            if (mood != MascotMood.Idle)
+            {
+                hurtTicks = 0;
+                danceTicks = 0;
+                clickStreak = 0;
+            }
+            bool hurt = mood == MascotMood.Idle && hurtTicks > 0;
             if (advanceTick && hurtTicks > 0) hurtTicks--;
-            bool annoyed = annoyedTicks > 0;
-            if (advanceTick && annoyedTicks > 0) annoyedTicks--;
-            bool dancing = danceTicks > 0 && !annoyed && !hurt;
+            bool dancing = mood == MascotMood.Idle && danceTicks > 0 && !hurt;
             if (advanceTick && danceTicks > 0) danceTicks--;
 
-            double danceBob = dancing ? -Math.Abs(Math.Sin(tick * 0.34)) * 0.45 * px : 0;
-            double doneHop = mood == MascotMood.Done && !annoyed ? -Math.Round(Math.Abs(Math.Sin(tick * 0.45)) * 1.1) * px : 0;
+            int hopStep = (tick / 3) % 4; // 0: left foot planted, 1: hop peak, 2: right foot planted, 3: hop peak
+            double danceBob = dancing ? ((hopStep == 1 || hopStep == 3) ? -0.48 * px : -0.1 * px) : 0;
+            double doneHop = mood == MascotMood.Done ? -Math.Round(Math.Abs(Math.Sin(tick * 0.45)) * 1.1) * px : 0;
             double baseBob = dancing ? danceBob : doneHop;
-            bool wiggles = (mood == MascotMood.Alert || mood == MascotMood.Question || mood == MascotMood.Error) && !annoyed;
+            bool wiggles = mood == MascotMood.Alert || mood == MascotMood.Question || mood == MascotMood.Error;
 
             double y = hurt && hurtTicks >= 4 ? baseBob + px * 0.45 : baseBob;
             SetTop(sprite, y);
 
             bool typing = mood == MascotMood.Working && tick % 90 < 72;
-            double danceSway = dancing ? Math.Sin(tick * 0.34) * 0.5 * px : 0;
+            double danceShift = dancing ? (hopStep == 0 ? -0.18 * px : hopStep == 2 ? 0.18 * px : 0) : 0;
             double errorShake = mood == MascotMood.Error && tick % 6 < 2 ? (tick % 2 == 0 ? -0.4 : 0.4) * px : 0;
             double x = hurt && hurtTicks >= 4 ? ((hurtTicks % 2 == 0 ? -0.28 : 0.28) * px)
-                : (mood == MascotMood.Error && !annoyed) ? errorShake
-                : (wiggles && tick % 12 < 4 ? (tick % 2 == 0 ? -px * 0.4 : px * 0.4) : danceSway);
+                : mood == MascotMood.Error ? errorShake
+                : (wiggles && tick % 12 < 4 ? (tick % 2 == 0 ? -px * 0.4 : px * 0.4) : danceShift);
             SetLeft(sprite, x);
 
             // Subtle tactile micro-squish on press (no exaggerated bounce or sparks)
@@ -499,121 +556,136 @@ namespace AgyPet
             lookY += (lookTargetY - lookY) * 0.35;
 
             bool compact = mood == MascotMood.Sleeping;
-            archNormalLayer.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+            bool leftHop = !compact && dancing && hopStep == 0;
+            bool rightHop = !compact && dancing && hopStep == 2;
             archCompactLayer.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
+            archDanceLeftLayer.Visibility = leftHop ? Visibility.Visible : Visibility.Collapsed;
+            archDanceRightLayer.Visibility = rightHop ? Visibility.Visible : Visibility.Collapsed;
+            archNormalLayer.Visibility = (!compact && !leftHop && !rightHop) ? Visibility.Visible : Visibility.Collapsed;
 
             if (mood == MascotMood.Idle || mood == MascotMood.Listening || mood == MascotMood.Speaking ||
                 mood == MascotMood.Searching || mood == MascotMood.Browsing || mood == MascotMood.Background)
-                DrawRestingArms();
+            {
+                if (dancing) DrawDanceArms(hopStep);
+                else DrawRestingArms();
+            }
 
             double ex = mood == MascotMood.Idle ? (lookX * 0.48 + glance * 0.08) : 0;
             double ey = mood == MascotMood.Idle ? (lookY * 0.34) : 0;
-
-            bool faceOverridden = hurt || annoyed;
 
             // 1. Always render the active status's props & arms so the current status stays calm and intact
             switch (mood)
             {
                 case MascotMood.Idle:
-                    if (!faceOverridden) DrawEyes(3.9 + ex, 3.2 + ey, 6.3 + ex, 3.2 + ey, closed);
+                    if (!hurt) DrawEyes(3.9 + ex, 3.2 + ey, 6.3 + ex, 3.2 + ey, closed);
                     if (dancing) DrawDanceNotes();
-                    else if (!annoyed) DrawIdleSparkle();
+                    else DrawIdleSparkle();
                     break;
                 case MascotMood.Sleeping:
-                    if (!faceOverridden) DrawShutEyes(4.0, 4.3, 6.2, 4.3);
+                    if (!hurt) DrawShutEyes(4.0, 4.3, 6.2, 4.3);
                     DrawZzz();
                     break;
                 case MascotMood.Listening:
-                    if (!faceOverridden) DrawEyes(3.9, 3.1, 6.3, 3.1, false);
+                    if (!hurt) DrawEyes(3.9, 3.1, 6.3, 3.1, false);
                     DrawWaves();
                     break;
                 case MascotMood.Thinking:
-                    if (!faceOverridden) DrawThinkingFace();
+                    if (!hurt) DrawThinkingEyes();
+                    DrawThinkingArms();
                     DrawThoughtCloud();
                     break;
                 case MascotMood.Speaking:
-                    if (!faceOverridden) { DrawEyes(3.9, 3.1, 6.3, 3.1, false); DrawMouth(); }
+                    if (!hurt) { DrawEyes(3.9, 3.1, 6.3, 3.1, false); DrawMouth(); }
                     else DrawSpeechDotsOnly();
                     break;
                 case MascotMood.Typing:
-                    if (!faceOverridden) DrawEyes(3.7, 3.3, 6.1, 3.3, false, shortEyes: true);
+                    if (!hurt) DrawEyes(3.7, 3.3, 6.1, 3.3, false, shortEyes: true);
                     DrawTypingScene();
                     break;
                 case MascotMood.Searching:
                     double sx = Math.Round(Math.Sin(tick * 0.14)) * 0.35;
-                    if (!faceOverridden) DrawEyes(3.9 + sx, 3.2, 6.3 + sx, 3.2, false);
+                    if (!hurt) DrawEyes(3.9 + sx, 3.2, 6.3 + sx, 3.2, false);
                     DrawMagnifier();
                     break;
                 case MascotMood.Reading:
-                    if (!faceOverridden) DrawEyes(3.9, 3.1, 6.3, 3.1, false, shortEyes: true);
+                    if (!hurt) DrawEyes(3.9, 3.1, 6.3, 3.1, false, shortEyes: true);
                     DrawBook();
                     break;
                 case MascotMood.Working:
-                    if (!faceOverridden) DrawWorkingFace();
+                    if (!hurt) DrawWorkingFace();
                     DrawLaptop(typing);
                     break;
                 case MascotMood.Terminal:
-                    if (!faceOverridden) DrawWorkingFace();
+                    if (!hurt) DrawWorkingFace();
                     DrawTerminal();
                     break;
                 case MascotMood.Browsing:
                     double bx = Math.Round(Math.Sin(tick * 0.16)) * 0.35;
-                    if (!faceOverridden) DrawEyes(3.9 + bx, 3.1, 6.3 + bx, 3.1, false);
+                    if (!hurt) DrawEyes(3.9 + bx, 3.1, 6.3 + bx, 3.1, false);
                     DrawBrowserGlobe();
                     break;
                 case MascotMood.Delegating:
-                    if (!faceOverridden) DrawEyes(4.1, 3.1, 6.5, 3.1, false);
+                    if (!hurt) DrawEyes(4.1, 3.1, 6.5, 3.1, false);
                     DrawDelegatingDispatch();
                     break;
                 case MascotMood.Multitasking:
                     double mx = (tick / 5 % 2 == 0) ? -0.45 : 0.45;
-                    if (!faceOverridden) DrawEyes(3.9 + mx, 3.1, 6.3 + mx, 3.1, false);
+                    if (!hurt) DrawEyes(3.9 + mx, 3.1, 6.3 + mx, 3.1, false);
                     DrawMultitaskingJuggle();
                     break;
                 case MascotMood.Background:
-                    if (!faceOverridden) DrawHappyEyes();
+                    if (!hurt) DrawHappyEyes();
                     DrawBackgroundServer();
                     break;
                 case MascotMood.Alert:
-                    if (!faceOverridden) DrawStartledEyes();
+                    if (!hurt) DrawStartledEyes();
                     DrawArmsUp();
                     DrawBang();
                     break;
                 case MascotMood.Question:
-                    if (!faceOverridden) DrawConfusedFace();
+                    if (!hurt) DrawConfusedEyes();
+                    DrawConfusedArms();
                     DrawQuestion();
                     break;
                 case MascotMood.Done:
-                    if (!faceOverridden) DrawHappyEyes();
+                    if (!hurt) DrawHappyEyes();
                     DrawArmsUp();
                     Dot(air, AgyShadowBrush, 2.5, 8.7, 6.0, 0.4);
                     DrawCelebrationConfetti();
                     break;
                 case MascotMood.Error:
-                    if (!faceOverridden) DrawErrorGlitchFace();
+                    if (!hurt) DrawErrorGlitchFace();
                     DrawArmsUp();
                     DrawErrorLightning();
                     break;
             }
 
-            if (dancing && mood != MascotMood.Idle)
-                DrawDanceNotes();
-
-            // 2. Subtle annoyance or poke wince overlays
+            // Subtle "> <" wince eyes on rapid clicks
             if (hurt)
                 DrawHurtOverlay(compact);
-            else if (annoyed)
-                DrawAnnoyedOverlay(compact);
         }
 
-        // ---- Face & arm helpers (auto-adapted for Classic vs Dark Remake) ----
+        // Samples the exact pixel color of the Idle arch body at (x, y) so arms and moving limbs match seamlessly.
+        public Color BodyColorAt(double x, double y)
+        {
+            double u = Math.Max(0.0, Math.Min(1.0, (x - 0.5) / 9.5));
+            double v = Math.Max(0.0, Math.Min(1.0, y / 8.5));
+            return IsDark
+                ? DarkArchPixelColor(u, v, false, false, true, false)
+                : OfficialArchPixelColor(u, v, false, false, false);
+        }
+
+        Brush BodyBrushAt(double x, double y)
+        {
+            return Frozen(BodyColorAt(x, y));
+        }
 
         Brush EyePrimary { get { return IsDark ? EyeWhite : EyeDark; } }
         Brush EyeGlint { get { return IsDark ? EyeSoftSilver : EyeWhite; } }
-        Brush ArmLeftUpper { get { return IsDark ? DarkArmLight : AgyTealBrush; } }
-        Brush ArmLeftLower { get { return IsDark ? DarkArmMid : AgyBlueBrush; } }
-        Brush ArmRightUpper { get { return IsDark ? DarkArmLight : AgyVioletBrush; } }
-        Brush ArmRightLower { get { return IsDark ? DarkArmMid : AgySkyBrush; } }
+        Brush ArmLeftUpper { get { return BodyBrushAt(2.0, 4.8); } }
+        Brush ArmLeftLower { get { return BodyBrushAt(2.0, 5.4); } }
+        Brush ArmRightUpper { get { return BodyBrushAt(9.0, 4.8); } }
+        Brush ArmRightLower { get { return BodyBrushAt(9.0, 5.4); } }
 
         void DrawRestingArms()
         {
@@ -623,12 +695,21 @@ namespace AgyPet
             Dot(gear, ArmRightLower, 9.4, 5.4, 0.5, 0.5);
         }
 
+        void DrawDanceArms(int hopStep)
+        {
+            bool leftHigh = hopStep == 0 || hopStep == 3;
+            Dot(gear, ArmLeftUpper, 1.4, leftHigh ? 4.2 : 4.9, 0.5, 1.0);
+            Dot(gear, ArmLeftLower, 1.0, leftHigh ? 4.0 : 5.5, 0.5, 0.5);
+            Dot(gear, ArmRightUpper, 9.1, !leftHigh ? 4.2 : 4.9, 0.5, 1.0);
+            Dot(gear, ArmRightLower, 9.5, !leftHigh ? 4.0 : 5.5, 0.5, 0.5);
+        }
+
         void DrawArmsUp()
         {
-            Dot(gear, ArmLeftUpper, 1.1, 3.7, 0.5, 1.0);
-            Dot(gear, ArmLeftLower, 1.6, 4.4, 0.5, 0.7);
-            Dot(gear, ArmRightLower, 9.4, 3.7, 0.5, 1.0);
-            Dot(gear, ArmRightUpper, 8.9, 4.4, 0.5, 0.7);
+            Dot(gear, BodyBrushAt(2.0, 3.8), 1.1, 3.7, 0.5, 1.0);
+            Dot(gear, BodyBrushAt(2.0, 4.4), 1.6, 4.4, 0.5, 0.7);
+            Dot(gear, BodyBrushAt(9.0, 3.8), 9.4, 3.7, 0.5, 1.0);
+            Dot(gear, BodyBrushAt(9.0, 4.4), 8.9, 4.4, 0.5, 0.7);
         }
 
         void DrawEyes(double lx, double ly, double rx, double ry, bool closed, bool shortEyes = false)
@@ -682,9 +763,9 @@ namespace AgyPet
             Dot(gear, EyePrimary, 6.3, 2.7, 0.75, 0.3);
         }
 
-        void DrawThinkingFace()
+        void DrawThinkingEyes()
         {
-            // Pondering upward gaze with slightly raised brow & resting chin hand
+            // Pondering upward gaze with slightly raised brow
             Dot(gear, EyePrimary, 3.9, 2.75, 0.85, 0.55);
             Dot(gear, EyePrimary, 6.3, 2.75, 0.85, 0.8);
             if (!IsDark)
@@ -692,10 +773,14 @@ namespace AgyPet
                 Dot(gear, EyeWhite, 4.35, 2.75, 0.35, 0.35);
                 Dot(gear, EyeWhite, 6.75, 2.75, 0.35, 0.35);
             }
+        }
+
+        void DrawThinkingArms()
+        {
             Dot(gear, ArmLeftUpper, 1.5, 4.8, 0.5, 1.0);
             Dot(gear, ArmLeftLower, 1.1, 5.4, 0.5, 0.5);
-            Dot(gear, ArmRightUpper, 8.6, 4.6, 0.55, 0.85);
-            Dot(gear, ArmRightLower, 7.6, 4.2, 1.05, 0.5);
+            Dot(gear, BodyBrushAt(8.5, 4.6), 8.6, 4.6, 0.55, 0.85);
+            Dot(gear, BodyBrushAt(8.5, 4.2), 7.6, 4.2, 1.05, 0.5);
         }
 
         void DrawStartledEyes()
@@ -706,18 +791,22 @@ namespace AgyPet
             Dot(gear, EyeDark, 6.45, 3.25, 0.55, 0.55);
         }
 
-        void DrawConfusedFace()
+        void DrawConfusedEyes()
         {
             Dot(gear, EyePrimary, 3.7, 3.2, 0.85, 0.85);
             if (!IsDark) Dot(gear, EyeWhite, 4.05, 3.2, 0.35, 0.35);
             Dot(gear, EyeWhite, 6.0, 2.8, 1.4, 1.4);
             Dot(gear, EyeDark, 6.45, 3.25, 0.55, 0.55);
+        }
+
+        void DrawConfusedArms()
+        {
             Dot(gear, ArmLeftLower, 1.5, 4.8, 0.5, 0.5);
             Dot(gear, ArmLeftUpper, 1.1, 5.3, 0.5, 0.5);
             Dot(gear, ArmLeftLower, 1.5, 5.8, 0.5, 0.5);
-            Dot(gear, ArmRightUpper, 9.0, 4.7, 0.5, 0.6);
-            Dot(gear, ArmRightLower, 9.5, 3.7, 0.5, 1.1);
-            Dot(gear, ArmRightLower, 8.8, 3.3, 0.7, 0.5);
+            Dot(gear, BodyBrushAt(9.0, 4.7), 9.0, 4.7, 0.5, 0.6);
+            Dot(gear, BodyBrushAt(9.0, 3.7), 9.5, 3.7, 0.5, 1.1);
+            Dot(gear, BodyBrushAt(9.0, 3.3), 8.8, 3.3, 0.7, 0.5);
         }
 
         // ---- Scenes & Props ------------------------------------------------
@@ -894,31 +983,6 @@ namespace AgyPet
             Dot(gear, EyePrimary, 6.75, ey, 0.4, 0.35);
             Dot(gear, EyePrimary, 6.3, ey + 0.32, 0.45, 0.35);
             Dot(gear, EyePrimary, 6.75, ey + 0.64, 0.4, 0.35);
-        }
-
-        // Expressive furrowed "\ /" glare + pulsing corner irk mark when clicked repeatedly
-        void DrawAnnoyedOverlay(bool compact)
-        {
-            double ey = compact ? 4.05 : 3.25;
-            // Flat annoyed slit eyes
-            Dot(gear, EyePrimary, 3.7, ey + 0.25, 1.0, 0.45);
-            Dot(gear, EyePrimary, 6.2, ey + 0.25, 1.0, 0.45);
-            // Furrowed inward "\" / "/" brows
-            Dot(gear, EyePrimary, 3.5, ey - 0.45, 0.6, 0.32);
-            Dot(gear, EyePrimary, 4.05, ey - 0.2, 0.6, 0.32);
-            Dot(gear, EyePrimary, 6.8, ey - 0.45, 0.6, 0.32);
-            Dot(gear, EyePrimary, 6.25, ey - 0.2, 0.6, 0.32);
-
-            if (tick % 8 < 6)
-            {
-                Brush mark = IsDark ? MonoBright : ErrorRedBrush;
-                double mx = 8.4, my = compact ? 0.5 : -0.5;
-                Dot(air, mark, mx, my, 0.45, 0.45);
-                Dot(air, mark, mx + 0.9, my, 0.45, 0.45);
-                Dot(air, mark, mx + 0.45, my + 0.45, 0.45, 0.45);
-                Dot(air, mark, mx, my + 0.9, 0.45, 0.45);
-                Dot(air, mark, mx + 0.9, my + 0.9, 0.45, 0.45);
-            }
         }
 
         // ---- 5 New Antigravity-Native Reaction Scenes ----

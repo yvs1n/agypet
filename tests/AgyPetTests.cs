@@ -208,25 +208,40 @@ namespace AgyPet.Tests
                 }
             });
 
-            Run("Click dances gently once, turns annoyed on rapid clicks, and cursor gaze normalizes cleanly", () =>
+            Run("Click dances on Idle, winces on 3+ rapid clicks, ignores non-Idle clicks, and matches body limb colors", () =>
             {
                 var m = new Mascot(4.0, Mascot.ClassicSkin) { Mood = MascotMood.Idle };
                 m.Poke();
-                AssertTrue(m.IsHurt, "Mascot should enter hurt state immediately when poked");
+                AssertTrue(m.IsHurt, "Mascot should enter hurt state immediately when poked in Idle");
                 AssertEq(MascotMood.Idle, m.Mood);
                 m.CancelHurt();
                 AssertTrue(!m.IsHurt, "CancelHurt should clear hurt state on drag");
 
                 var t0 = new DateTime(2026, 11, 27, 1, 0, 0, DateTimeKind.Utc);
                 m.RegisterClickAt(t0);
-                AssertTrue(m.IsDancing && !m.IsAnnoyed, "First single click should dance gently without annoyance");
+                AssertTrue(m.IsDancing && !m.IsHurt, "First click in Idle should hop playfully without wincing");
                 m.RegisterClickAt(t0.AddMilliseconds(250));
+                AssertTrue(m.IsDancing && !m.IsHurt, "Second click in Idle continues leg-hop dance");
                 m.RegisterClickAt(t0.AddMilliseconds(500));
-                AssertTrue(m.IsDancing && !m.IsAnnoyed, "Up to 3 clicks stays playful");
-                m.RegisterClickAt(t0.AddMilliseconds(750));
-                AssertTrue(m.IsAnnoyed && !m.IsDancing, "4th rapid click triggers annoyed state cleanly without fighting dance");
+                AssertTrue(m.IsHurt && !m.IsDancing, "3rd rapid click triggers the original wince cleanly");
                 m.RegisterClickAt(t0.AddSeconds(4));
-                AssertTrue(m.IsDancing && !m.IsAnnoyed, "Cooldown resets streak so later single click dances again");
+                AssertTrue(m.IsDancing && !m.IsHurt, "Cooldown resets streak so later single click hops again");
+
+                // Clicking once or multiple times outside Idle should do nothing
+                m.Mood = MascotMood.Working;
+                m.Snap(1);
+                AssertTrue(!m.IsDancing && !m.IsHurt, "Transitioning out of Idle clears active click animation");
+                m.RegisterClickAt(t0.AddSeconds(6));
+                AssertTrue(!m.IsDancing && !m.IsHurt, "Single click while Working must not animate");
+                m.RegisterClickAt(t0.AddSeconds(6.2));
+                m.RegisterClickAt(t0.AddSeconds(6.4));
+                AssertTrue(!m.IsDancing && !m.IsHurt, "Rapid clicks while Working must not animate");
+                m.Poke();
+                m.Dance();
+                AssertTrue(!m.IsDancing && !m.IsHurt, "Poke and Dance are ignored outside Idle");
+
+                var leftArmSample = m.BodyColorAt(1.5, 4.8);
+                AssertEq(Mascot.OfficialArchPixelColor((1.5 - 0.5) / 9.5, 4.8 / 8.5, false, false, false), leftArmSample);
 
                 double nx, ny;
                 Mascot.NormalizeLookOffset(0, 0, out nx, out ny);

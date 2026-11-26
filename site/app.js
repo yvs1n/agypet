@@ -23,6 +23,27 @@
     "##................##",
   ];
 
+  // Alternating leg-hop masks for Idle click dance
+  const DANCE_LEFT_MASK = [
+    ...ARCH_MASK.slice(0, 12),
+    "...###........###...",
+    "...###.......####...",
+    "..###........###....",
+    ".###................",
+    ".##.................",
+    "##..................",
+  ];
+
+  const DANCE_RIGHT_MASK = [
+    ...ARCH_MASK.slice(0, 12),
+    "...###........###...",
+    "..####........###...",
+    "....###........###..",
+    "................###.",
+    ".................##.",
+    "..................##",
+  ];
+
   const COMPACT_MASK = [
     "....................",
     "....................",
@@ -120,8 +141,17 @@
     return rgbCss(c);
   }
 
-  function buildMaskCache(skin, compact) {
-    const mask = compact ? COMPACT_MASK : ARCH_MASK;
+  function bodyColorAt(skin, x, y) {
+    const u = Math.max(0.05, Math.min(0.95, ((x - 0.5) * 2) / 19));
+    const v = Math.max(0.05, Math.min(0.95, (y * 2) / 17));
+    return skin === 'dark'
+      ? darkPixelColor(u, v, false, false, false, false)
+      : officialPixelColor(u, v, false, false, false);
+  }
+
+  function buildMaskCache(skin, variant) {
+    const compact = variant === 'compact';
+    const mask = compact ? COMPACT_MASK : (variant === 'danceL' ? DANCE_LEFT_MASK : (variant === 'danceR' ? DANCE_RIGHT_MASK : ARCH_MASK));
     const cells = [];
     for (let r = 0; r < mask.length; r++) {
       const row = mask[r];
@@ -144,8 +174,18 @@
   }
 
   const CACHE = {
-    classic: { normal: buildMaskCache('classic', false), compact: buildMaskCache('classic', true) },
-    dark: { normal: buildMaskCache('dark', false), compact: buildMaskCache('dark', true) },
+    classic: {
+      normal: buildMaskCache('classic', 'normal'),
+      compact: buildMaskCache('classic', 'compact'),
+      danceL: buildMaskCache('classic', 'danceL'),
+      danceR: buildMaskCache('classic', 'danceR'),
+    },
+    dark: {
+      normal: buildMaskCache('dark', 'normal'),
+      compact: buildMaskCache('dark', 'compact'),
+      danceL: buildMaskCache('dark', 'danceL'),
+      danceR: buildMaskCache('dark', 'danceR'),
+    },
   };
 
   function setupHiDpiCanvas(canvas) {
@@ -166,24 +206,25 @@
     ctx.clearRect(0, 0, Math.round(w * dpr), Math.round(h * dpr));
     const isDark = skin === 'dark';
     const compact = mood === 'Sleeping';
-    const hurt = typeof state === 'object' ? (state.hurt > 0) : state > 0;
-    const hurtT = typeof state === 'object' ? (state.hurt || 0) : (state || 0);
-    const annoyed = typeof state === 'object' && (state.annoyed > 0);
-    const dancing = typeof state === 'object' && (state.dance > 0) && !annoyed && !hurt;
+    const isIdle = mood === 'Idle';
+    const hurt = isIdle && (typeof state === 'object' ? (state.hurt > 0) : state > 0);
+    const hurtT = isIdle ? (typeof state === 'object' ? (state.hurt || 0) : (state || 0)) : 0;
+    const dancing = isIdle && typeof state === 'object' && (state.dance > 0) && !hurt;
 
     const shiftLeftProp = (mood === 'Working' || mood === 'Terminal') ? 1.4 * px : 0;
     const ox = (w - 11 * px) * 0.5 + shiftLeftProp;
     const oy = (h - 9 * px) * 0.5 + 1.3 * px;
 
-    const danceBob = dancing ? -Math.abs(Math.sin(tick * 0.34)) * 0.45 * px : 0;
-    const doneHop = mood === 'Done' && !annoyed ? -Math.round(Math.abs(Math.sin(tick * 0.45)) * 1.1) * px : 0;
+    const hopStep = Math.floor(tick / 3) % 4;
+    const danceBob = dancing ? ((hopStep === 1 || hopStep === 3) ? -0.48 * px : -0.1 * px) : 0;
+    const doneHop = mood === 'Done' ? -Math.round(Math.abs(Math.sin(tick * 0.45)) * 1.1) * px : 0;
     const baseBob = dancing ? danceBob : doneHop;
-    const wiggles = (mood === 'Alert' || mood === 'Question' || mood === 'Error') && !annoyed;
+    const wiggles = mood === 'Alert' || mood === 'Question' || mood === 'Error';
     const bobY = hurt && hurtT >= 4 ? baseBob + px * 0.45 : baseBob;
-    const danceSway = dancing ? Math.sin(tick * 0.34) * 0.5 * px : 0;
+    const danceShift = dancing ? (hopStep === 0 ? -0.18 * px : (hopStep === 2 ? 0.18 * px : 0)) : 0;
     const wigX = hurt && hurtT >= 4 ? ((hurtT % 2 === 0 ? -0.28 : 0.28) * px)
-      : (mood === 'Error' && !annoyed && tick % 6 < 2) ? ((tick % 2 === 0 ? -0.4 : 0.4) * px)
-      : (wiggles && tick % 12 < 4 ? (tick % 2 === 0 ? -px * 0.4 : px * 0.4) : danceSway);
+      : (mood === 'Error' && tick % 6 < 2) ? ((tick % 2 === 0 ? -0.4 : 0.4) * px)
+      : (wiggles && tick % 12 < 4 ? (tick % 2 === 0 ? -px * 0.4 : px * 0.4) : danceShift);
 
     // Edge-to-edge physical pixel rounding guarantees zero transparent 1px seams through any mascot!
     const dot = (fill, x, y, dw = 1, dh = 1, inSprite = true) => {
@@ -206,10 +247,12 @@
     };
 
     const eyeMain = isDark ? '#F8FAFC' : '#0B1220';
-    const armLU = isDark ? '#52525B' : '#1FA8D8';
-    const armLL = isDark ? '#3A3A40' : '#1E78FF';
-    const armRU = isDark ? '#52525B' : '#7B61EC';
-    const armRL = isDark ? '#3A3A40' : '#2C86FF';
+    const armLU = bodyColorAt(skin, 1.5, 4.8);
+    const armLL = bodyColorAt(skin, 1.1, 5.4);
+    const armRU = bodyColorAt(skin, 9.0, 4.8);
+    const armRL = bodyColorAt(skin, 9.4, 5.4);
+    const armRaisedL = bodyColorAt(skin, 2.0, 3.7);
+    const armRaisedR = bodyColorAt(skin, 9.0, 3.7);
 
     ctx.save();
     if (hurt && hurtT >= 4) {
@@ -219,17 +262,27 @@
       ctx.translate(-cx, -cy);
     }
 
-    const cells = CACHE[skin][compact ? 'compact' : 'normal'];
+    const maskKey = compact ? 'compact' : (dancing && hopStep === 0 ? 'danceL' : (dancing && hopStep === 2 ? 'danceR' : 'normal'));
+    const cells = CACHE[skin][maskKey];
     for (let i = 0; i < cells.length; i++) {
       const cell = cells[i];
       dot(cell.fill, cell.x, cell.y, cell.w, cell.h, true);
     }
 
-    const closed = !hurt && !annoyed && (tick % 58 >= 56);
-    const faceBlocked = hurt || annoyed;
+    const closed = !hurt && (tick % 58 >= 56);
+    const faceBlocked = hurt;
     if (mood === 'Idle' || mood === 'Listening' || mood === 'Speaking' || mood === 'Searching' || mood === 'Browsing' || mood === 'Background') {
-      dot(armLU, 1.5, 4.8, 0.5, 1.0); dot(armLL, 1.1, 5.4, 0.5, 0.5);
-      dot(armRU, 9.0, 4.8, 0.5, 1.0); dot(armRL, 9.4, 5.4, 0.5, 0.5);
+      if (dancing) {
+        const leftHigh = hopStep === 0 || hopStep === 1;
+        dot(leftHigh ? armRaisedL : armLU, leftHigh ? 1.1 : 1.5, leftHigh ? 3.8 : 4.8, 0.5, 1.0);
+        if (!leftHigh) dot(armLL, 1.1, 5.4, 0.5, 0.5);
+        const rightHigh = hopStep === 2 || hopStep === 3;
+        dot(rightHigh ? armRaisedR : armRU, rightHigh ? 9.4 : 9.0, rightHigh ? 3.8 : 4.8, 0.5, 1.0);
+        if (!rightHigh) dot(armRL, 9.4, 5.4, 0.5, 0.5);
+      } else {
+        dot(armLU, 1.5, 4.8, 0.5, 1.0); dot(armLL, 1.1, 5.4, 0.5, 0.5);
+        dot(armRU, 9.0, 4.8, 0.5, 1.0); dot(armRL, 9.4, 5.4, 0.5, 0.5);
+      }
     }
 
     const drawEyes = (lx, ly, rx, ry, isClosed, shortH = false) => {
@@ -264,7 +317,7 @@
           dot(isDark ? '#F4F4F5' : '#F8C618', -0.65, 1.5 - nt * 0.3, 0.65, 0.48, false);
           dot(isDark ? '#A1A1AA' : '#38BDF8', 10.2, 0.2 - ((nt + 2) % 4) * 0.3, 0.48, 1.2, false);
           dot(isDark ? '#A1A1AA' : '#38BDF8', 9.75, 1.1 - ((nt + 2) % 4) * 0.3, 0.65, 0.48, false);
-        } else if (!annoyed && tick % 24 < 14) {
+        } else if (tick % 24 < 14) {
           dot(isDark ? '#F4F4F5' : '#FFF6D6', 8.9, 1.3, 0.5, 0.5, false);
           if (tick % 24 < 9) {
             const rCol = isDark ? '#A1A1AA' : '#E2E8F0';
@@ -294,7 +347,7 @@
           if (!isDark) { dot('#F8FAFC', 4.35, 2.75, 0.35, 0.35); dot('#F8FAFC', 6.75, 2.75, 0.35, 0.35); }
         }
         dot(armLU, 1.5, 4.8, 0.5, 1.0); dot(armLL, 1.1, 5.4, 0.5, 0.5);
-        dot(armRU, 8.6, 4.6, 0.55, 0.85); dot(armRL, 7.6, 4.2, 1.05, 0.5);
+        dot(bodyColorAt(skin, 8.5, 4.6), 8.6, 4.6, 0.55, 0.85); dot(bodyColorAt(skin, 8.5, 4.2), 7.6, 4.2, 1.05, 0.5);
         const rim = isDark ? '#A1A1AA' : '#1E78FF';
         const bg = isDark ? '#27272A' : '#0F172A';
         dot(rim, 8.4, 0.6, 0.5, 0.5, false);
@@ -326,8 +379,8 @@
           dot(down ? (isDark ? '#F4F4F5' : '#38BDF8') : (isDark ? '#A1A1AA' : '#E2E8F0'), 2.1 + i * 1.8, down ? 6.65 : 6.45, 1.1, 0.55);
         }
         const leftDown = tick % 4 < 2;
-        dot(armLU, 1.6, leftDown ? 5.3 : 4.8, 0.65, 0.9);
-        dot(armRU, 8.7, leftDown ? 4.8 : 5.3, 0.65, 0.9);
+        dot(bodyColorAt(skin, 2.0, leftDown ? 5.3 : 4.8), 1.6, leftDown ? 5.3 : 4.8, 0.65, 0.9);
+        dot(bodyColorAt(skin, 9.0, leftDown ? 4.8 : 5.3), 8.7, leftDown ? 4.8 : 5.3, 0.65, 0.9);
         dot(isDark ? '#27272A' : '#0F172A', 8.7, -0.9, 4.2, 2.0, false);
         for (let d = 0; d < 3; d++) {
           const lift = ((Math.floor(tick / 3) + d) % 3 === 0) ? -0.3 : 0;
@@ -364,7 +417,7 @@
         dot(isDark ? '#F4F4F5' : '#1E78FF', -3.1, 3.0, 2.4, 0.45, false);
         dot(isDark ? '#A1A1AA' : '#EF443A', -2.7, 4.0, 2.0, 0.45, false);
         dot(isDark ? '#F4F4F5' : '#4EC446', -3.1, 5.0, 1.2 + (tick % 3) * 0.55, 0.45, false);
-        dot(armLU, 0.6, 5.0, 1.6, 0.85, false);
+        dot(bodyColorAt(skin, 2.0, 5.0), 0.6, 5.0, 1.6, 0.85, false);
         break;
       case 'Terminal': {
         if (!faceBlocked) {
@@ -382,7 +435,7 @@
         dot(isDark ? '#A1A1AA' : '#E2E8F0', tx + 1.9, 3.7, 1.2 + (Math.floor(tick / 4) % 3) * 0.55, 0.45, false);
         dot(isDark ? '#71717A' : '#38BDF8', tx + 0.9, 5.0, 2.5, 0.42, false);
         if (tick % 6 < 3) dot(prompt, tx + 3.5, 5.9, 0.6, 0.6, false);
-        dot(armLU, 0.6, 5.0, 1.6, 0.85, false);
+        dot(bodyColorAt(skin, 2.0, 5.0), 0.6, 5.0, 1.6, 0.85, false);
         break;
       }
       case 'Browsing': {
@@ -398,8 +451,8 @@
         const mx = (Math.floor(tick / 5) % 2 === 0) ? -0.45 : 0.45;
         if (!faceBlocked) drawEyes(3.9 + mx, 3.1, 6.3 + mx, 3.1, false);
         const ph = tick % 6 < 3;
-        dot(armLU, 1.0, ph ? 3.5 : 4.2, 0.55, 1.0); dot(armLL, 1.5, 4.4, 0.5, 0.6);
-        dot(armRL, 9.45, ph ? 4.2 : 3.5, 0.55, 1.0); dot(armRU, 8.95, 4.4, 0.5, 0.6);
+        dot(bodyColorAt(skin, 2.0, ph ? 3.5 : 4.2), 1.0, ph ? 3.5 : 4.2, 0.55, 1.0); dot(bodyColorAt(skin, 2.0, 4.4), 1.5, 4.4, 0.5, 0.6);
+        dot(bodyColorAt(skin, 9.0, ph ? 4.2 : 3.5), 9.45, ph ? 4.2 : 3.5, 0.55, 1.0); dot(bodyColorAt(skin, 9.0, 4.4), 8.95, 4.4, 0.5, 0.6);
         const orbs = isDark ? ['#F4F4F5', '#A1A1AA'] : ['#F8C618', '#4EC446', '#38BDF8', '#7B61EC', '#EF443A', '#1E78FF', '#1FA8D8', '#F8FAFC'];
         const nOrbs = Math.max(2, Math.min(8, orbCount || 3));
         const orbSize = nOrbs >= 6 ? 0.9 : 1.05;
@@ -426,7 +479,7 @@
           dot('#F8FAFC', 3.6, 2.9, 1.25, 1.25); dot('#0B1220', 3.95, 3.25, 0.55, 0.55);
           dot('#F8FAFC', 6.1, 2.9, 1.25, 1.25); dot('#0B1220', 6.45, 3.25, 0.55, 0.55);
         }
-        dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
+        dot(armRaisedL, 1.1, 3.7, 0.5, 1.0); dot(armRaisedR, 9.4, 3.7, 0.5, 1.0);
         if (tick % 10 >= 2) {
           dot(isDark ? '#F4F4F5' : '#F59E0B', 5.0, -2.3, 1, 2.2, false);
           dot(isDark ? '#F4F4F5' : '#F59E0B', 5.0, 0.3, 1, 0.8, false);
@@ -445,7 +498,7 @@
       case 'Delegating': {
         if (!faceBlocked) drawEyes(4.1, 3.1, 6.5, 3.1, false);
         dot(armLU, 1.5, 4.8, 0.5, 1.0); dot(armLL, 1.1, 5.4, 0.5, 0.5);
-        dot(armRU, 8.7, 4.2, 1.1, 0.65, false);
+        dot(bodyColorAt(skin, 9.0, 4.2), 8.7, 4.2, 1.1, 0.65, false);
         const frame = isDark ? '#27272A' : '#0F172A';
         const slot = isDark ? '#A1A1AA' : '#3F4A5C';
         for (let row = 0; row < 2; row++) {
@@ -468,7 +521,7 @@
           dot('#F8FAFC', 3.55, 2.95, 0.45, 0.35); dot('#F8FAFC', 4.0, 3.3, 0.45, 0.35); dot('#F8FAFC', 3.55, 3.65, 0.45, 0.35);
           dot('#F8FAFC', 6.85, 2.95, 0.45, 0.35); dot('#F8FAFC', 6.4, 3.3, 0.45, 0.35); dot('#F8FAFC', 6.85, 3.65, 0.45, 0.35);
         }
-        dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
+        dot(armRaisedL, 1.1, 3.7, 0.5, 1.0); dot(armRaisedR, 9.4, 3.7, 0.5, 1.0);
         if (tick % 8 >= 2) {
           shape(isDark ? '#F4F4F5' : '#EF4444', 4.3, -2.7, ["..##", ".##.", "###.", ".##.", ".#.."]);
           dot(isDark ? '#A1A1AA' : '#FFD24A', 5.2, -1.1, 0.45, 0.45, false);
@@ -477,7 +530,7 @@
       }
       case 'Done': {
         if (!faceBlocked) drawHappyEyes();
-        dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
+        dot(armRaisedL, 1.1, 3.7, 0.5, 1.0); dot(armRaisedR, 9.4, 3.7, 0.5, 1.0);
         const lift = tick % 8 < 4 ? -0.25 : 0.15;
         dot(isDark ? '#F4F4F5' : '#EF443A', 0.2, 1.2 + lift, 0.45, 0.85, false);
         dot(isDark ? '#A1A1AA' : '#4EC446', 1.3, -0.7 - lift, 1.0, 0.36, false);
@@ -491,19 +544,6 @@
       const ey = compact ? 3.85 : 3.05;
       dot(eyeMain, 3.65, ey, 0.4, 0.35); dot(eyeMain, 4.05, ey + 0.32, 0.45, 0.35); dot(eyeMain, 3.65, ey + 0.64, 0.4, 0.35);
       dot(eyeMain, 6.75, ey, 0.4, 0.35); dot(eyeMain, 6.3, ey + 0.32, 0.45, 0.35); dot(eyeMain, 6.75, ey + 0.64, 0.4, 0.35);
-    } else if (annoyed) {
-      const ey = compact ? 4.05 : 3.25;
-      dot(eyeMain, 3.7, ey + 0.25, 1.0, 0.45);
-      dot(eyeMain, 6.2, ey + 0.25, 1.0, 0.45);
-      dot(eyeMain, 3.5, ey - 0.45, 0.6, 0.32); dot(eyeMain, 4.05, ey - 0.2, 0.6, 0.32);
-      dot(eyeMain, 6.8, ey - 0.45, 0.6, 0.32); dot(eyeMain, 6.25, ey - 0.2, 0.6, 0.32);
-      if (tick % 8 < 6) {
-        const mk = isDark ? '#F4F4F5' : '#EF4444';
-        const mx = 8.4, my = compact ? 0.5 : -0.5;
-        dot(mk, mx, my, 0.45, 0.45, false); dot(mk, mx + 0.9, my, 0.45, 0.45, false);
-        dot(mk, mx + 0.45, my + 0.45, 0.45, 0.45, false);
-        dot(mk, mx, my + 0.9, 0.45, 0.45, false); dot(mk, mx + 0.9, my + 0.9, 0.45, 0.45, false);
-      }
     }
 
     ctx.restore();
@@ -584,7 +624,6 @@
   let globalTick = 0;
   let hurtTicks = 0;
   let danceTicks = 0;
-  let annoyedTicks = 0;
   let clickStreak = 0;
   let lastClickMs = 0;
   let simLookX = 0;
@@ -697,6 +736,11 @@
 
   function setHeroMood(m) {
     heroMood = m;
+    if (m !== 'Idle') {
+      clickStreak = 0;
+      hurtTicks = 0;
+      danceTicks = 0;
+    }
     cycleMoodBtn.textContent = `Mood: ${heroMood}`;
     const info = MOODS.find((item) => item.id === m);
     const sub = info ? info.sub : '';
@@ -820,21 +864,27 @@
     }
   }
 
-  // Single-click gently dances; rapid clicking (4+ within 2.2s) makes him annoyed; Sleeping wakes up!
+  // Idle only: single-click hops from leg to leg; rapid clicks (3+ within 2.2s) trigger the original wince; Sleeping wakes up first!
   stagePet.addEventListener('click', () => {
     if (heroMood === 'Sleeping') {
       setHeroMood('Idle');
       chatStatus.textContent = 'Woke up from sleep (At rest)';
     }
+    if (heroMood !== 'Idle') {
+      clickStreak = 0;
+      hurtTicks = 0;
+      danceTicks = 0;
+      return;
+    }
     const nowMs = performance.now();
     if (nowMs - lastClickMs > 2200) clickStreak = 0;
     clickStreak++;
     lastClickMs = nowMs;
-    if (clickStreak >= 4) {
+    if (clickStreak >= 3) {
       danceTicks = 0;
-      annoyedTicks = 28;
+      hurtTicks = 6;
     } else {
-      annoyedTicks = 0;
+      hurtTicks = 0;
       danceTicks = 24;
     }
     renderAllOnce();
@@ -985,7 +1035,7 @@
 
   function renderAllOnce() {
     drawMascot(navMeta.ctx, navMeta.w, navMeta.h, 2.1, currentSkin, 'Idle', globalTick, 0, navMeta.dpr, 3, simLookX, simLookY);
-    drawMascot(heroMeta.ctx, heroMeta.w, heroMeta.h, heroPx, currentSkin, heroMood, globalTick, { hurt: hurtTicks, dance: danceTicks, annoyed: annoyedTicks }, heroMeta.dpr, 3, simLookX, simLookY);
+    drawMascot(heroMeta.ctx, heroMeta.w, heroMeta.h, heroPx, currentSkin, heroMood, globalTick, { hurt: hurtTicks, dance: danceTicks }, heroMeta.dpr, 3, simLookX, simLookY);
     moodTiles.forEach((t, i) => drawMascot(t.ctx, t.w, t.h, 3.6, currentSkin, t.mood, globalTick + i * 3, 0, t.dpr, 3, t.mood === 'Idle' ? simLookX : 0, t.mood === 'Idle' ? simLookY : 0));
     skinSamples.forEach((s, i) => drawMascot(s.ctx, s.w, s.h, 4.2, s.skin, s.mood, globalTick + i * 5, 0, s.dpr));
   }
@@ -1006,7 +1056,6 @@
       globalTick++;
       if (hurtTicks > 0) hurtTicks--;
       if (danceTicks > 0) danceTicks--;
-      if (annoyedTicks > 0) annoyedTicks--;
       renderAllOnce();
     }
     requestAnimationFrame(frame);
