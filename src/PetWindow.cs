@@ -40,7 +40,9 @@ namespace AgyPet
         readonly DispatcherTimer pollTimer;
         readonly DispatcherTimer animTimer;
         readonly DispatcherTimer hoverLeaveTimer;
+        readonly DispatcherTimer menuDismissTimer;
 
+        readonly uint selfPid = (uint)Process.GetCurrentProcess().Id;
         bool mouseDown;
         bool dragging;
         POINT dragStartCursor;
@@ -50,6 +52,9 @@ namespace AgyPet
         bool contextMenuOpen;
         bool externalMenuOpen;
         DateTime menuCooldownUntil = DateTime.MinValue;
+        HwndSource hwndSource;
+        IntPtr menuOpenedForeground = IntPtr.Zero;
+        bool prevMenuLeftDown, prevMenuRightDown, prevMenuMiddleDown, prevMenuEscDown;
         readonly ContextMenu contextMenu = new ContextMenu();
 
         bool previewMode;
@@ -79,6 +84,7 @@ namespace AgyPet
             Background = Brushes.Transparent;
             Topmost = true;
             ShowInTaskbar = false;
+            ShowActivated = false;
             ResizeMode = ResizeMode.NoResize;
             SizeToContent = SizeToContent.WidthAndHeight;
 
@@ -128,16 +134,22 @@ namespace AgyPet
             };
 
             RebuildMascot();
+            menuDismissTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(16) };
+            menuDismissTimer.Tick += (s, e) => CheckContextMenuDismiss();
+
             contextMenu.Opened += (s, e) =>
             {
                 contextMenuOpen = true;
                 hoverPopup.IsOpen = false;
                 PopulateContextMenu();
+                StartContextMenuWatch();
             };
             contextMenu.Closed += (s, e) =>
             {
                 contextMenuOpen = false;
                 menuCooldownUntil = DateTime.UtcNow.AddMilliseconds(220);
+                StopContextMenuWatch();
+                RestoreTaskbarTopmost();
             };
             PopulateContextMenu();
             petHitArea.ContextMenu = contextMenu;
@@ -167,6 +179,15 @@ namespace AgyPet
             monitor.Updated += () => Dispatcher.BeginInvoke(new Action(SyncActivity));
             SourceInitialized += OnSourceInitialized;
             Loaded += (s, e) => { SyncActivity(); SnapToTarget(); };
+            Closed += (s, e) =>
+            {
+                StopContextMenuWatch();
+                if (hwndSource != null)
+                {
+                    hwndSource.RemoveHook(OnWndProc);
+                    hwndSource = null;
+                }
+            };
         }
 
         void OnCardMouseWheel(object sender, MouseWheelEventArgs e)
@@ -183,6 +204,67 @@ namespace AgyPet
             IntPtr hwnd = new WindowInteropHelper(this).Handle;
             int ex = GetWindowLong(hwnd, GWL_EXSTYLE);
             SetWindowLong(hwnd, GWL_EXSTYLE, ex | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
+            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+            hwndSource = HwndSource.FromHwnd(hwnd);
+            if (hwndSource != null)
+                hwndSource.AddHook(OnWndProc);
+        }
+
+        public static bool ShouldForceTopmostOnPosChanging(
+            bool dockedOnTaskbar,
+            uint flags,
+            IntPtr insertAfter,
+            uint insertAfterPid,
+            uint selfPid)
+        {
+            if (!dockedOnTaskbar) return false;
+            if ((flags & SWP_NOZORDER) != 0) return false;
+            if (insertAfter == HWND_TOPMOST) return false;
+            if (insertAfterPid != 0 && insertAfterPid == selfPid) return false;
+            return true;
+        }
+
+        IntPtr OnWndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
+            if (msg == WM_MOUSEACTIVATE)
+            {
+                handled = true;
+                return new IntPtr(MA_NOACTIVATE);
+            }
+            if (msg == WM_WINDOWPOSCHANGING && IsDockedOnTaskbar() && lParam != IntPtr.Zero)
+            {
+                try
+                {
+                    var wp = (WINDOWPOS)Marshal.PtrToStructure(lParam, typeof(WINDOWPOS));
+                    uint afterPid = 0;
+                    if (wp.hwndInsertAfter != IntPtr.Zero && wp.hwndInsertAfter != HWND_TOPMOST)
+                        GetWindowThreadProcessId(wp.hwndInsertAfter, out afterPid);
+                    if (ShouldForceTopmostOnPosChanging(true, wp.flags, wp.hwndInsertAfter, afterPid, selfPid))
+                    {
+                        wp.hwndInsertAfter = HWND_TOPMOST;
+                        Marshal.StructureToPtr(wp, lParam, false);
+                    }
+                }
+                catch { }
+            }
+            return IntPtr.Zero;
+        }
+
+        bool IsDockedOnTaskbar()
+        {
+            return !tracker.IsInFront && !settings.HasCustomFreePos && settings.MinimizedCorner != null &&
+                   settings.MinimizedCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase);
+        }
+
+        void RestoreTaskbarTopmost()
+        {
+            if (!IsDockedOnTaskbar()) return;
+            EnsureTopmost();
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(() =>
+            {
+                if (!contextMenuOpen && !externalMenuOpen && IsDockedOnTaskbar())
+                    EnsureTopmost();
+            }));
         }
 
         public void RebuildMascot()
@@ -581,7 +663,12 @@ namespace AgyPet
 
         void PollTarget()
         {
-            if (dragging || IsAnyMenuActive) return;
+            if (dragging || IsAnyMenuActive)
+            {
+                if (!dragging && !contextMenuOpen && !externalMenuOpen && IsDockedOnTaskbar())
+                    EnsureTopmost();
+                return;
+            }
             tracker.TrackCliWindows = settings.CliPlacement != "off";
             tracker.Poll();
             monitor.PreferredChatTitle = tracker.ActiveChatTitle;
@@ -606,8 +693,7 @@ namespace AgyPet
             if (nowOnChatScreen && userMovedWhileInFront) return;
 
             // Keep AgyPet above Shell_TrayWnd when docked along the Windows taskbar itself.
-            if (!nowInFront && !settings.HasCustomFreePos && settings.MinimizedCorner != null &&
-                settings.MinimizedCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
+            if (IsDockedOnTaskbar())
             {
                 EnsureTopmost();
             }
@@ -651,6 +737,8 @@ namespace AgyPet
             Point desired = ComputeDesiredPosition();
             Left = targetLeft = desired.X;
             Top = targetTop = desired.Y;
+            if (IsDockedOnTaskbar())
+                EnsureTopmost();
         }
 
         public static Point PlaceAboveChatBox(Rect chatBoxDip, double spriteW, double spriteH, double padX, double padY)
@@ -925,6 +1013,128 @@ namespace AgyPet
 
         // ---- Right-Click Context Menu ----
 
+        public static bool IsPointInsideAnyRect(double x, double y, IList<Rect> rects)
+        {
+            if (rects == null) return false;
+            for (int i = 0; i < rects.Count; i++)
+            {
+                Rect r = rects[i];
+                if (!r.IsEmpty && x >= r.Left && x <= r.Right && y >= r.Top && y <= r.Bottom)
+                    return true;
+            }
+            return false;
+        }
+
+        public static bool ShouldDismissMenu(
+            bool cursorInsideMenu,
+            bool leftJustPressed,
+            bool rightJustPressed,
+            bool middleJustPressed,
+            bool escapePressed,
+            bool foregroundMovedAway)
+        {
+            if (escapePressed || foregroundMovedAway) return true;
+            return !cursorInsideMenu && (leftJustPressed || rightJustPressed || middleJustPressed);
+        }
+
+        void StartContextMenuWatch()
+        {
+            menuOpenedForeground = GetForegroundWindow();
+            prevMenuLeftDown = IsKeyDown(VK_LBUTTON);
+            prevMenuRightDown = IsKeyDown(VK_RBUTTON);
+            prevMenuMiddleDown = IsKeyDown(VK_MBUTTON);
+            prevMenuEscDown = IsKeyDown(VK_ESCAPE);
+            menuDismissTimer.Start();
+        }
+
+        void StopContextMenuWatch()
+        {
+            menuDismissTimer.Stop();
+            menuOpenedForeground = IntPtr.Zero;
+        }
+
+        static bool AddVisualHandleRect(Visual visual, HashSet<IntPtr> seen, List<Rect> rects)
+        {
+            if (visual == null) return false;
+            var src = PresentationSource.FromVisual(visual) as HwndSource;
+            if (src == null || src.Handle == IntPtr.Zero) return false;
+            if (seen.Add(src.Handle))
+            {
+                RECT r;
+                if (GetWindowRect(src.Handle, out r) && r.Right > r.Left && r.Bottom > r.Top)
+                    rects.Add(new Rect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top));
+            }
+            return true;
+        }
+
+        static void CollectSubmenuRects(ItemsControl parent, HashSet<IntPtr> seen, List<Rect> rects)
+        {
+            if (parent == null) return;
+            foreach (object obj in parent.Items)
+            {
+                var mi = obj as MenuItem;
+                if (mi == null || !mi.IsSubmenuOpen) continue;
+                foreach (object child in mi.Items)
+                {
+                    if (AddVisualHandleRect(child as Visual, seen, rects))
+                        break;
+                }
+                CollectSubmenuRects(mi, seen, rects);
+            }
+        }
+
+        List<Rect> GetOpenContextMenuRects()
+        {
+            var rects = new List<Rect>();
+            var seen = new HashSet<IntPtr>();
+            AddVisualHandleRect(contextMenu, seen, rects);
+            CollectSubmenuRects(contextMenu, seen, rects);
+            return rects;
+        }
+
+        void CheckContextMenuDismiss()
+        {
+            if (!contextMenuOpen || !contextMenu.IsOpen)
+            {
+                StopContextMenuWatch();
+                return;
+            }
+
+            bool leftDown = IsKeyDown(VK_LBUTTON);
+            bool rightDown = IsKeyDown(VK_RBUTTON);
+            bool middleDown = IsKeyDown(VK_MBUTTON);
+            bool escDown = IsKeyDown(VK_ESCAPE);
+
+            bool leftJustPressed = leftDown && !prevMenuLeftDown;
+            bool rightJustPressed = rightDown && !prevMenuRightDown;
+            bool middleJustPressed = middleDown && !prevMenuMiddleDown;
+            bool escJustPressed = escDown && !prevMenuEscDown;
+            prevMenuLeftDown = leftDown;
+            prevMenuRightDown = rightDown;
+            prevMenuMiddleDown = middleDown;
+            prevMenuEscDown = escDown;
+
+            IntPtr fg = GetForegroundWindow();
+            uint fgPid = 0;
+            if (fg != IntPtr.Zero) GetWindowThreadProcessId(fg, out fgPid);
+            bool foregroundMovedAway = fg != IntPtr.Zero && fg != menuOpenedForeground && fgPid != selfPid;
+
+            bool cursorInside = true;
+            if (leftJustPressed || rightJustPressed || middleJustPressed)
+            {
+                var rects = GetOpenContextMenuRects();
+                POINT pt;
+                if (rects.Count > 0 && GetCursorPos(out pt))
+                    cursorInside = IsPointInsideAnyRect(pt.X, pt.Y, rects);
+            }
+
+            if (ShouldDismissMenu(cursorInside, leftJustPressed, rightJustPressed, middleJustPressed, escJustPressed, foregroundMovedAway))
+            {
+                contextMenu.IsOpen = false;
+                StopContextMenuWatch();
+            }
+        }
+
         void PopulateContextMenu()
         {
             contextMenu.Items.Clear();
@@ -1063,16 +1273,50 @@ namespace AgyPet
         [StructLayout(LayoutKind.Sequential)]
         struct POINT { public int X, Y; }
 
+        [StructLayout(LayoutKind.Sequential)]
+        struct RECT { public int Left, Top, Right, Bottom; }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct WINDOWPOS
+        {
+            public IntPtr hwnd;
+            public IntPtr hwndInsertAfter;
+            public int x;
+            public int y;
+            public int cx;
+            public int cy;
+            public uint flags;
+        }
+
         static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
         const uint SWP_NOSIZE = 0x0001;
         const uint SWP_NOMOVE = 0x0002;
+        const uint SWP_NOZORDER = 0x0004;
         const uint SWP_NOACTIVATE = 0x0010;
+        const uint SWP_FRAMECHANGED = 0x0020;
+        const int WM_MOUSEACTIVATE = 0x0021;
+        const int WM_WINDOWPOSCHANGING = 0x0046;
+        const int MA_NOACTIVATE = 3;
         const int GWL_EXSTYLE = -20;
         const int WS_EX_TOOLWINDOW = 0x00000080;
         const int WS_EX_NOACTIVATE = 0x08000000;
+        const int VK_LBUTTON = 0x01;
+        const int VK_RBUTTON = 0x02;
+        const int VK_MBUTTON = 0x04;
+        const int VK_ESCAPE = 0x1B;
+
+        static bool IsKeyDown(int vKey)
+        {
+            return (GetAsyncKeyState(vKey) & 0x8000) != 0;
+        }
+
         [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
         [DllImport("user32.dll")] static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
         [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
         [DllImport("user32.dll")] static extern bool GetCursorPos(out POINT lpPoint);
+        [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+        [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+        [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+        [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
     }
 }

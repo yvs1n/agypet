@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Windows;
 using System.Windows.Media;
 
 namespace AgyPet.Tests
@@ -210,6 +212,42 @@ namespace AgyPet.Tests
                 AssertEq("abc123", rel.Sha256);
                 AssertTrue(Updater.IsNewer("v0.2.0", new Version(0, 1, 0, 0)), "0.2.0 should be newer than 0.1.0");
                 AssertTrue(!Updater.IsNewer("v0.1.0", new Version(0, 1, 0, 0)), "0.1.0 should not be newer than 0.1.0");
+            });
+
+            Run("Context menu hit-testing and outside-click dismissal handle main menu, submenus, and focus loss", () =>
+            {
+                var rects = new List<Rect>
+                {
+                    new Rect(100, 100, 220, 320),
+                    new Rect(320, 140, 180, 160)
+                };
+                AssertTrue(PetWindow.IsPointInsideAnyRect(150, 200, rects), "Point inside main menu should be treated as inside");
+                AssertTrue(PetWindow.IsPointInsideAnyRect(380, 200, rects), "Point inside open submenu should be treated as inside");
+                AssertTrue(!PetWindow.IsPointInsideAnyRect(50, 50, rects), "Point outside menu and submenu should be outside");
+                AssertTrue(!PetWindow.IsPointInsideAnyRect(150, 200, null), "Null rect list should return false");
+                AssertTrue(!PetWindow.IsPointInsideAnyRect(150, 200, new List<Rect>()), "Empty rect list should return false");
+
+                AssertTrue(!PetWindow.ShouldDismissMenu(true, true, false, false, false, false), "Clicking inside menu or unmeasured popup should not dismiss");
+                AssertTrue(!PetWindow.ShouldDismissMenu(false, false, false, false, false, false), "Idle cursor outside menu without click or focus loss should keep menu open");
+                AssertTrue(PetWindow.ShouldDismissMenu(false, true, false, false, false, false), "Left-click outside menu must dismiss");
+                AssertTrue(PetWindow.ShouldDismissMenu(false, false, true, false, false, false), "Right-click outside menu must dismiss");
+                AssertTrue(PetWindow.ShouldDismissMenu(false, false, false, true, false, false), "Middle-click outside menu must dismiss");
+                AssertTrue(PetWindow.ShouldDismissMenu(true, false, false, false, true, false), "Escape key must dismiss menu");
+                AssertTrue(PetWindow.ShouldDismissMenu(true, false, false, false, false, true), "Foreground moving to another app must dismiss menu");
+            });
+
+            Run("Taskbar Z-order guard keeps mascot topmost while allowing own popups above it", () =>
+            {
+                IntPtr topmost = new IntPtr(-1);
+                IntPtr tray = new IntPtr(1234);
+                IntPtr ownPopup = new IntPtr(5678);
+
+                AssertTrue(PetWindow.ShouldForceTopmostOnPosChanging(true, 0, tray, 999, 100), "External Z-order demotion while docked on taskbar must be forced back to HWND_TOPMOST");
+                AssertTrue(PetWindow.ShouldForceTopmostOnPosChanging(true, 0, IntPtr.Zero, 0, 100), "HWND_TOP demotion while docked on taskbar must be forced back to HWND_TOPMOST");
+                AssertTrue(!PetWindow.ShouldForceTopmostOnPosChanging(false, 0, tray, 999, 100), "Do not override Z-order when not docked on taskbar");
+                AssertTrue(!PetWindow.ShouldForceTopmostOnPosChanging(true, 0x0004, tray, 999, 100), "Do not override when SWP_NOZORDER is set");
+                AssertTrue(!PetWindow.ShouldForceTopmostOnPosChanging(true, 0, topmost, 0, 100), "Already HWND_TOPMOST needs no override");
+                AssertTrue(!PetWindow.ShouldForceTopmostOnPosChanging(true, 0, ownPopup, 100, 100), "Own popups (context menu / hover card) must stay allowed above mascot");
             });
 
             Console.WriteLine("Tests complete: " + passed + " passed, " + failed + " failed.");
