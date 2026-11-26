@@ -424,6 +424,9 @@ namespace AgyPet
             public int StepsInProgress;
         }
 
+        // Sentiment detection adapted from Atom (https://github.com/Arnav8452/atom),
+        // MIT License, Copyright (c) 2026 Antigravity Atom Contributors.
+        // See LICENSE in the repository root for the full MIT permission notice.
         static readonly Regex CodeBlockRe = new Regex("```[\\s\\S]*?```|`[^`\\n]*`", RegexOptions.Compiled);
         static readonly Regex UrlRe = new Regex(@"https?://\S+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         static readonly Regex PathRe = new Regex(@"(?:^|\s)(?:~?/|(?:\./|\.\./))[A-Za-z0-9._/@-]+", RegexOptions.Compiled);

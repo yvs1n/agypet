@@ -107,6 +107,8 @@ Have an idea for a new reaction or spotted a bug? Submit directly via:
 
 Made by **[Yassin Ragab](https://yassinr.me)** for **[Google Antigravity](https://antigravity.google)**, built with Antigravity.
 
+Turn-sentiment moods, per-model quota sleep, and delegation states were inspired by **[Atom](https://github.com/Arnav8452/atom)**, and prompt sentiment detection in [`src/ActivityMonitor.cs`](src/ActivityMonitor.cs) is adapted from Atom's code (MIT License, Copyright (c) 2026 Antigravity Atom Contributors).
+
 ## License
 
 [MIT](LICENSE)
