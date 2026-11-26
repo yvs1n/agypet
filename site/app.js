@@ -166,7 +166,7 @@
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, Math.round(w * dpr), Math.round(h * dpr));
     const isDark = skin === 'dark';
-    const compact = mood === 'Thinking' || mood === 'Sleeping';
+    const compact = mood === 'Sleeping';
     const hurt = hurtTicks > 0;
 
     const shiftLeftProp = (mood === 'Working' || mood === 'Terminal') ? 1.8 * px : 0;
@@ -178,6 +178,7 @@
     const baseBob = hops ? -Math.round(Math.abs(Math.sin(tick * 0.55)) * 1.4) * px : 0;
     const bobY = hurt && hurtTicks >= 4 ? baseBob + px * 0.45 : baseBob;
     const wigX = hurt && hurtTicks >= 4 ? ((hurtTicks % 2 === 0 ? -0.3 : 0.3) * px)
+      : mood === 'Error' && tick % 6 < 2 ? ((tick % 2 === 0 ? -0.45 : 0.45) * px)
       : (wiggles && tick % 12 < 4 ? (tick % 2 === 0 ? -px * 0.45 : px * 0.45) : 0);
 
     // Edge-to-edge physical pixel rounding guarantees zero transparent 1px seams through any mascot!
@@ -205,18 +206,6 @@
     const armLL = isDark ? '#3A3A40' : '#1E78FF';
     const armRU = isDark ? '#52525B' : '#7B61EC';
     const armRL = isDark ? '#3A3A40' : '#2C86FF';
-
-    if (mood === 'Thinking') {
-      const tilts = [0.5, -0.5];
-      for (let orb = 0; orb < 2; orb++) {
-        const cosT = Math.cos(tilts[orb]), sinT = Math.sin(tilts[orb]);
-        for (let i = 0; i < 30; i++) {
-          const th = (i * Math.PI * 2) / 30;
-          const ex = 5.4 * Math.cos(th), ey = 2.1 * Math.sin(th);
-          if (ey <= 0) dot(isDark ? '#52525B' : '#94A3B8', 5.5 + ex * cosT - ey * sinT, 4.6 + ex * sinT + ey * cosT, 0.42, 0.42, false);
-        }
-      }
-    }
 
     ctx.save();
     if (hurt && hurtTicks >= 4) {
@@ -287,25 +276,28 @@
           dot(wc, 11.1 + i * 1.1, wt, 0.75, wh, false);
         }
         break;
-      case 'Thinking':
+      case 'Thinking': {
         if (!hurt) {
-          dot(eyeMain, 3.7, 4.3, 0.9, 0.35);
-          dot('#F8FAFC', 6.0, 3.8, 1.3, 0.95);
-          dot('#0B1220', 6.5, 3.9, 0.65, 0.65);
+          dot(eyeMain, 3.9, 2.75, 0.85, 0.55);
+          dot(eyeMain, 6.3, 2.75, 0.85, 0.8);
+          if (!isDark) { dot('#F8FAFC', 4.35, 2.75, 0.35, 0.35); dot('#F8FAFC', 6.75, 2.75, 0.35, 0.35); }
         }
-        for (let orb = 0; orb < 2; orb++) {
-          const tilt = orb === 0 ? 0.5 : -0.5;
-          const cosT = Math.cos(tilt), sinT = Math.sin(tilt);
-          for (let i = 0; i < 30; i++) {
-            const th = (i * Math.PI * 2) / 30;
-            const ex = 5.4 * Math.cos(th), ey = 2.1 * Math.sin(th);
-            if (ey > 0) dot(isDark ? '#F4F4F5' : '#E2E8F0', 5.5 + ex * cosT - ey * sinT, 4.6 + ex * sinT + ey * cosT, 0.42, 0.42, true);
-          }
-          const eth = (tick * 0.22 + orb * Math.PI) % (Math.PI * 2);
-          const ex = 5.4 * Math.cos(eth), ey = 2.1 * Math.sin(eth);
-          dot(orb === 0 ? (isDark ? '#F4F4F5' : '#38BDF8') : '#F8FAFC', 5.2 + ex * cosT - ey * sinT, 4.3 + ex * sinT + ey * cosT, 0.85, 0.85, false);
+        dot(armLU, 1.5, 4.8, 0.5, 1.0); dot(armLL, 1.1, 5.4, 0.5, 0.5);
+        dot(armRU, 8.6, 4.6, 0.55, 0.85); dot(armRL, 7.6, 4.2, 1.05, 0.5);
+        const rim = isDark ? '#A1A1AA' : '#1E78FF';
+        const bg = isDark ? '#27272A' : '#0F172A';
+        dot(rim, 9.0, 0.3, 0.55, 0.55, false);
+        dot(rim, 10.1, -0.7, 0.8, 0.8, false);
+        dot(rim, 9.6, -3.5, 5.3, 2.4, false);
+        dot(bg, 10.0, -3.1, 4.5, 1.6, false);
+        const pulse = Math.floor(tick / 3) % 3;
+        const sparks = isDark ? ['#F4F4F5', '#A1A1AA', '#F4F4F5'] : ['#F8C618', '#4EC446', '#38BDF8'];
+        for (let d = 0; d < 3; d++) {
+          const lit = d === pulse;
+          dot(lit ? sparks[d] : (isDark ? '#52525B' : '#64748B'), 10.6 + d * 1.25, lit ? -2.65 : -2.4, 0.75, 0.75, false);
         }
         break;
+      }
       case 'Speaking':
         if (!hurt) {
           drawEyes(3.9, 3.1, 6.3, 3.1, false);
@@ -438,40 +430,49 @@
         }
         break;
       case 'Delegating': {
-        const dx = Math.round(Math.sin(tick * 0.2)) * 0.35;
-        if (!hurt) drawEyes(3.9 + dx, 3.1, 6.3 + dx, 3.1, false);
-        dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
-        const buds = isDark ? ['#F4F4F5', '#A1A1AA', '#F4F4F5'] : ['#F8C618', '#4EC446', '#7B61EC'];
-        for (let i = 0; i < 3; i++) {
-          const a = tick * 0.2 + i * ((Math.PI * 2) / 3);
-          const bx = 5.0 + Math.cos(a) * 5.4, by = 1.6 + Math.sin(a) * 2.2;
-          dot(buds[i], bx + 0.35, by, 1.1, 0.55, false);
-          dot(buds[i], bx, by + 0.55, 1.8, 0.75, false);
-          dot(buds[i], bx, by + 1.3, 0.55, 0.55, false);
-          dot(buds[i], bx + 1.25, by + 1.3, 0.55, 0.55, false);
+        if (!hurt) drawEyes(4.1, 3.1, 6.5, 3.1, false);
+        dot(armLU, 1.5, 4.8, 0.5, 1.0); dot(armLL, 1.1, 5.4, 0.5, 0.5);
+        dot(armRU, 8.9, 4.2, 1.35, 0.65, false);
+        const frame = isDark ? '#27272A' : '#0F172A';
+        const slot = isDark ? '#A1A1AA' : '#3F4A5C';
+        for (let row = 0; row < 2; row++) {
+          const ny = row === 0 ? -0.4 : 3.2;
+          dot(slot, 10.5, ny, 4.2, 2.7, false);
+          dot(frame, 10.85, ny + 0.35, 3.5, 2.0, false);
+          const active = (Math.floor(tick / 4) % 2) === row;
+          const badge = row === 0 ? (isDark ? '#F4F4F5' : '#F8C618') : (isDark ? '#A1A1AA' : '#7B61EC');
+          dot(badge, 11.2, ny + 0.75, 0.65, 0.65, false);
+          dot(active ? (isDark ? '#F4F4F5' : '#38BDF8') : (isDark ? '#52525B' : '#64748B'), 12.15, ny + 0.85, 1.6, 0.45, false);
+          dot(isDark ? '#52525B' : '#4EC446', 11.2, ny + 1.65, 2.2, 0.38, false);
         }
+        const frac = (tick % 6) / 5.0;
+        const upper = Math.floor(tick / 6) % 2 === 0;
+        dot(isDark ? '#F4F4F5' : '#F8C618', 9.4 + frac * 1.1, 4.2 + (upper ? -2.9 : -0.1) * frac, 0.65, 0.65, false);
         break;
       }
       case 'Happy': {
         if (!hurt) drawHappyEyes();
+        if (!isDark) {
+          dot('rgba(251, 113, 133, 0.85)', 2.8, 4.15, 0.9, 0.55);
+          dot('rgba(251, 113, 133, 0.85)', 7.2, 4.15, 0.9, 0.55);
+        }
         dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
-        const lift = -((Math.floor(tick / 3)) % 4) * 0.5;
-        const hc = isDark ? '#F4F4F5' : '#F43F5E';
-        shape(hc, -1.8, 0.2 + lift, ["#.#", "###", ".#."]);
-        shape(isDark ? '#A1A1AA' : '#FB7185', 10.6, -0.4 + lift, ["#.#", "###", ".#."]);
+        const liftA = -((Math.floor(tick / 3)) % 4) * 0.45;
+        const liftB = -((Math.floor(tick / 3) + 2) % 4) * 0.45;
+        shape(isDark ? '#F4F4F5' : '#F8C618', -2.0, -0.4 + liftA, [".#.", "###", ".#."]);
+        shape(isDark ? '#A1A1AA' : '#4EC446', 10.6, -1.0 + liftB, [".#.", "###", ".#."]);
+        dot(isDark ? '#F4F4F5' : '#38BDF8', 4.9, -2.2 + liftA * 0.5, 0.8, 0.8, false);
         break;
       }
       case 'Error': {
         if (!hurt) {
-          dot('#F8FAFC', 3.6, 2.9, 0.4, 0.4); dot('#F8FAFC', 4.4, 2.9, 0.4, 0.4); dot('#F8FAFC', 4.0, 3.3, 0.45, 0.45);
-          dot('#F8FAFC', 3.6, 3.75, 0.4, 0.4); dot('#F8FAFC', 4.4, 3.75, 0.4, 0.4);
-          dot('#F8FAFC', 6.1, 2.9, 0.4, 0.4); dot('#F8FAFC', 6.9, 2.9, 0.4, 0.4); dot('#F8FAFC', 6.5, 3.3, 0.45, 0.45);
-          dot('#F8FAFC', 6.1, 3.75, 0.4, 0.4); dot('#F8FAFC', 6.9, 3.75, 0.4, 0.4);
+          dot('#F8FAFC', 3.55, 2.95, 0.45, 0.35); dot('#F8FAFC', 4.0, 3.3, 0.45, 0.35); dot('#F8FAFC', 3.55, 3.65, 0.45, 0.35);
+          dot('#F8FAFC', 6.85, 2.95, 0.45, 0.35); dot('#F8FAFC', 6.4, 3.3, 0.45, 0.35); dot('#F8FAFC', 6.85, 3.65, 0.45, 0.35);
         }
         dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
         if (tick % 8 >= 2) {
-          dot(isDark ? '#F4F4F5' : '#EF4444', 5.0, -2.8, 1, 2.2, false);
-          dot(isDark ? '#F4F4F5' : '#EF4444', 5.0, -0.2, 1, 0.8, false);
+          shape(isDark ? '#F4F4F5' : '#EF4444', 4.2, -3.7, ["..##", ".##.", "###.", ".##.", ".#.."]);
+          dot(isDark ? '#A1A1AA' : '#FFD24A', 5.1, -2.1, 0.45, 0.45, false);
         }
         break;
       }
@@ -502,7 +503,7 @@
       heading: 'AgyPet Overlay',
       status: 'Agent typing a reply (press mascot above chatbox)',
       userMsg: 'Add live chat detection, multitasking, and a subtle press wince.',
-      agentMsg: 'Updating WindowTracker.cs, ActivityMonitor.cs, and all 16 reactions in Mascot.cs…',
+      agentMsg: 'Updating WindowTracker.cs, ActivityMonitor.cs, and all 19 reactions in Mascot.cs…',
       mood: 'Typing',
       voice: false,
       settings: false,

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.3 (2026-11-26)
+- **Distinctive Visual Overhaul for AgyPet Reactions**:
+  - **Thinking:** Hand-on-chin pondering pose with a pulsing neural thought cloud overhead (Antigravity arch silhouette instead of capsule/orbits).
+  - **Delegating:** Streams dispatch packets from AgyPet's outstretched hand into twin stacked subagent worker cards.
+  - **Happy:** Rosy pixel blush cheeks + twinkling 4-point Antigravity Aurora stars.
+  - **Error:** Dizzy glitch squint eyes (`> <`) with glitch shake and a flashing red lightning bolt.
+  - **Angry / Sad Turn Sentiments:** Preserves AgyPet's signature skin colors cleanly — `Angry` adds furrowed knit brows + animated steam puffs above the crown; `Sad` adds drooping brows + a shimmering cyan pixel teardrop.
+
 ## 0.2.2 (2026-11-26)
 - **Rock-Steady Mascot Posture**: Removed continuous vertical sine-wave oscillation across resting and active states so AgyPet stays planted cleanly on the chatbox border, corner edge, and taskbar (while keeping celebratory hops for `Done`, `Happy`, and double-click `Dance`).
 - **Mobile Carousel Swiping & Refreshed Media**: Fixed horizontal touch swiping (`touch-action: pan-x pan-y`) on the landing page reactions strip and refreshed animated showcases (`docs/agypet-preview.gif`, `docs/showcase-classic.gif`, `docs/showcase-dark.gif`, and `docs/agypet-demo.mp4`).

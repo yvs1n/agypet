@@ -564,7 +564,7 @@ namespace AgyPet.Tools
             });
             bandHdr.Children.Add(new TextBlock
             {
-                Text = "Includes Delegating · Happy · Error · Quota Sleep · Angry/Sad Tints · Taskbar Corners",
+                Text = "Includes Delegating · Happy · Error · Quota Sleep · Steam/Tear Moods · Taskbar Corners",
                 Foreground = BrushHex(0x88, 0x92, 0xA6),
                 FontSize = 11.5,
                 HorizontalAlignment = HorizontalAlignment.Right,

@@ -23,7 +23,7 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 ## Features
 
 - **Adaptive Chatbox Perch**: Floats cleanly right above the top-right corner of Antigravity's chat composer without occupying side-panel space or requiring Electron patching/CDP debug flags. Automatically tracks attachments, multi-line prompts, and `Small` / `Medium` / `Large` sizes at 60fps.
-- **Turn Sentiment Moods & Quota Sleep**: Sustained **Angry** (crimson tint + `\ /` brows) and **Sad** (muted blue tint + `/ \` brows) moods react to your tone across active steps (while ignoring code blocks and SQL), **Happy** celebrates praise, and **Quota Sleep** naps when hitting 429/quota limits until you switch models.
+- **Turn Sentiment Moods & Quota Sleep**: `Angry` (furrowed brows + animated steam puffs) and `Sad` (drooping brows + falling pixel teardrop) react to your tone across active steps (while ignoring code blocks and SQL), `Happy` celebrates praise with rosy cheeks & aurora stars, and **Quota Sleep** naps when hitting 429/quota limits until you switch models.
 - **Anti-Flicker Dwell & Instant File Wakeup**: Uses native `FileSystemWatcher` for sub-100ms reaction to Antigravity writes plus a `1.2s` minimum busy-state dwell so fast tool chains never strobe.
 - **Context-Aware Per-Chat Tracking**: Matches whichever conversation you currently have open. Shows `Typing` when either the agent or you are typing, `Listening` during dictation, and flips between `Listening` and `Speaking` in Voice Mode.
 - **Alt+Tab, Corner & Taskbar Dock**: Leaves the chatbox when you switch apps or open Settings, gliding calmly to `Top-Right`, `Top-Left`, above the taskbar (`Bottom-Left` / `Bottom-Middle` / `Bottom-Right`), or directly along the taskbar (`Taskbar · Left` / `Taskbar · Middle` / `Taskbar · Right`). Return to Antigravity and he snaps right back above the chatbox.
@@ -47,11 +47,11 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 | Reaction | Trigger in Antigravity |
 | :--- | :--- |
 | **Typing** | Agent streaming a text reply, or you typing in the chatbox |
-| **Thinking** | Planner reasoning before tool calls |
+| **Thinking** | Planner reasoning before tool calls (chin-ponder + neural thought cloud) |
 | **Working** | `edit_file`, `write_file`, and file updates |
 | **Terminal** | `run_command` / shell execution |
 | **Browsing** | Browser automation & DevTools steps |
-| **Delegating** | `invoke_subagent`, `swarm`, and `run_workflow` multi-agent tasks |
+| **Delegating** | `invoke_subagent`, `swarm`, and `run_workflow` (dispatching to worker nodes) |
 | **Reading** | `read_file`, `grep`, `glob`, `list` |
 | **Searching** | `search_web`, `search_marketplace`, `fetch` |
 | **Listening** | Dictation mic active, or user speaking in Voice Mode |
@@ -61,8 +61,8 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 | **Alert** | Permission or approval needed |
 | **Question** | `ask_question` waiting for your choice |
 | **Done** | Task finished celebration |
-| **Happy** | Rising pixel hearts on user praise ("thanks!", "perfect!") |
-| **Error** | Turn or tool failure (`X X` startled eyes & red badge) |
+| **Happy** | Rosy blush & aurora stars on user praise ("thanks!", "perfect!") |
+| **Error** | Turn or tool failure (`> <` glitch squint & flashing lightning bolt) |
 | **Idle** | Ready at rest |
 | **Sleeping** | Quiet after extended idle, or model quota limit reached |
 

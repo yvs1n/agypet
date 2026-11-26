@@ -85,10 +85,9 @@ namespace AgyPet
         static readonly Brush AgyVioletBrush = Frozen(AgyViolet);
         static readonly Brush AgyOrbitDim = Frozen(Color.FromRgb(0x94, 0xA3, 0xB8));
         static readonly Brush AgyShadowBrush = Frozen(Color.FromArgb(0x88, 0x07, 0x07, 0x09));
-        static readonly Brush AngryTintBrush = Frozen(Color.FromArgb(0x96, 0xE1, 0x1D, 0x48));
-        static readonly Brush SadTintBrush = Frozen(Color.FromArgb(0x88, 0x33, 0x50, 0x7A));
-        static readonly Brush HeartBrush = Frozen(Color.FromRgb(0xF4, 0x3F, 0x5E));
-        static readonly Brush HeartGlowBrush = Frozen(Color.FromRgb(0xFB, 0x71, 0x85));
+        static readonly Brush BlushBrush = Frozen(Color.FromArgb(0xD8, 0xFB, 0x71, 0x85));
+        static readonly Brush TearBrush = Frozen(Color.FromRgb(0x38, 0xBD, 0xF8));
+        static readonly Brush SteamBright = Frozen(Color.FromRgb(0xFB, 0x71, 0x85));
         static readonly Brush ErrorRedBrush = Frozen(Color.FromRgb(0xEF, 0x44, 0x44));
 
         // Dark Monochrome Remake palette (sampled from the new dark Antigravity remake logo)
@@ -152,8 +151,6 @@ namespace AgyPet
         readonly Canvas sprite = new Canvas();
         readonly Canvas archNormalLayer = new Canvas();
         readonly Canvas archCompactLayer = new Canvas();
-        readonly Canvas tintNormalLayer = new Canvas();
-        readonly Canvas tintCompactLayer = new Canvas();
         readonly Canvas gear = new Canvas();
         readonly Canvas air = new Canvas();
         readonly DispatcherTimer timer;
@@ -256,24 +253,18 @@ namespace AgyPet
             sprite.Children.Clear();
             archNormalLayer.Children.Clear();
             archCompactLayer.Children.Clear();
-            tintNormalLayer.Children.Clear();
-            tintCompactLayer.Children.Clear();
             gear.Children.Clear();
             air.Children.Clear();
 
-            RenderPixelMask(archNormalLayer, AgyArchMask, false, null);
-            RenderPixelMask(archCompactLayer, AgyCompactMask, true, null);
+            RenderPixelMask(archNormalLayer, AgyArchMask, false);
+            RenderPixelMask(archCompactLayer, AgyCompactMask, true);
             archCompactLayer.Visibility = Visibility.Collapsed;
-            tintNormalLayer.Visibility = Visibility.Collapsed;
-            tintCompactLayer.Visibility = Visibility.Collapsed;
             sprite.Children.Add(archNormalLayer);
             sprite.Children.Add(archCompactLayer);
-            sprite.Children.Add(tintNormalLayer);
-            sprite.Children.Add(tintCompactLayer);
             sprite.Children.Add(gear);
         }
 
-        void RenderPixelMask(Canvas layer, string[] mask, bool compact, Brush solidOverride)
+        void RenderPixelMask(Canvas layer, string[] mask, bool compact)
         {
             for (int r = 0; r < mask.Length; r++)
             {
@@ -288,37 +279,17 @@ namespace AgyPet
                     bool hasTop = r > 0 && mask[r - 1][c] == '#';
                     bool hasBottom = r + 1 < mask.Length && mask[r + 1][c] == '#';
 
-                    Brush fill;
-                    if (solidOverride != null)
-                    {
-                        fill = solidOverride;
-                    }
-                    else
-                    {
-                        double u = c / 19.0;
-                        double v = r / 17.0;
-                        Color col = IsDark
-                            ? DarkArchPixelColor(u, v, compact, !hasTop, !hasLeft || !hasRight, !hasBottom)
-                            : OfficialArchPixelColor(u, v, compact, !hasTop, !hasBottom && r >= 8 && r <= 12 && c >= 6 && c <= 13);
-                        fill = Frozen(col);
-                    }
+                    double u = c / 19.0;
+                    double v = r / 17.0;
+                    Color col = IsDark
+                        ? DarkArchPixelColor(u, v, compact, !hasTop, !hasLeft || !hasRight, !hasBottom)
+                        : OfficialArchPixelColor(u, v, compact, !hasTop, !hasBottom && r >= 8 && r <= 12 && c >= 6 && c <= 13);
 
                     double bleedX = hasRight ? 0.03 : 0.0;
                     double bleedY = hasBottom ? 0.03 : 0.0;
-                    Dot(layer, fill, x, y, 0.5 + bleedX, 0.5 + bleedY);
+                    Dot(layer, Frozen(col), x, y, 0.5 + bleedX, 0.5 + bleedY);
                 }
             }
-        }
-
-        void EnsureTintMasksBuilt(TurnSentiment sentiment)
-        {
-            if (tintNormalLayer.Children.Count > 0 && (tintNormalLayer.Tag as TurnSentiment?) == sentiment) return;
-            tintNormalLayer.Children.Clear();
-            tintCompactLayer.Children.Clear();
-            Brush tint = sentiment == TurnSentiment.Angry ? AngryTintBrush : SadTintBrush;
-            RenderPixelMask(tintNormalLayer, AgyArchMask, false, tint);
-            RenderPixelMask(tintCompactLayer, AgyCompactMask, true, tint);
-            tintNormalLayer.Tag = sentiment;
         }
 
         // Spatial radial color model matching the official Antigravity logo:
@@ -439,7 +410,7 @@ namespace AgyPet
             bool dancing = danceTicks > 0;
             if (danceTicks > 0) danceTicks--;
 
-            bool applyTurnTint = (Sentiment == TurnSentiment.Angry || Sentiment == TurnSentiment.Sad) &&
+            bool showSentiment = (Sentiment == TurnSentiment.Angry || Sentiment == TurnSentiment.Sad) &&
                                  mood != MascotMood.Sleeping && mood != MascotMood.Done &&
                                  mood != MascotMood.Happy && mood != MascotMood.Error;
 
@@ -452,7 +423,9 @@ namespace AgyPet
 
             bool typing = mood == MascotMood.Working && tick % 90 < 72;
             double danceSway = dancing ? Math.Sin(tick * 0.7) * 1.4 * px : 0;
+            double errorShake = mood == MascotMood.Error && tick % 6 < 2 ? (tick % 2 == 0 ? -0.45 : 0.45) * px : 0;
             double x = hurt && hurtTicks >= 4 ? ((hurtTicks % 2 == 0 ? -0.3 : 0.3) * px)
+                : mood == MascotMood.Error ? errorShake
                 : (wiggles && tick % 12 < 4 ? (tick % 2 == 0 ? -px * 0.5 : px * 0.5) : danceSway);
             SetLeft(sprite, x);
 
@@ -477,21 +450,9 @@ namespace AgyPet
                 glanceAt = glance == 0 ? rnd.Next(40, 100) : rnd.Next(12, 25);
             }
 
-            bool compact = mood == MascotMood.Thinking || mood == MascotMood.Sleeping;
+            bool compact = mood == MascotMood.Sleeping;
             archNormalLayer.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
             archCompactLayer.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
-
-            if (applyTurnTint)
-            {
-                EnsureTintMasksBuilt(Sentiment);
-                tintNormalLayer.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-                tintCompactLayer.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
-            }
-            else
-            {
-                tintNormalLayer.Visibility = Visibility.Collapsed;
-                tintCompactLayer.Visibility = Visibility.Collapsed;
-            }
 
             if (mood == MascotMood.Idle || mood == MascotMood.Listening || mood == MascotMood.Speaking ||
                 mood == MascotMood.Searching || mood == MascotMood.Browsing || mood == MascotMood.Background)
@@ -517,7 +478,7 @@ namespace AgyPet
                     break;
                 case MascotMood.Thinking:
                     if (!hurt) DrawThinkingFace();
-                    DrawAtomicOrbits();
+                    DrawThoughtCloud();
                     break;
                 case MascotMood.Speaking:
                     if (!hurt) { DrawEyes(3.9, 3.1, 6.3, 3.1, false); DrawMouth(); }
@@ -550,9 +511,8 @@ namespace AgyPet
                     DrawBrowserGlobe();
                     break;
                 case MascotMood.Delegating:
-                    double dx = Math.Round(Math.Sin(tick * 0.2)) * 0.35;
-                    if (!hurt) DrawEyes(3.9 + dx, 3.1, 6.3 + dx, 3.1, false);
-                    DrawDelegatingSwarm();
+                    if (!hurt) DrawEyes(4.1, 3.1, 6.5, 3.1, false);
+                    DrawDelegatingDispatch();
                     break;
                 case MascotMood.Multitasking:
                     double mx = (tick / 5 % 2 == 0) ? -0.45 : 0.45;
@@ -582,18 +542,18 @@ namespace AgyPet
                     if (!hurt) DrawHappyEyes();
                     DrawArmsUp();
                     Dot(air, AgyShadowBrush, 2.5, 8.7, 6.0, 0.4);
-                    DrawHappyHearts();
+                    DrawHappyAurora();
                     break;
                 case MascotMood.Error:
-                    if (!hurt) DrawErrorEyes();
+                    if (!hurt) DrawErrorGlitchFace();
                     DrawArmsUp();
-                    DrawErrorBadge();
+                    DrawErrorLightning();
                     break;
             }
 
-            // 2. Sustained angry (\ /) or sad (/ \) brows across active states
-            if (applyTurnTint && !hurt)
-                DrawSentimentBrows(compact, Sentiment == TurnSentiment.Angry);
+            // 2. Original AgyPet sentiment cues (steam vents for Angry, shimmering tear for Sad — no body recolor)
+            if (showSentiment && !hurt)
+                DrawSentimentEffects(Sentiment == TurnSentiment.Angry);
 
             // 3. Subtle "> <" wince eyes on left-click poke above chatbox
             if (hurt)
@@ -678,10 +638,18 @@ namespace AgyPet
 
         void DrawThinkingFace()
         {
-            Dot(gear, EyePrimary, 3.7, 4.3, 0.9, 0.35);
-            Dot(gear, EyeWhite, 6.0, 3.8, 1.3, 0.95);
-            Dot(gear, EyeDark, 6.5, 3.9, 0.65, 0.65);
-            Dot(gear, EyeWhite, 6.8, 3.9, 0.3, 0.3);
+            // Pondering upward gaze with slightly raised brow & resting chin hand
+            Dot(gear, EyePrimary, 3.9, 2.75, 0.85, 0.55);
+            Dot(gear, EyePrimary, 6.3, 2.75, 0.85, 0.8);
+            if (!IsDark)
+            {
+                Dot(gear, EyeWhite, 4.35, 2.75, 0.35, 0.35);
+                Dot(gear, EyeWhite, 6.75, 2.75, 0.35, 0.35);
+            }
+            Dot(gear, ArmLeftUpper, 1.5, 4.8, 0.5, 1.0);
+            Dot(gear, ArmLeftLower, 1.1, 5.4, 0.5, 0.5);
+            Dot(gear, ArmRightUpper, 8.6, 4.6, 0.55, 0.85);
+            Dot(gear, ArmRightLower, 7.6, 4.2, 1.05, 0.5);
         }
 
         void DrawStartledEyes()
@@ -725,38 +693,25 @@ namespace AgyPet
             }
         }
 
-        void DrawAtomicOrbits()
+        // Thinking: trailing neural bubbles + glowing Antigravity thought cloud (zero orbital rings)
+        void DrawThoughtCloud()
         {
-            double cx = 5.5, cy = 4.6, a = 5.4, b = 2.1;
-            double[] tilts = { 0.50, -0.50 };
-            Brush frontRing = IsDark ? MonoBright : Cloud;
-            Brush backRing = IsDark ? MonoDim : AgyOrbitDim;
-            Brush orbA = IsDark ? MonoBright : GlassLit;
-            Brush orbB = IsDark ? MonoMid : EyeWhite;
-            Brush starCore = IsDark ? MonoBright : SparkHot;
-            Brush starRay = IsDark ? MonoMid : Spark;
+            int pulse = tick / 3 % 3;
+            Brush cloudBg = IsDark ? DarkCase : Paper;
+            Brush cloudRim = IsDark ? MonoMid : AgyBlueBrush;
+            Dot(air, cloudRim, 9.0, 0.3, 0.55, 0.55);
+            Dot(air, cloudRim, 10.1, -0.7, 0.8, 0.8);
+            Dot(air, cloudRim, 9.6, -3.5, 5.3, 2.4);
+            Dot(air, cloudBg, 10.0, -3.1, 4.5, 1.6);
 
-            for (int orb = 0; orb < 2; orb++)
+            Brush[] sparks = IsDark
+                ? new[] { MonoBright, MonoMid, MonoBright }
+                : new[] { AgyGoldBrush, AgyEmeraldBrush, GlassLit };
+            for (int d = 0; d < 3; d++)
             {
-                double cosT = Math.Cos(tilts[orb]), sinT = Math.Sin(tilts[orb]);
-                for (int i = 0; i < 34; i++)
-                {
-                    double th = i * Math.PI * 2.0 / 34.0;
-                    double ox = a * Math.Cos(th), oy = b * Math.Sin(th);
-                    double rx = cx + ox * cosT - oy * sinT;
-                    double ry = cy + ox * sinT + oy * cosT;
-                    bool inFront = oy > 0;
-                    Dot(inFront ? gear : air, inFront ? frontRing : backRing, rx, ry, 0.42, 0.42);
-                }
-                double eth = (tick * 0.24 + orb * Math.PI) % (Math.PI * 2.0);
-                double ex = a * Math.Cos(eth), ey = b * Math.Sin(eth);
-                double pxE = cx + ex * cosT - ey * sinT;
-                double pyE = cy + ex * sinT + ey * cosT;
-                Dot(air, orb == 0 ? orbA : orbB, pxE - 0.3, pyE - 0.3, 0.85, 0.85);
+                bool lit = d == pulse;
+                Dot(air, lit ? sparks[d] : (IsDark ? MonoDim : CloudDim), 10.6 + d * 1.25, lit ? -2.65 : -2.4, 0.75, 0.75);
             }
-            Dot(air, starCore, 10.2, 7.6, 0.45, 0.45);
-            Dot(air, starRay, 9.75, 7.6, 0.45, 0.45); Dot(air, starRay, 10.65, 7.6, 0.45, 0.45);
-            Dot(air, starRay, 10.2, 7.15, 0.45, 0.45); Dot(air, starRay, 10.2, 8.05, 0.45, 0.45);
         }
 
         void DrawCelebrationConfetti()
@@ -1009,82 +964,119 @@ namespace AgyPet
             Dot(air, IsDark ? MonoMid : Cloud, sx + 1.9, sy + 3.1, 1.2, 0.35);
         }
 
-        // Delegating: 3 orbiting mini-buddies coordinating subagents / swarm workflows
-        void DrawDelegatingSwarm()
+        // Delegating: streaming dispatch packets into twin subagent worker cards
+        void DrawDelegatingDispatch()
         {
-            DrawArmsUp();
-            Brush[] buddyCols = IsDark
-                ? new[] { MonoBright, MonoMid, MonoBright }
-                : new[] { AgyGoldBrush, AgyEmeraldBrush, AgyVioletBrush };
-            for (int i = 0; i < 3; i++)
+            Dot(gear, ArmLeftUpper, 1.5, 4.8, 0.5, 1.0);
+            Dot(gear, ArmLeftLower, 1.1, 5.4, 0.5, 0.5);
+            Dot(air, ArmRightUpper, 8.9, 4.2, 1.35, 0.65);
+
+            double nx = 10.5;
+            Brush frame = IsDark ? DarkCase : Paper;
+            Brush slot = IsDark ? MonoMid : SteelDark;
+            for (int row = 0; row < 2; row++)
             {
-                double a = tick * 0.20 + i * (Math.PI * 2.0 / 3.0);
-                double bx = 5.0 + Math.Cos(a) * 5.6;
-                double by = 1.6 + Math.Sin(a) * 2.3;
-                Brush col = buddyCols[i];
-                Dot(air, col, bx + 0.35, by, 1.1, 0.55);
-                Dot(air, col, bx, by + 0.55, 1.8, 0.75);
-                Dot(air, col, bx, by + 1.3, 0.55, 0.55);
-                Dot(air, col, bx + 1.25, by + 1.3, 0.55, 0.55);
-                // Link spark halfway toward mascot
-                Dot(air, IsDark ? MonoDim : GlassLit, 5.3 + (bx - 5.0) * 0.52, 2.8 + (by - 1.6) * 0.5, 0.38, 0.38);
+                double ny = row == 0 ? -0.4 : 3.2;
+                Dot(air, slot, nx, ny, 4.2, 2.7);
+                Dot(air, frame, nx + 0.35, ny + 0.35, 3.5, 2.0);
+                bool active = (tick / 4 % 2) == row;
+                Brush badge = row == 0
+                    ? (IsDark ? MonoBright : AgyGoldBrush)
+                    : (IsDark ? MonoMid : AgyVioletBrush);
+                Dot(air, badge, nx + 0.7, ny + 0.75, 0.65, 0.65);
+                Dot(air, active ? (IsDark ? MonoBright : GlassLit) : (IsDark ? MonoDim : CloudDim), nx + 1.65, ny + 0.85, 1.6, 0.45);
+                Dot(air, IsDark ? MonoDim : AgyEmeraldBrush, nx + 0.7, ny + 1.65, 2.2, 0.38);
             }
+
+            // Animated packet dot travelling from hand toward active subagent card
+            int step = tick % 6;
+            double frac = step / 5.0;
+            bool upper = (tick / 6) % 2 == 0;
+            double pxP = 9.4 + frac * 1.1;
+            double pyP = 4.2 + (upper ? -2.9 : -0.1) * frac;
+            Dot(air, IsDark ? MonoBright : AgyGoldBrush, pxP, pyP, 0.65, 0.65);
         }
 
-        // Happy: rising pixel hearts on user praise ("thanks!", "perfect!")
-        void DrawHappyHearts()
+        // Happy: rosy blush cheeks + twinkling 4-point Antigravity Aurora stars
+        void DrawHappyAurora()
         {
+            if (!IsDark)
+            {
+                Dot(gear, BlushBrush, 2.8, 4.15, 0.9, 0.55);
+                Dot(gear, BlushBrush, 7.2, 4.15, 0.9, 0.55);
+            }
             int phase = tick / 3;
-            Brush h1 = IsDark ? MonoBright : HeartBrush;
-            Brush h2 = IsDark ? MonoMid : HeartGlowBrush;
-            double liftA = -((phase) % 5) * 0.55;
-            double liftB = -((phase + 2) % 5) * 0.55;
-            Shape(air, h1, -2.0, 0.2 + liftA,
-                "#.#",
+            double liftA = -((phase) % 4) * 0.45;
+            double liftB = -((phase + 2) % 4) * 0.45;
+            Brush s1 = IsDark ? MonoBright : AgyGoldBrush;
+            Brush s2 = IsDark ? MonoMid : AgyEmeraldBrush;
+            Brush s3 = IsDark ? MonoBright : GlassLit;
+
+            Shape(air, s1, -2.0, -0.4 + liftA,
+                ".#.",
                 "###",
                 ".#.");
-            Shape(air, h2, 10.6, -0.4 + liftB,
-                "#.#",
+            Shape(air, s2, 10.6, -1.0 + liftB,
+                ".#.",
                 "###",
                 ".#.");
+            Dot(air, s3, 4.9, -2.2 + liftA * 0.5, 0.8, 0.8);
         }
 
-        // Error: startled X X eyes + red "!" badge on failed tool / error status
-        void DrawErrorEyes()
+        // Error: glitch squint eyes + flashing Coral Red lightning bolt
+        void DrawErrorGlitchFace()
         {
             Brush col = IsDark ? MonoBright : EyeWhite;
-            Dot(gear, col, 3.6, 2.9, 0.4, 0.4); Dot(gear, col, 4.4, 2.9, 0.4, 0.4);
-            Dot(gear, col, 4.0, 3.3, 0.45, 0.45);
-            Dot(gear, col, 3.6, 3.75, 0.4, 0.4); Dot(gear, col, 4.4, 3.75, 0.4, 0.4);
+            // Left dizzy ">", Right dizzy "<"
+            Dot(gear, col, 3.55, 2.95, 0.45, 0.35);
+            Dot(gear, col, 4.0, 3.3, 0.45, 0.35);
+            Dot(gear, col, 3.55, 3.65, 0.45, 0.35);
 
-            Dot(gear, col, 6.1, 2.9, 0.4, 0.4); Dot(gear, col, 6.9, 2.9, 0.4, 0.4);
-            Dot(gear, col, 6.5, 3.3, 0.45, 0.45);
-            Dot(gear, col, 6.1, 3.75, 0.4, 0.4); Dot(gear, col, 6.9, 3.75, 0.4, 0.4);
+            Dot(gear, col, 6.85, 2.95, 0.45, 0.35);
+            Dot(gear, col, 6.4, 3.3, 0.45, 0.35);
+            Dot(gear, col, 6.85, 3.65, 0.45, 0.35);
         }
 
-        void DrawErrorBadge()
+        void DrawErrorLightning()
         {
             if (tick % 8 < 2) return;
-            Brush b = IsDark ? MonoBright : ErrorRedBrush;
-            Dot(air, b, 5.0, -3.2, 1, 2.5);
-            Dot(air, b, 5.0, -0.3, 1, 0.9);
+            Brush bolt = IsDark ? MonoBright : ErrorRedBrush;
+            Brush core = IsDark ? MonoMid : Spark;
+            Shape(air, bolt, 4.2, -3.7,
+                "..##",
+                ".##.",
+                "###.",
+                ".##.",
+                ".#..");
+            Dot(air, core, 5.1, -2.1, 0.45, 0.45);
         }
 
-        void DrawSentimentBrows(bool compact, bool angry)
+        // Original AgyPet sentiment cues (angry steam vents or sad teardrop; preserves body skin)
+        void DrawSentimentEffects(bool angry)
         {
-            double by = compact ? 3.25 : 2.35;
-            Brush col = IsDark ? MonoBright : EyeWhite;
             if (angry)
             {
-                // Tilted "\ /" brows
-                Dot(gear, col, 3.35, by, 0.55, 0.35); Dot(gear, col, 3.9, by + 0.3, 0.55, 0.35);
-                Dot(gear, col, 6.95, by, 0.55, 0.35); Dot(gear, col, 6.4, by + 0.3, 0.55, 0.35);
+                // Furrowed sharp brow bar
+                Dot(gear, EyePrimary, 3.4, 2.4, 1.35, 0.35);
+                Dot(gear, EyePrimary, 6.1, 2.4, 1.35, 0.35);
+                // Dual animated steam puffs above left/right shoulders
+                int p = (tick / 3) % 4;
+                double rise = -p * 0.55;
+                Brush steam = IsDark ? MonoBright : SteamBright;
+                Dot(air, steam, 2.2, -0.6 + rise, 0.9, 0.7);
+                Dot(air, IsDark ? MonoMid : AgyGoldBrush, 1.8, -1.3 + rise, 0.65, 0.55);
+                Dot(air, steam, 7.9, -0.8 + rise, 0.9, 0.7);
+                Dot(air, IsDark ? MonoMid : AgyGoldBrush, 8.4, -1.5 + rise, 0.65, 0.55);
             }
             else
             {
-                // Drooping "/ \" brows
-                Dot(gear, col, 3.9, by, 0.55, 0.35); Dot(gear, col, 3.35, by + 0.3, 0.55, 0.35);
-                Dot(gear, col, 6.4, by, 0.55, 0.35); Dot(gear, col, 6.95, by + 0.3, 0.55, 0.35);
+                // Drooping outer brows + gentle falling cyan pixel teardrop
+                Dot(gear, EyePrimary, 3.8, 2.45, 0.75, 0.3);
+                Dot(gear, EyePrimary, 3.25, 2.75, 0.6, 0.3);
+                Dot(gear, EyePrimary, 6.3, 2.45, 0.75, 0.3);
+                Dot(gear, EyePrimary, 6.95, 2.75, 0.6, 0.3);
+                double fall = ((tick / 3) % 5) * 0.55;
+                Dot(gear, IsDark ? MonoBright : TearBrush, 3.45, 4.2 + fall, 0.55, 0.75);
             }
         }
 
