@@ -216,6 +216,11 @@ namespace AgyPet.Tests
                 AssertEq(MascotMood.Thinking, m.Mood);
                 m.CancelHurt();
                 AssertTrue(!m.IsHurt, "CancelHurt should clear hurt state on drag");
+
+                AssertEq(3, Mascot.ResolveOrbCount(0));
+                AssertEq(2, Mascot.ResolveOrbCount(2));
+                AssertEq(4, Mascot.ResolveOrbCount(4));
+                AssertEq(8, Mascot.ResolveOrbCount(12));
             });
 
             Run("Nudge wakes a sleeping mascot and resets the idle sleep clock", () =>

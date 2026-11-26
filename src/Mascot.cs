@@ -148,8 +148,14 @@ namespace AgyPet
         int tick, blinkAt, blinkLeft, glanceAt, glance;
         int hurtTicks;
         int danceTicks;
+        int activeSessionCount = 3;
 
         public MascotMood Mood { get; set; }
+        public int ActiveSessionCount
+        {
+            get { return activeSessionCount; }
+            set { activeSessionCount = value; }
+        }
         public string SkinName { get; private set; }
         public bool IsHurt { get { return hurtTicks > 0; } }
         public bool IsDancing { get { return danceTicks > 0; } }
@@ -897,7 +903,13 @@ namespace AgyPet
             Dot(air, IsDark ? MonoBright : AgyGoldBrush, gx + sweep, gy + 0.5, 0.65, 3.0);
         }
 
-        // Multitasking: juggling 3 glowing task orbs above head when 2+ sessions run while minimized!
+        public static int ResolveOrbCount(int activeSessions)
+        {
+            if (activeSessions <= 0) return 3;
+            return Math.Min(8, activeSessions);
+        }
+
+        // Multitasking: juggling one glowing task orb per active session (2..8) when minimized!
         void DrawMultitaskingJuggle()
         {
             // Raised juggling arms alternating
@@ -907,18 +919,21 @@ namespace AgyPet
             Dot(gear, ArmRightLower, 9.45, phase ? 4.2 : 3.5, 0.55, 1.0);
             Dot(gear, ArmRightUpper, 8.95, 4.4, 0.5, 0.6);
 
+            int count = Math.Max(2, ResolveOrbCount(activeSessionCount));
+            double orbSize = count >= 6 ? 0.9 : 1.05;
             Brush[] orbColors = IsDark
-                ? new[] { MonoBright, MonoMid, MonoBright }
-                : new[] { AgyGoldBrush, AgyEmeraldBrush, GlassLit };
-            for (int i = 0; i < 3; i++)
+                ? new[] { MonoBright, MonoMid }
+                : new[] { AgyGoldBrush, AgyEmeraldBrush, GlassLit, AgyVioletBrush, AgyCoralBrush, AgyBlueBrush, AgyTealBrush, EyeWhite };
+
+            for (int i = 0; i < count; i++)
             {
-                double a = tick * 0.24 + i * (Math.PI * 2.0 / 3.0);
+                double a = tick * 0.24 + i * (Math.PI * 2.0 / count);
                 double ox = 5.2 + Math.Cos(a) * 4.8;
                 double oy = -0.8 + Math.Sin(a) * 2.2;
-                Dot(air, orbColors[i], ox, oy, 1.05, 1.05);
+                Dot(air, orbColors[i % orbColors.Length], ox, oy, orbSize, orbSize);
                 // Trailing motion pixel
                 double pa = a - 0.38;
-                Dot(air, IsDark ? MonoDim : AgyOrbitDim, 5.3 + Math.Cos(pa) * 4.8, -0.7 + Math.Sin(pa) * 2.2, 0.48, 0.48);
+                Dot(air, IsDark ? MonoDim : AgyOrbitDim, 5.3 + Math.Cos(pa) * 4.8, -0.7 + Math.Sin(pa) * 2.2, 0.45, 0.45);
             }
         }
 

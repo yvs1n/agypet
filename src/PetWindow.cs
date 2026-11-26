@@ -452,6 +452,8 @@ namespace AgyPet
                 lastAppliedMood = nextMood;
                 lastBusySwitchAt = DateTime.UtcNow;
             }
+            var actives = monitor.ActiveSessions;
+            mascot.ActiveSessionCount = previewMode ? 3 : (actives != null && actives.Count > 0 ? actives.Count : 3);
             mascot.Mood = nextMood;
         }
 

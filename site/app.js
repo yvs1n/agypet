@@ -161,7 +161,7 @@
     return { ctx, w: logicalW, h: logicalH, dpr };
   }
 
-  function drawMascot(ctx, w, h, px, skin, mood, tick, hurtTicks = 0, dpr = 1) {
+  function drawMascot(ctx, w, h, px, skin, mood, tick, hurtTicks = 0, dpr = 1, orbCount = 3) {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, Math.round(w * dpr), Math.round(h * dpr));
     const isDark = skin === 'dark';
@@ -388,10 +388,12 @@
         const ph = tick % 6 < 3;
         dot(armLU, 1.0, ph ? 3.5 : 4.2, 0.55, 1.0); dot(armLL, 1.5, 4.4, 0.5, 0.6);
         dot(armRL, 9.45, ph ? 4.2 : 3.5, 0.55, 1.0); dot(armRU, 8.95, 4.4, 0.5, 0.6);
-        const orbs = isDark ? ['#F4F4F5', '#A1A1AA', '#F4F4F5'] : ['#F8C618', '#4EC446', '#38BDF8'];
-        for (let i = 0; i < 3; i++) {
-          const a = tick * 0.24 + i * ((Math.PI * 2) / 3);
-          dot(orbs[i], 5.2 + Math.cos(a) * 4.8, -0.8 + Math.sin(a) * 2.1, 1.05, 1.05, false);
+        const orbs = isDark ? ['#F4F4F5', '#A1A1AA'] : ['#F8C618', '#4EC446', '#38BDF8', '#7B61EC', '#EF443A', '#1E78FF', '#1FA8D8', '#F8FAFC'];
+        const nOrbs = Math.max(2, Math.min(8, orbCount || 3));
+        const orbSize = nOrbs >= 6 ? 0.9 : 1.05;
+        for (let i = 0; i < nOrbs; i++) {
+          const a = tick * 0.24 + i * ((Math.PI * 2) / nOrbs);
+          dot(orbs[i % orbs.length], 5.2 + Math.cos(a) * 4.8, -0.8 + Math.sin(a) * 2.1, orbSize, orbSize, false);
         }
         break;
       }
@@ -518,6 +520,15 @@
       agentMsg: 'Toggle who is talking below to watch AgyPet flip between Listening and Speaking.',
       mood: 'Listening',
       voice: true,
+      settings: false,
+    },
+    cli: {
+      heading: 'Windows Terminal · agy',
+      status: 'Detects agy CLI terminals & perches cleanly by the prompt',
+      userMsg: 'agy --model gemini-3-pro "run test suite"',
+      agentMsg: 'Attached natively to Windows Terminal, PowerShell, pwsh, CMD, Alacritty & more (Bottom/Top edge placements).',
+      mood: 'Terminal',
+      voice: false,
       settings: false,
     },
     settings: {

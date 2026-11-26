@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.5 (2026-11-27)
+- **Dynamic Multi-Session Orbiting Orbs**: `Multitasking` now juggles one orbiting orb per active session (`2`–`8` orbs spaced evenly overhead, matching live `ActiveSessions.Count` while defaulting to `3` in Preview Mode).
+- **Updated Landing Page**: Added interactive `agy CLI Terminal` simulator tab plus explicit coverage of Antigravity IDE, App, `agy` CLI perching, inner prompt alignment, Pin Above Taskbar, Lock Position, Auto-Hide, Wake-on-Nudge, and dynamic session orbs.
+
 ## 0.3.4 (2026-11-27)
 - **Inner Prompt Box Perch & Project Header Exclusion (PR `#8` by `@Dunya2200`)**:
   - Excluded Antigravity's top `"No Project ⌄"` / project selector header bar from composer bounds (`WindowTracker`) while keeping attachments inside the box, so AgyPet sits solidly on the inner prompt input box border.

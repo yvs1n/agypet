@@ -11,7 +11,7 @@
     } catch {}
   </script>
   <title>AgyPet: Live Pixel Companion for Google Antigravity</title>
-  <meta name="description" content="A lightweight Windows pixel-art companion by Yassin Ragab that perches on your Google Antigravity chatbox and agy CLI terminals, reacts to 18 live agent and user states, and tracks multi-session progress when minimized." />
+  <meta name="description" content="A lightweight Windows pixel-art companion by Yassin Ragab for Google Antigravity App, Antigravity IDE, and agy CLI that perches on your inner prompt box or terminal, reacts to 18 live states, and tracks multi-session progress when minimized." />
   <meta name="keywords" content="AgyPet, Google Antigravity, Antigravity IDE, Antigravity mascot, desktop pet, pixel companion, AI coding assistant overlay, Yassin Ragab" />
   <meta name="author" content="Yassin Ragab" />
   <meta name="creator" content="Yassin Ragab" />
@@ -54,16 +54,16 @@
         "name": "AgyPet",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Windows 10, Windows 11",
-        "softwareVersion": "0.3.4",
+        "softwareVersion": "0.3.5",
         "license": "https://opensource.org/licenses/MIT",
         "description": "A zero-dependency Windows pixel-art companion overlay for Google Antigravity App, Antigravity IDE, and Antigravity CLI that perches above the chatbox, reacts across 18 states, and displays scrollable multi-session progress when minimized.",
         "featureList": [
           "18 live reactions: Typing, Thinking, Working, Terminal, Browsing, Delegating, Reading, Searching, Listening, Speaking, Multitasking, Background, Alert, Question, Done, Error, Idle, Sleeping",
-          "Antigravity App composer perch plus automatic agy CLI terminal window placements",
-          "Per-chat awareness matching the currently focused Antigravity conversation",
-          "Live Voice Mode and dictation sync (Listening vs Speaking)",
-          "Scrollable multi-session hover progress card when minimized or Alt+Tabbed away",
-          "Classic Official and Dark Remake pixel skins"
+          "Antigravity App and Antigravity IDE inner prompt box perch (ignoring outer project headers while keeping attachments)",
+          "Native agy CLI terminal perching across Windows Terminal, PowerShell, pwsh, CMD, Alacritty, WezTerm, Warp, Hyper, Tabby, and Mintty",
+          "Per-chat awareness matching the currently focused Antigravity App, IDE, or CLI conversation",
+          "Taskbar docking, Pin Above Taskbar, Lock Position, Auto-Hide when inactive or minimized, and Wake-on-Nudge from Sleep",
+          "Live Voice Mode and dictation sync (Listening vs Speaking) plus Classic Official and Dark Remake pixel skins"
         ],
         "screenshot": "./og-screen.png",
         "offers": {
@@ -95,10 +95,18 @@
           },
           {
             "@type": "Question",
+            "name": "Does AgyPet support Antigravity IDE and agy CLI in addition to the desktop app?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes. AgyPet works across Antigravity App, Antigravity IDE, and agy CLI. It matches the active chat tab or pane in the App and IDE, and automatically attaches to Windows Terminal, PowerShell, CMD, Alacritty, WezTerm, Warp, Hyper, Tabby, or Mintty whenever agy is running."
+            }
+          },
+          {
+            "@type": "Question",
             "name": "What happens when I Alt+Tab out or minimize Antigravity?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "AgyPet leaves the chatbox and glides to your chosen screen corner. If 2 or more sessions are active simultaneously, it switches to the Multitasking animation and hovering displays a scrollable card tracking every active session with exact step percentages."
+              "text": "AgyPet leaves the chatbox and glides to your chosen screen corner or taskbar dock (or hides automatically if Auto-Hide is enabled). If 2 or more sessions are active simultaneously, it switches to Multitasking and hovering displays a scrollable card tracking every active session with exact step percentages."
             }
           }
         ]
@@ -186,7 +194,7 @@
         <div class="hero-top">
           <div class="hero-copy">
             <h1 class="hero-title">A live pixel companion inside Antigravity.</h1>
-            <p class="hero-sub">Tracks each open chat, voice mode, typing, and background servers.</p>
+            <p class="hero-sub">Tracks open chats, voice, and servers across App, IDE, and agy CLI.</p>
           </div>
           <div class="hero-actions" id="install">
             <a class="btn-primary" href="https://github.com/yvs1n/agypet/releases/latest/download/AgyPet.exe" target="_blank" rel="noopener noreferrer">
@@ -279,6 +287,10 @@
                   <span class="chat-tab-meta">Voice sync</span>
                 </button>
                 <div class="sidebar-label">Workspace</div>
+                <button type="button" class="chat-tab" role="tab" data-chat="cli" aria-selected="false">
+                  <span class="chat-tab-title">agy CLI Terminal</span>
+                  <span class="chat-tab-meta">Terminal perch</span>
+                </button>
                 <button type="button" class="chat-tab" role="tab" data-chat="settings" aria-selected="false">
                   <span class="chat-tab-title">Settings</span>
                   <span class="chat-tab-meta">Corner park</span>
@@ -399,7 +411,7 @@
       <div class="container">
         <div class="section-head">
           <div>
-            <h2 class="section-title">Context-aware across chats, voice, and background servers</h2>
+            <h2 class="section-title">Built for Antigravity App, IDE, and agy CLI</h2>
             <p class="section-desc">Zero Electron bloat, zero side-panel clutter, and zero edits to Antigravity’s files.</p>
           </div>
         </div>
@@ -408,25 +420,33 @@
           <article class="feature-card reveal-on-scroll">
             <div class="feature-head">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              <h3 class="feature-title">Per-chat awareness and voice sync</h3>
+              <h3 class="feature-title">Per-chat sync across App, IDE, and CLI</h3>
             </div>
-            <p class="feature-body">Matches the exact conversation you are viewing. Shows Typing when either you or the agent is writing, Listening during dictation, and flips live between Listening and Speaking in Voice Mode.</p>
+            <p class="feature-body">Matches your active chat across Antigravity App and IDE, plus isolated agy CLI sessions. Tracks typing, dictation, and live Listening vs Speaking in Voice Mode.</p>
+          </article>
+
+          <article class="feature-card reveal-on-scroll">
+            <div class="feature-head">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              <h3 class="feature-title">Native agy CLI terminal perching</h3>
+            </div>
+            <p class="feature-body">Detects agy CLI in Windows Terminal, PowerShell, pwsh, CMD, Alacritty, WezTerm, Warp, Hyper, Tabby, and Mintty with Bottom or Top terminal placements.</p>
+          </article>
+
+          <article class="feature-card reveal-on-scroll">
+            <div class="feature-head">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <h3 class="feature-title">Inner prompt perch, Pin &amp; Auto-Hide</h3>
+            </div>
+            <p class="feature-body">Rests inside Antigravity’s inner prompt border (excluding outer project bars while keeping attachments). Supports Pin Above Taskbar, Lock Position, Auto-Hide, and Wake-on-Nudge.</p>
           </article>
 
           <article class="feature-card reveal-on-scroll">
             <div class="feature-head">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-              <h3 class="feature-title">Multitasking and live servers</h3>
+              <h3 class="feature-title">Multitasking, servers &amp; zero bloat</h3>
             </div>
-            <p class="feature-body">Juggles orbiting tasks when minimized with multiple active sessions, follows a single session directly, and displays a calm server rack when a finished chat keeps a live server running.</p>
-          </article>
-
-          <article class="feature-card feature-wide reveal-on-scroll">
-            <div class="feature-head">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-              <h3 class="feature-title">Adaptive perch with subtle press physics</h3>
-            </div>
-            <p class="feature-body">Compiles in two seconds via Windows’ built-in .NET compiler. Tracks the composer card across Small, Medium, and Large sizes, attaches natively to Windows Terminal / PowerShell running agy CLI, docks on your taskbar, and wakes right up with a subtle startle when nudged.</p>
+            <p class="feature-body">Builds via Windows’ .NET compiler (~143 KB portable .exe with GitHub auto-updates). Orbits one orb per active session when away, tracks live servers, and dismisses menus cleanly.</p>
           </article>
         </div>
       </div>
