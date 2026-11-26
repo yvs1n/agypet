@@ -1,24 +1,29 @@
 # Changelog
 
+## 0.3.0 (2026-11-26)
+- **CLI Terminal Placements (`agy` CLI Support)**:
+  - Added **CLI Terminal Placement** options (`Bottom-Right (CLI Prompt)`, `Bottom-Middle (Prompt Center)`, `Bottom-Left (Above Prompt)`, `Top-Right (Window Edge)`, `Top-Left (Window Edge)`, and `Off`) under Right-Click / System Tray.
+  - Automatically detects terminal windows actively hosting `agy.exe` (`WindowsTerminal.exe`, `pwsh.exe`, `powershell.exe`, `cmd.exe`, `wezterm-gui.exe`, `alacritty.exe`, `mintty.exe`, etc.), perches right beside the CLI prompt or window edge, and prioritizes live `Antigravity CLI` session updates + user keystroke `Typing`.
+- **18 Original Live Reactions**:
+  - Removed the `Happy` celebration state and turn-sentiment crying/steaming overlays along with the `0.2.0`–`0.2.3` prompt-sentiment & quota regex code adapted from Atom, leaving 100% original code and animations in `0.3.0`.
+
 ## 0.2.3 (2026-11-26)
 - **Distinctive Visual Overhaul for AgyPet Reactions**:
   - **Thinking:** Hand-on-chin pondering pose with a pulsing neural thought cloud overhead (Antigravity arch silhouette instead of capsule/orbits).
   - **Delegating:** Streams dispatch packets from AgyPet's outstretched hand into twin stacked subagent worker cards.
   - **Happy:** Rosy pixel blush cheeks + twinkling 4-point Antigravity Aurora stars.
   - **Error:** Dizzy glitch squint eyes (`> <`) with glitch shake and a flashing red lightning bolt.
-  - **Angry / Sad Turn Sentiments:** Preserves AgyPet's signature skin colors cleanly — `Angry` adds furrowed knit brows + animated steam puffs above the crown; `Sad` adds drooping brows + a shimmering cyan pixel teardrop.
+  - **Angry / Sad Turn Sentiments:** Steam puffs and falling pixel teardrop overlays.
 
 ## 0.2.2 (2026-11-26)
-- **Rock-Steady Mascot Posture**: Removed continuous vertical sine-wave oscillation across resting and active states so AgyPet stays planted cleanly on the chatbox border, corner edge, and taskbar (while keeping celebratory hops for `Done`, `Happy`, and double-click `Dance`).
-- **Mobile Carousel Swiping & Refreshed Media**: Fixed horizontal touch swiping (`touch-action: pan-x pan-y`) on the landing page reactions strip and refreshed animated showcases (`docs/agypet-preview.gif`, `docs/showcase-classic.gif`, `docs/showcase-dark.gif`, and `docs/agypet-demo.mp4`).
+- **Rock-Steady Mascot Posture**: Removed continuous vertical sine-wave oscillation across resting and active states so AgyPet stays planted cleanly on the chatbox border, corner edge, and taskbar (while keeping celebratory hops for `Done` and double-click `Dance`).
+- **Mobile Carousel Swiping & Refreshed Media**: Fixed horizontal touch swiping (`touch-action: pan-x pan-y`) on the landing page reactions strip.
 
 ## 0.2.1 (2026-11-26)
-- **Along-the-Taskbar & Bottom-Middle Dock Locations** (suggested by `@Bobdo-b` in #1):
-  - Added **Taskbar · Left**, **Taskbar · Middle**, and **Taskbar · Right** — docks AgyPet vertically centered directly inside the Windows taskbar strip (works for bottom, top, and auto-hide taskbars, with automatic `HWND_TOPMOST` layering).
-  - Added **Bottom-Middle (Above Taskbar)** alongside **Bottom-Left** and **Bottom-Right**.
-  - Updated hover card placement to pop cleanly **above** the mascot whenever docked at the bottom or along the taskbar so status details never clip behind the taskbar.
+- **Along-the-Taskbar & Bottom-Middle Dock Locations** (suggested by `@Bobdo-b` in #1): Added **Taskbar · Left**, **Taskbar · Middle**, **Taskbar · Right**, and **Bottom-Middle (Above Taskbar)**.
 
 ## 0.2.0 (2026-11-26)
+- *Historical Attribution Note:* Turn-sentiment moods, per-model quota sleep, and delegation concepts in `0.2.0`–`0.2.3` (commits `f339d2c`–`5db1b17`) were inspired by [Atom](https://github.com/Arnav8452/atom), and prompt sentiment detection in `0.2.0`–`0.2.3` was adapted from Atom's code ([MIT License](https://github.com/Arnav8452/atom/blob/main/LICENSE), Copyright (c) 2026 Antigravity Atom Contributors). Both were removed in `0.3.0`.
 - **19 live reactions** (added `Delegating` for subagents/swarms/workflows, `Happy` rising pixel hearts on user praise, and `Error` with `X X` eyes and red `!` badge).
 - **Sustained Turn Sentiment Moods (`Angry` & `Sad`)**: Detects hostility/ALL-CAPS shouting (`Angry` crimson tint + `\ /` brows) and insults (`Sad` muted-blue tint + `/ \` brows) across active working steps until the turn ends, while cleanly ignoring code blocks, URLs, file paths, and SQL queries.
 - **Per-Model Quota Sleep & Instant Wakeup**: Enters `Sleeping` (`Quota limit · Sleeping`) when hitting 429 / quota limits and wakes immediately once you switch models or start a new turn.

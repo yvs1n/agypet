@@ -42,6 +42,19 @@ namespace AgyPet
             new LocationOption("taskbar-right", "Taskbar · Right"),
         };
 
+        // "bottom-right" | "bottom-center" | "bottom-left" | "top-right" | "top-left" | "off"
+        public string CliPlacement { get; set; }
+
+        public static readonly LocationOption[] CliLocations =
+        {
+            new LocationOption("bottom-right", "Bottom-Right (CLI Prompt)"),
+            new LocationOption("bottom-center", "Bottom-Middle (Prompt Center)"),
+            new LocationOption("bottom-left", "Bottom-Left (Above Prompt)"),
+            new LocationOption("top-right", "Top-Right (Window Edge)"),
+            new LocationOption("top-left", "Top-Left (Window Edge)"),
+            new LocationOption("off", "Off (Corner / Taskbar Only)"),
+        };
+
         // "small" | "medium" | "large"
         public string Size { get; set; }
 
@@ -64,6 +77,7 @@ namespace AgyPet
             Skin = Mascot.ClassicSkin;
             PlacementMode = "pin-chat";
             MinimizedCorner = "top-right";
+            CliPlacement = "bottom-right";
             Size = "medium";
             HasCustomChatOffset = false;
             ChatOffsetFromRight = 92;
@@ -125,11 +139,23 @@ namespace AgyPet
             return "top-right";
         }
 
+        public static string NormalizeCliPlacement(string placement)
+        {
+            if (placement != null)
+            {
+                foreach (var opt in CliLocations)
+                    if (string.Equals(placement, opt.Id, StringComparison.OrdinalIgnoreCase))
+                        return opt.Id;
+            }
+            return "bottom-right";
+        }
+
         public void Normalize()
         {
             Skin = Mascot.NormalizeSkin(Skin);
             PlacementMode = PlacementMode == "free" ? "free" : "pin-chat";
             MinimizedCorner = NormalizeCorner(MinimizedCorner);
+            CliPlacement = NormalizeCliPlacement(CliPlacement);
             if (Size != "small" && Size != "medium" && Size != "large") Size = "medium";
             if (double.IsNaN(ChatOffsetFromRight) || ChatOffsetFromRight < 8 || ChatOffsetFromRight > 1200) ChatOffsetFromRight = 92;
             if (double.IsNaN(ChatOffsetFromTop) || ChatOffsetFromTop < 8 || ChatOffsetFromTop > 1200) ChatOffsetFromTop = 64;

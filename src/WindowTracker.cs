@@ -21,6 +21,8 @@ namespace AgyPet
         public bool IsOpen { get; private set; }
         public bool IsMinimized { get; private set; }
         public bool IsInFront { get; private set; }
+        public bool IsCliInFront { get; private set; }
+        public bool TrackCliWindows { get; set; }
         public Rect WindowBoundsPx { get; private set; }
         public Rect ChatBoxBoundsPx { get; private set; }
         public IntPtr WindowHandle { get; private set; }
@@ -32,6 +34,9 @@ namespace AgyPet
         public bool VoiceAgentSpeaking { get; private set; }
 
         HashSet<uint> targetPids = new HashSet<uint>();
+        HashSet<uint> cliHostPids = new HashSet<uint>();
+        HashSet<uint> terminalPids = new HashSet<uint>();
+        bool hasActiveCliProcess;
         DateTime pidsRefreshed = DateTime.MinValue;
         readonly uint selfPid = (uint)Process.GetCurrentProcess().Id;
 
@@ -62,9 +67,7 @@ namespace AgyPet
         public static bool IsAntigravityProcessName(string processName)
         {
             if (string.IsNullOrWhiteSpace(processName)) return false;
-            string n = processName.Trim();
-            if (n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
-                n = n.Substring(0, n.Length - 4);
+            string n = StripExe(processName);
             return n.Equals("Antigravity", StringComparison.OrdinalIgnoreCase)
                 || n.Equals("GoogleAntigravity", StringComparison.OrdinalIgnoreCase)
                 || n.Equals("Google Antigravity", StringComparison.OrdinalIgnoreCase)
@@ -72,31 +75,99 @@ namespace AgyPet
                 || n.StartsWith("Antigravity-", StringComparison.OrdinalIgnoreCase);
         }
 
-        public void Poll()
+        public static bool IsCliProcessName(string processName)
         {
-            if ((DateTime.Now - pidsRefreshed).TotalSeconds > 1.5)
+            if (string.IsNullOrWhiteSpace(processName)) return false;
+            return StripExe(processName).Equals("agy", StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool IsTerminalProcessName(string processName)
+        {
+            if (string.IsNullOrWhiteSpace(processName)) return false;
+            switch (StripExe(processName).ToLowerInvariant())
             {
-                var pids = new HashSet<uint>();
+                case "windowsterminal":
+                case "powershell":
+                case "pwsh":
+                case "cmd":
+                case "conhost":
+                case "openconsole":
+                case "wezterm-gui":
+                case "alacritty":
+                case "mintty":
+                case "hyper":
+                case "tabby":
+                case "warp":
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        static string StripExe(string name)
+        {
+            string n = name.Trim();
+            return n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) ? n.Substring(0, n.Length - 4) : n;
+        }
+
+        void RefreshProcessSets()
+        {
+            var appPids = new HashSet<uint>();
+            var agyPids = new HashSet<uint>();
+            var termPids = new HashSet<uint>();
+            var parentMap = new Dictionary<uint, uint>();
+
+            IntPtr snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if (snap != IntPtr.Zero && snap != INVALID_HANDLE_VALUE)
+            {
                 try
                 {
-                    foreach (var p in Process.GetProcesses())
+                    var pe = new PROCESSENTRY32 { dwSize = (uint)Marshal.SizeOf(typeof(PROCESSENTRY32)) };
+                    if (Process32First(snap, ref pe))
                     {
-                        try
+                        do
                         {
-                            if (p.Id != selfPid && IsAntigravityProcessName(p.ProcessName))
-                                pids.Add((uint)p.Id);
+                            uint pid = pe.th32ProcessID;
+                            if (pid == 0 || pid == selfPid) continue;
+                            parentMap[pid] = pe.th32ParentProcessID;
+                            string exe = pe.szExeFile ?? "";
+                            if (IsAntigravityProcessName(exe)) appPids.Add(pid);
+                            else if (IsCliProcessName(exe)) agyPids.Add(pid);
+                            else if (IsTerminalProcessName(exe)) termPids.Add(pid);
                         }
-                        catch { }
-                        finally { try { p.Dispose(); } catch { } }
+                        while (Process32Next(snap, ref pe));
                     }
                 }
-                catch { }
-                targetPids = pids;
-                pidsRefreshed = DateTime.Now;
+                finally { CloseHandle(snap); }
             }
 
-            IntPtr visible = IntPtr.Zero;
-            IntPtr minimized = IntPtr.Zero;
+            var cliHosts = new HashSet<uint>();
+            foreach (uint agyPid in agyPids)
+            {
+                uint cur = agyPid;
+                for (int hop = 0; hop < 12; hop++)
+                {
+                    cliHosts.Add(cur);
+                    uint parent;
+                    if (!parentMap.TryGetValue(cur, out parent) || parent == 0 || parent == cur) break;
+                    cur = parent;
+                }
+            }
+
+            targetPids = appPids;
+            cliHostPids = cliHosts;
+            terminalPids = termPids;
+            hasActiveCliProcess = agyPids.Count > 0;
+            pidsRefreshed = DateTime.Now;
+        }
+
+        public void Poll()
+        {
+            if ((DateTime.Now - pidsRefreshed).TotalSeconds > 1.2)
+                RefreshProcessSets();
+
+            IntPtr visibleApp = IntPtr.Zero, minApp = IntPtr.Zero;
+            IntPtr visibleCli = IntPtr.Zero, minCli = IntPtr.Zero;
             IntPtr fg = GetForegroundWindow();
             uint fgPid = 0;
             if (fg != IntPtr.Zero) GetWindowThreadProcessId(fg, out fgPid);
@@ -111,19 +182,38 @@ namespace AgyPet
                 GetWindowThreadProcessId(h, out pid);
                 if (pid == selfPid) return true;
 
-                // Strictly match actual Antigravity App / IDE processes (never web browsers whose tab title mentions Antigravity).
-                if (!targetPids.Contains(pid)) return true;
-
-                if (IsIconic(h))
+                if (targetPids.Contains(pid))
                 {
-                    if (minimized == IntPtr.Zero) minimized = h;
+                    if (IsIconic(h)) { if (minApp == IntPtr.Zero) minApp = h; }
+                    else if (h == fg || visibleApp == IntPtr.Zero) visibleApp = h;
+                    return true;
                 }
-                else
+
+                if (TrackCliWindows && hasActiveCliProcess)
                 {
-                    if (h == fg || visible == IntPtr.Zero) visible = h;
+                    bool isCliHost = cliHostPids.Contains(pid);
+                    bool isFgTerminalFallback = false;
+                    if (!isCliHost && terminalPids.Contains(pid))
+                    {
+                        var sb = new StringBuilder(192);
+                        GetWindowText(h, sb, sb.Capacity);
+                        string t = sb.ToString();
+                        if (h == fg || t.IndexOf("agy", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                            t.IndexOf("antigravity", StringComparison.OrdinalIgnoreCase) >= 0)
+                            isFgTerminalFallback = true;
+                    }
+                    if (isCliHost || isFgTerminalFallback)
+                    {
+                        if (IsIconic(h)) { if (minCli == IntPtr.Zero) minCli = h; }
+                        else if (h == fg || visibleCli == IntPtr.Zero) visibleCli = h;
+                    }
                 }
                 return true;
             }, IntPtr.Zero);
+
+            bool preferCli = visibleCli != IntPtr.Zero && (visibleCli == fg || visibleApp == IntPtr.Zero);
+            IntPtr visible = preferCli ? visibleCli : visibleApp;
+            IntPtr minimized = (visible != IntPtr.Zero) ? IntPtr.Zero : (minApp != IntPtr.Zero ? minApp : minCli);
 
             IsOpen = visible != IntPtr.Zero || minimized != IntPtr.Zero;
             IsMinimized = IsOpen && visible == IntPtr.Zero;
@@ -131,8 +221,12 @@ namespace AgyPet
 
             bool fgTransient = fg == IntPtr.Zero;
             bool fgIsSelf = fgPid == selfPid;
-            bool fgIsAgy = visible != IntPtr.Zero && (visible == fg || (fgPid != 0 && targetPids.Contains(fgPid) && !IsIconic(fg)));
-            IsInFront = visible != IntPtr.Zero && (fgIsAgy || ((fgIsSelf || fgTransient) && IsInFront));
+            bool fgIsApp = visibleApp != IntPtr.Zero && (visibleApp == fg || (fgPid != 0 && targetPids.Contains(fgPid) && !IsIconic(fg)));
+            bool fgIsCli = visibleCli != IntPtr.Zero && (visibleCli == fg || (fgPid != 0 && (cliHostPids.Contains(fgPid) || (hasActiveCliProcess && terminalPids.Contains(fgPid)))));
+
+            bool wasCli = IsCliInFront;
+            IsInFront = visible != IntPtr.Zero && (fgIsApp || fgIsCli || ((fgIsSelf || fgTransient) && IsInFront));
+            IsCliInFront = IsInFront && (preferCli || fgIsCli || ((fgIsSelf || fgTransient) && wasCli));
 
             if (visible != IntPtr.Zero)
             {
@@ -147,21 +241,23 @@ namespace AgyPet
                 ActiveChatTitle = "";
             }
 
-            probeHwnd = IsInFront ? visible : IntPtr.Zero;
-            probeActive = IsInFront;
+            // UIA Electron composer probe runs ONLY for Antigravity App / IDE windows (never CLI terminals)
+            probeHwnd = (IsInFront && !IsCliInFront) ? visible : IntPtr.Zero;
+            probeActive = IsInFront && !IsCliInFront;
 
             lock (chatLock)
             {
-                ChatBoxBoundsPx = IsInFront ? probedChatBox : Rect.Empty;
+                ChatBoxBoundsPx = (IsInFront && !IsCliInFront) ? probedChatBox : Rect.Empty;
             }
 
-            // Detect live user typing strictly while Antigravity's chat screen is active
-            if (IsInFront && !ChatBoxBoundsPx.IsEmpty && AnyTypingKeyPressed())
+            // Detect live user typing strictly while App chatbox OR active CLI terminal is focused
+            bool typingSurfaceActive = IsInFront && (IsCliInFront ? !WindowBoundsPx.IsEmpty : !ChatBoxBoundsPx.IsEmpty);
+            if (typingSurfaceActive && AnyTypingKeyPressed())
                 lastKeystrokeAt = DateTime.UtcNow;
 
-            IsUserTyping = IsInFront && !ChatBoxBoundsPx.IsEmpty && (DateTime.UtcNow - lastKeystrokeAt).TotalSeconds < 1.6;
-            InVoiceMode = IsInFront && probedVoice;
-            InDictation = IsInFront && !probedVoice && probedDictation;
+            IsUserTyping = typingSurfaceActive && (DateTime.UtcNow - lastKeystrokeAt).TotalSeconds < 1.6;
+            InVoiceMode = IsInFront && !IsCliInFront && probedVoice;
+            InDictation = IsInFront && !IsCliInFront && !probedVoice && probedDictation;
             VoiceAgentSpeaking = InVoiceMode && probedAgentSpeaking;
         }
 
@@ -497,7 +593,21 @@ namespace AgyPet
         [StructLayout(LayoutKind.Sequential)]
         struct RECT { public int Left, Top, Right, Bottom; }
 
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        struct PROCESSENTRY32
+        {
+            public uint dwSize, cntUsage, th32ProcessID;
+            public IntPtr th32DefaultHeapID;
+            public uint th32ModuleID, cntThreads, th32ParentProcessID;
+            public int pcPriClassBase;
+            public uint dwFlags;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+            public string szExeFile;
+        }
+
         const uint GW_OWNER = 4;
+        const uint TH32CS_SNAPPROCESS = 0x00000002;
+        static readonly IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1);
         delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
         [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc fn, IntPtr l);
         [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr h);
@@ -509,5 +619,9 @@ namespace AgyPet
         [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
         [DllImport("user32.dll")] static extern bool GetWindowRect(IntPtr h, out RECT r);
         [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vKey);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateToolhelp32Snapshot(uint dwFlags, uint th32ProcessID);
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto)] static extern bool Process32First(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
+        [DllImport("kernel32.dll", CharSet = CharSet.Auto)] static extern bool Process32Next(IntPtr hSnapshot, ref PROCESSENTRY32 lppe);
+        [DllImport("kernel32.dll", SetLastError = true)] static extern bool CloseHandle(IntPtr hObject);
     }
 }

@@ -7,14 +7,6 @@ using System.Windows.Threading;
 
 namespace AgyPet
 {
-    public enum TurnSentiment
-    {
-        Neutral,
-        Happy,
-        Sad,
-        Angry
-    }
-
     public enum MascotMood
     {
         Idle,
@@ -34,7 +26,6 @@ namespace AgyPet
         Alert,
         Question,
         Done,
-        Happy,
         Error
     }
 
@@ -85,9 +76,6 @@ namespace AgyPet
         static readonly Brush AgyVioletBrush = Frozen(AgyViolet);
         static readonly Brush AgyOrbitDim = Frozen(Color.FromRgb(0x94, 0xA3, 0xB8));
         static readonly Brush AgyShadowBrush = Frozen(Color.FromArgb(0x88, 0x07, 0x07, 0x09));
-        static readonly Brush BlushBrush = Frozen(Color.FromArgb(0xD8, 0xFB, 0x71, 0x85));
-        static readonly Brush TearBrush = Frozen(Color.FromRgb(0x38, 0xBD, 0xF8));
-        static readonly Brush SteamBright = Frozen(Color.FromRgb(0xFB, 0x71, 0x85));
         static readonly Brush ErrorRedBrush = Frozen(Color.FromRgb(0xEF, 0x44, 0x44));
 
         // Dark Monochrome Remake palette (sampled from the new dark Antigravity remake logo)
@@ -162,7 +150,6 @@ namespace AgyPet
         int danceTicks;
 
         public MascotMood Mood { get; set; }
-        public TurnSentiment Sentiment { get; set; }
         public string SkinName { get; private set; }
         public bool IsHurt { get { return hurtTicks > 0; } }
         public bool IsDancing { get { return danceTicks > 0; } }
@@ -233,7 +220,7 @@ namespace AgyPet
         // Playful dance groove on double-click when calm
         public void Dance()
         {
-            if (hurtTicks > 0 || Sentiment == TurnSentiment.Angry || Sentiment == TurnSentiment.Sad) return;
+            if (hurtTicks > 0) return;
             danceTicks = 22;
             Step();
         }
@@ -410,11 +397,7 @@ namespace AgyPet
             bool dancing = danceTicks > 0;
             if (danceTicks > 0) danceTicks--;
 
-            bool showSentiment = (Sentiment == TurnSentiment.Angry || Sentiment == TurnSentiment.Sad) &&
-                                 mood != MascotMood.Sleeping && mood != MascotMood.Done &&
-                                 mood != MascotMood.Happy && mood != MascotMood.Error;
-
-            bool hops = dancing || mood == MascotMood.Done || mood == MascotMood.Happy;
+            bool hops = dancing || mood == MascotMood.Done;
             bool wiggles = mood == MascotMood.Alert || mood == MascotMood.Question || mood == MascotMood.Error;
 
             double baseBob = hops ? -Math.Round(Math.Abs(Math.Sin(tick * 0.55)) * 1.6) * px : 0;
@@ -538,12 +521,6 @@ namespace AgyPet
                     Dot(air, AgyShadowBrush, 2.5, 8.7, 6.0, 0.4);
                     DrawCelebrationConfetti();
                     break;
-                case MascotMood.Happy:
-                    if (!hurt) DrawHappyEyes();
-                    DrawArmsUp();
-                    Dot(air, AgyShadowBrush, 2.5, 8.7, 6.0, 0.4);
-                    DrawHappyAurora();
-                    break;
                 case MascotMood.Error:
                     if (!hurt) DrawErrorGlitchFace();
                     DrawArmsUp();
@@ -551,11 +528,7 @@ namespace AgyPet
                     break;
             }
 
-            // 2. Original AgyPet sentiment cues (steam vents for Angry, shimmering tear for Sad — no body recolor)
-            if (showSentiment && !hurt)
-                DrawSentimentEffects(Sentiment == TurnSentiment.Angry);
-
-            // 3. Subtle "> <" wince eyes on left-click poke above chatbox
+            // 2. Subtle "> <" wince eyes on left-click poke above chatbox
             if (hurt)
                 DrawHurtOverlay(compact);
         }
@@ -997,32 +970,6 @@ namespace AgyPet
             Dot(air, IsDark ? MonoBright : AgyGoldBrush, pxP, pyP, 0.65, 0.65);
         }
 
-        // Happy: rosy blush cheeks + twinkling 4-point Antigravity Aurora stars
-        void DrawHappyAurora()
-        {
-            if (!IsDark)
-            {
-                Dot(gear, BlushBrush, 2.8, 4.15, 0.9, 0.55);
-                Dot(gear, BlushBrush, 7.2, 4.15, 0.9, 0.55);
-            }
-            int phase = tick / 3;
-            double liftA = -((phase) % 4) * 0.45;
-            double liftB = -((phase + 2) % 4) * 0.45;
-            Brush s1 = IsDark ? MonoBright : AgyGoldBrush;
-            Brush s2 = IsDark ? MonoMid : AgyEmeraldBrush;
-            Brush s3 = IsDark ? MonoBright : GlassLit;
-
-            Shape(air, s1, -2.0, -0.4 + liftA,
-                ".#.",
-                "###",
-                ".#.");
-            Shape(air, s2, 10.6, -1.0 + liftB,
-                ".#.",
-                "###",
-                ".#.");
-            Dot(air, s3, 4.9, -2.2 + liftA * 0.5, 0.8, 0.8);
-        }
-
         // Error: glitch squint eyes + flashing Coral Red lightning bolt
         void DrawErrorGlitchFace()
         {
@@ -1049,35 +996,6 @@ namespace AgyPet
                 ".##.",
                 ".#..");
             Dot(air, core, 5.1, -2.1, 0.45, 0.45);
-        }
-
-        // Original AgyPet sentiment cues (angry steam vents or sad teardrop; preserves body skin)
-        void DrawSentimentEffects(bool angry)
-        {
-            if (angry)
-            {
-                // Furrowed sharp brow bar
-                Dot(gear, EyePrimary, 3.4, 2.4, 1.35, 0.35);
-                Dot(gear, EyePrimary, 6.1, 2.4, 1.35, 0.35);
-                // Dual animated steam puffs above left/right shoulders
-                int p = (tick / 3) % 4;
-                double rise = -p * 0.55;
-                Brush steam = IsDark ? MonoBright : SteamBright;
-                Dot(air, steam, 2.2, -0.6 + rise, 0.9, 0.7);
-                Dot(air, IsDark ? MonoMid : AgyGoldBrush, 1.8, -1.3 + rise, 0.65, 0.55);
-                Dot(air, steam, 7.9, -0.8 + rise, 0.9, 0.7);
-                Dot(air, IsDark ? MonoMid : AgyGoldBrush, 8.4, -1.5 + rise, 0.65, 0.55);
-            }
-            else
-            {
-                // Drooping outer brows + gentle falling cyan pixel teardrop
-                Dot(gear, EyePrimary, 3.8, 2.45, 0.75, 0.3);
-                Dot(gear, EyePrimary, 3.25, 2.75, 0.6, 0.3);
-                Dot(gear, EyePrimary, 6.3, 2.45, 0.75, 0.3);
-                Dot(gear, EyePrimary, 6.95, 2.75, 0.6, 0.3);
-                double fall = ((tick / 3) % 5) * 0.55;
-                Dot(gear, IsDark ? MonoBright : TearBrush, 3.45, 4.2 + fall, 0.55, 0.75);
-            }
         }
 
         void DrawDanceNotes()

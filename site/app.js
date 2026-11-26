@@ -60,10 +60,9 @@
     { id: "Alert", sub: "Needs approval" },
     { id: "Question", sub: "Asking a choice" },
     { id: "Done", sub: "Task complete" },
-    { id: "Happy", sub: "Praise celebration" },
     { id: "Error", sub: "Step hit error" },
     { id: "Idle", sub: "At rest" },
-    { id: "Sleeping", sub: "Quiet or quota limit" },
+    { id: "Sleeping", sub: "Quiet" },
   ];
 
   function gauss(u, v, mu, mv, su, sv) {
@@ -173,7 +172,7 @@
     const ox = (w - 11 * px) * 0.5 + shiftLeftProp;
     const oy = (h - 9 * px) * 0.5 + 1.3 * px;
 
-    const hops = mood === 'Done' || mood === 'Happy';
+    const hops = mood === 'Done';
     const wiggles = mood === 'Alert' || mood === 'Question' || mood === 'Error';
     const baseBob = hops ? -Math.round(Math.abs(Math.sin(tick * 0.55)) * 1.4) * px : 0;
     const bobY = hurt && hurtTicks >= 4 ? baseBob + px * 0.45 : baseBob;
@@ -450,20 +449,6 @@
         dot(isDark ? '#F4F4F5' : '#F8C618', 9.4 + frac * 1.1, 4.2 + (upper ? -2.9 : -0.1) * frac, 0.65, 0.65, false);
         break;
       }
-      case 'Happy': {
-        if (!hurt) drawHappyEyes();
-        if (!isDark) {
-          dot('rgba(251, 113, 133, 0.85)', 2.8, 4.15, 0.9, 0.55);
-          dot('rgba(251, 113, 133, 0.85)', 7.2, 4.15, 0.9, 0.55);
-        }
-        dot(armLU, 1.1, 3.7, 0.5, 1.0); dot(armRL, 9.4, 3.7, 0.5, 1.0);
-        const liftA = -((Math.floor(tick / 3)) % 4) * 0.45;
-        const liftB = -((Math.floor(tick / 3) + 2) % 4) * 0.45;
-        shape(isDark ? '#F4F4F5' : '#F8C618', -2.0, -0.4 + liftA, [".#.", "###", ".#."]);
-        shape(isDark ? '#A1A1AA' : '#4EC446', 10.6, -1.0 + liftB, [".#.", "###", ".#."]);
-        dot(isDark ? '#F4F4F5' : '#38BDF8', 4.9, -2.2 + liftA * 0.5, 0.8, 0.8, false);
-        break;
-      }
       case 'Error': {
         if (!hurt) {
           dot('#F8FAFC', 3.55, 2.95, 0.45, 0.35); dot('#F8FAFC', 4.0, 3.3, 0.45, 0.35); dot('#F8FAFC', 3.55, 3.65, 0.45, 0.35);
@@ -503,7 +488,7 @@
       heading: 'AgyPet Overlay',
       status: 'Agent typing a reply (press mascot above chatbox)',
       userMsg: 'Add live chat detection, multitasking, and a subtle press wince.',
-      agentMsg: 'Updating WindowTracker.cs, ActivityMonitor.cs, and all 19 reactions in Mascot.cs…',
+      agentMsg: 'Updating WindowTracker.cs, ActivityMonitor.cs, and all 18 reactions in Mascot.cs…',
       mood: 'Typing',
       voice: false,
       settings: false,

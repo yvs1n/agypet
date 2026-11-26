@@ -12,6 +12,7 @@ namespace AgyPet
         readonly Updater updater;
         ToolStripMenuItem updateItem;
         ToolStripMenuItem locationMenu;
+        ToolStripMenuItem cliLocationMenu;
 
         public TrayMenu(PetWindow window, PetSettings settings, Updater updater)
         {
@@ -49,13 +50,24 @@ namespace AgyPet
 
         void RefreshCornerChecks()
         {
-            if (locationMenu == null) return;
-            bool custom = settings.HasCustomFreePos;
-            foreach (ToolStripItem item in locationMenu.DropDownItems)
+            if (locationMenu != null)
             {
-                var mi = item as ToolStripMenuItem;
-                if (mi != null && mi.Tag is string)
-                    mi.Checked = !custom && settings.MinimizedCorner == (string)mi.Tag;
+                bool custom = settings.HasCustomFreePos;
+                foreach (ToolStripItem item in locationMenu.DropDownItems)
+                {
+                    var mi = item as ToolStripMenuItem;
+                    if (mi != null && mi.Tag is string)
+                        mi.Checked = !custom && settings.MinimizedCorner == (string)mi.Tag;
+                }
+            }
+            if (cliLocationMenu != null)
+            {
+                foreach (ToolStripItem item in cliLocationMenu.DropDownItems)
+                {
+                    var mi = item as ToolStripMenuItem;
+                    if (mi != null && mi.Tag is string)
+                        mi.Checked = settings.CliPlacement == (string)mi.Tag;
+                }
             }
         }
 
@@ -81,6 +93,18 @@ namespace AgyPet
                 locationMenu.DropDownItems.Add(mi);
             }
             menu.Items.Add(locationMenu);
+
+            cliLocationMenu = new ToolStripMenuItem("CLI Terminal Placement");
+            foreach (var opt in PetSettings.CliLocations)
+            {
+                string value = opt.Id;
+                var mi = new ToolStripMenuItem(opt.Label, null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.SetCliPlacement(value))))
+                {
+                    Tag = value
+                };
+                cliLocationMenu.DropDownItems.Add(mi);
+            }
+            menu.Items.Add(cliLocationMenu);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Reset Position", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(window.ResetPosition)));
             updateItem = new ToolStripMenuItem("Check for Updates", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => { if (updater != null) updater.CheckNow(); })));

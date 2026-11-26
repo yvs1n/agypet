@@ -88,15 +88,36 @@ namespace AgyPet.Tests
                 AssertEq(MascotMood.Delegating, ActivityMonitor.MoodForTool("run_workflow"));
             });
 
-            Run("Prompt sentiment detects angry, sad, and happy while ignoring code blocks and SQL", () =>
+            Run("CLI terminal and placement detection identify terminals cleanly without false positives", () =>
             {
-                AssertEq(TurnSentiment.Angry, ActivityMonitor.DetectSentiment("why is this still broken again"));
-                AssertEq(TurnSentiment.Angry, ActivityMonitor.DetectSentiment("WHY IS THIS NOT WORKING AT ALL"));
-                AssertEq(TurnSentiment.Sad, ActivityMonitor.DetectSentiment("you're useless and this code is trash"));
-                AssertEq(TurnSentiment.Happy, ActivityMonitor.DetectSentiment("thanks! perfect!"));
-                AssertEq(TurnSentiment.Neutral, ActivityMonitor.DetectSentiment("Implement a garbage collector with `SELECT * FROM users`"));
-                AssertEq(TurnSentiment.Neutral, ActivityMonitor.DetectSentiment("make the landing page look amazing with sections"));
-                AssertTrue(ActivityMonitor.IsQuotaErrorText("You have reached the quota limit (429)"), "Quota error text should trigger quota sleep");
+                AssertEq("bottom-right", PetSettings.NormalizeCliPlacement(null));
+                AssertEq("bottom-center", PetSettings.NormalizeCliPlacement("bottom-center"));
+                AssertEq("off", PetSettings.NormalizeCliPlacement("off"));
+
+                AssertTrue(WindowTracker.IsCliProcessName("agy"), "agy.exe must match CLI process");
+                AssertTrue(!WindowTracker.IsCliProcessName("chrome"), "chrome must not match CLI");
+                AssertTrue(WindowTracker.IsTerminalProcessName("WindowsTerminal"), "WindowsTerminal must match terminal hosts");
+                AssertTrue(WindowTracker.IsTerminalProcessName("pwsh.exe"), "pwsh.exe must match terminal hosts");
+                AssertTrue(!WindowTracker.IsTerminalProcessName("Antigravity"), "Antigravity GUI must not match terminal filter");
+
+                var win = new System.Windows.Rect(160, 120, 960, 620);
+                var work = new System.Windows.Rect(0, 0, 1920, 1032);
+                foreach (double px in new[] { 3.2, 4.2, 5.2 })
+                {
+                    double sw = 11.0 * px, sh = 9.0 * px;
+                    var br = PetWindow.PlaceOnCliWindow("bottom-right", win, work, sw, sh, 32, 24);
+                    var bc = PetWindow.PlaceOnCliWindow("bottom-center", win, work, sw, sh, 32, 24);
+                    var bl = PetWindow.PlaceOnCliWindow("bottom-left", win, work, sw, sh, 32, 24);
+                    var tr = PetWindow.PlaceOnCliWindow("top-right", win, work, sw, sh, 32, 24);
+                    var tl = PetWindow.PlaceOnCliWindow("top-left", win, work, sw, sh, 32, 24);
+
+                    AssertTrue(Math.Abs((br.X + 32 + sw) - (win.Right - 22.0)) < 0.01, "CLI bottom-right X aligns right inset");
+                    AssertTrue(Math.Abs((br.Y + 24 + sh) - (win.Bottom - 20.0)) < 0.01, "CLI bottom-right rests above prompt");
+                    AssertTrue(Math.Abs((bc.X + 32 + sw * 0.5) - (win.Left + win.Width * 0.5)) < 0.01, "CLI bottom-center centers horizontally");
+                    AssertTrue(Math.Abs((bl.X + 32) - (win.Left + 22.0)) < 0.01, "CLI bottom-left aligns left inset");
+                    AssertTrue(Math.Abs((tr.Y + 24 + sh) - (win.Top + 2.0)) < 0.01, "CLI top-right rests cleanly on window top edge");
+                    AssertTrue(Math.Abs(tl.X - bl.X) < 0.01, "CLI top-left X aligns with bottom-left X");
+                }
             });
 
             Run("Window title parser and Antigravity process filter reject browsers and unrelated apps", () =>

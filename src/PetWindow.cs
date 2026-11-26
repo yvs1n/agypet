@@ -54,7 +54,6 @@ namespace AgyPet
 
         bool previewMode;
         MascotMood previewMood = MascotMood.Idle;
-        TurnSentiment previewSentiment = TurnSentiment.Neutral;
         MascotMood lastAppliedMood = MascotMood.Idle;
         DateTime lastBusySwitchAt = DateTime.MinValue;
         double targetLeft = double.NaN, targetTop = double.NaN;
@@ -191,7 +190,6 @@ namespace AgyPet
             stage.Children.Clear();
             mascot = new Mascot(settings.PixelSize, settings.Skin);
             mascot.Mood = previewMode ? previewMood : monitor.Latest.Mood;
-            mascot.Sentiment = previewMode ? previewSentiment : monitor.Latest.Sentiment;
             lastAppliedMood = mascot.Mood;
             lastBusySwitchAt = DateTime.UtcNow;
             stage.Width = mascot.Width;
@@ -210,11 +208,12 @@ namespace AgyPet
             get { return contextMenuOpen || externalMenuOpen || DateTime.UtcNow < menuCooldownUntil; }
         }
 
-        bool IsPerchedOnChatBox
+        bool IsPerchedOnTarget
         {
             get
             {
-                return tracker.IsInFront && !tracker.IsMinimized && !tracker.ChatBoxBoundsPx.IsEmpty && !userMovedWhileInFront;
+                return tracker.IsInFront && !tracker.IsMinimized && !userMovedWhileInFront &&
+                       (tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty);
             }
         }
 
@@ -246,7 +245,6 @@ namespace AgyPet
             else
             {
                 previewMode = false;
-                previewSentiment = TurnSentiment.Neutral;
                 SyncActivity();
             }
         }
@@ -257,6 +255,18 @@ namespace AgyPet
             settings.MinimizedCorner = PetSettings.NormalizeCorner(corner);
             settings.Save();
             if (!tracker.IsInFront) SnapToTarget();
+        }
+
+        public void SetCliPlacement(string placement)
+        {
+            settings.CliPlacement = PetSettings.NormalizeCliPlacement(placement);
+            settings.Save();
+            tracker.TrackCliWindows = settings.CliPlacement != "off";
+            if (tracker.IsInFront && tracker.IsCliInFront)
+            {
+                userMovedWhileInFront = false;
+                SnapToTarget();
+            }
         }
 
         public void ResetPosition()
@@ -301,21 +311,6 @@ namespace AgyPet
             return monitor.Latest.Mood;
         }
 
-        TurnSentiment ResolveCurrentSentiment()
-        {
-            if (previewMode) return previewSentiment;
-            if (tracker.IsInFront)
-            {
-                if (tracker.InVoiceMode || tracker.InDictation) return TurnSentiment.Neutral;
-                var focused = monitor.FocusedSession;
-                return focused != null ? focused.Sentiment : TurnSentiment.Neutral;
-            }
-            var actives = monitor.ActiveSessions;
-            if (actives != null && actives.Count == 1)
-                return actives[0].Sentiment;
-            return TurnSentiment.Neutral;
-        }
-
         static bool IsBusyWorkMood(MascotMood mood)
         {
             return mood == MascotMood.Thinking || mood == MascotMood.Typing || mood == MascotMood.Working ||
@@ -327,7 +322,6 @@ namespace AgyPet
         {
             if (mascot == null) return;
             MascotMood nextMood = ResolveCurrentMood();
-            TurnSentiment nextSentiment = ResolveCurrentSentiment();
 
             if (!previewMode && IsBusyWorkMood(lastAppliedMood) && IsBusyWorkMood(nextMood) &&
                 nextMood != lastAppliedMood && !(tracker.IsInFront && tracker.IsUserTyping) &&
@@ -342,7 +336,6 @@ namespace AgyPet
                 lastBusySwitchAt = DateTime.UtcNow;
             }
             mascot.Mood = nextMood;
-            mascot.Sentiment = nextSentiment;
         }
 
         void SyncActivity()
@@ -573,8 +566,7 @@ namespace AgyPet
             }
             switch (mood)
             {
-                case MascotMood.Done:
-                case MascotMood.Happy: return BrushHex(0x34, 0xA8, 0x53);
+                case MascotMood.Done: return BrushHex(0x34, 0xA8, 0x53);
                 case MascotMood.Error: return BrushHex(0xEF, 0x44, 0x44);
                 case MascotMood.Delegating: return BrushHex(0x8B, 0x5C, 0xF6);
                 case MascotMood.Alert: return BrushHex(0xF5, 0x9E, 0x0B);
@@ -590,14 +582,17 @@ namespace AgyPet
         void PollTarget()
         {
             if (dragging || IsAnyMenuActive) return;
+            tracker.TrackCliWindows = settings.CliPlacement != "off";
             tracker.Poll();
             monitor.PreferredChatTitle = tracker.ActiveChatTitle;
+            monitor.PreferredSource = tracker.IsCliInFront ? "Antigravity CLI" : "";
 
             if (!previewMode)
                 ApplyResolvedMascotState();
 
             bool nowInFront = tracker.IsInFront;
-            bool nowOnChatScreen = nowInFront && !tracker.IsMinimized && !tracker.ChatBoxBoundsPx.IsEmpty;
+            bool hasTargetBox = tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty;
+            bool nowOnChatScreen = nowInFront && !tracker.IsMinimized && hasTargetBox;
 
             if (nowInFront && hoverPopup.IsOpen)
                 hoverPopup.IsOpen = false;
@@ -649,8 +644,10 @@ namespace AgyPet
 
         void SnapToTarget()
         {
+            tracker.TrackCliWindows = settings.CliPlacement != "off";
             tracker.Poll();
-            wasOnChatScreen = tracker.IsInFront && !tracker.IsMinimized && !tracker.ChatBoxBoundsPx.IsEmpty;
+            bool hasTargetBox = tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty;
+            wasOnChatScreen = tracker.IsInFront && !tracker.IsMinimized && hasTargetBox;
             Point desired = ComputeDesiredPosition();
             Left = targetLeft = desired.X;
             Top = targetTop = desired.Y;
@@ -663,6 +660,25 @@ namespace AgyPet
             return new Point(
                 visualRight - spriteW - padX,
                 visualBottom - spriteH - padY);
+        }
+
+        public static Point PlaceOnCliWindow(string cliPlacement, Rect winDip, Rect workArea, double spriteW, double spriteH, double padX, double padY)
+        {
+            string normalized = PetSettings.NormalizeCliPlacement(cliPlacement);
+            double petW = spriteW + padX * 2;
+            bool isLeft = normalized.EndsWith("-left", StringComparison.Ordinal);
+            bool isCenter = normalized.EndsWith("-center", StringComparison.Ordinal);
+            bool isTop = normalized.StartsWith("top-", StringComparison.Ordinal);
+
+            double left = isLeft ? (winDip.Left + 22.0 - padX)
+                : isCenter ? (winDip.Left + (winDip.Width - petW) * 0.5)
+                : (winDip.Right - 22.0 - spriteW - padX);
+
+            double visualBottom = isTop
+                ? Math.Max(workArea.Top + spriteH + 6.0, winDip.Top + 2.0)
+                : Math.Min(workArea.Bottom, winDip.Bottom - 20.0);
+
+            return new Point(left, visualBottom - spriteH - padY);
         }
 
         public static Point PlaceInCorner(string corner, Rect workArea, double spriteW, double spriteH, double padX, double padY)
@@ -730,9 +746,20 @@ namespace AgyPet
 
             double petLeft, petTop;
 
-            // Perch above the chatbox ONLY when Antigravity is focused AND a chatbox is present on screen
-            // (so opening Antigravity's Settings / Customizations screen cleanly parks him in the corner instead of bugging out!)
-            if (tracker.IsInFront && !tracker.IsMinimized && !tracker.ChatBoxBoundsPx.IsEmpty)
+            // Perch above Antigravity chatbox OR on active agy CLI terminal window when focused
+            if (tracker.IsInFront && !tracker.IsMinimized && tracker.IsCliInFront &&
+                settings.CliPlacement != "off" && !tracker.WindowBoundsPx.IsEmpty)
+            {
+                Rect winDip = new Rect(
+                    tracker.WindowBoundsPx.Left / dpiX,
+                    tracker.WindowBoundsPx.Top / dpiY,
+                    tracker.WindowBoundsPx.Width / dpiX,
+                    tracker.WindowBoundsPx.Height / dpiY);
+                Point p = PlaceOnCliWindow(settings.CliPlacement, winDip, work, spriteW, spriteH, StagePadX, StagePadY);
+                petLeft = p.X;
+                petTop = p.Y;
+            }
+            else if (tracker.IsInFront && !tracker.IsMinimized && !tracker.IsCliInFront && !tracker.ChatBoxBoundsPx.IsEmpty)
             {
                 Rect boxDip = new Rect(
                     tracker.ChatBoxBoundsPx.Left / dpiX,
@@ -831,14 +858,14 @@ namespace AgyPet
             dragStartLeft = Left;
             dragStartTop = Top;
 
-            // Double-click when calm triggers joyful dance; single click perched above chatbox gives subtle wince
+            // Double-click when calm triggers joyful dance; single click perched on chatbox/CLI gives subtle wince
             if (mascot != null && e.ClickCount >= 2 &&
-                (mascot.Mood == MascotMood.Idle || mascot.Mood == MascotMood.Done || mascot.Mood == MascotMood.Happy))
+                (mascot.Mood == MascotMood.Idle || mascot.Mood == MascotMood.Done))
             {
                 mascot.CancelHurt();
                 mascot.Dance();
             }
-            else if (mascot != null && IsPerchedOnChatBox)
+            else if (mascot != null && IsPerchedOnTarget)
             {
                 mascot.Poke();
             }
@@ -921,6 +948,14 @@ namespace AgyPet
             }
             contextMenu.Items.Add(cornerMenu);
 
+            var cliMenu = new MenuItem { Header = "CLI Terminal Placement" };
+            foreach (var opt in PetSettings.CliLocations)
+            {
+                string value = opt.Id;
+                cliMenu.Items.Add(CheckItem(opt.Label, settings.CliPlacement == value, () => SetCliPlacement(value)));
+            }
+            contextMenu.Items.Add(cliMenu);
+
             var sizeMenu = new MenuItem { Header = "Size" };
             sizeMenu.Items.Add(CheckItem("Small", settings.Size == "small", () => ApplySize("small")));
             sizeMenu.Items.Add(CheckItem("Medium", settings.Size == "medium", () => ApplySize("medium")));
@@ -934,17 +969,6 @@ namespace AgyPet
             {
                 var captured = m;
                 previewSub.Items.Add(CheckItem(captured.ToString(), previewMode && previewMood == captured, () => SetPreviewMood(captured)));
-            }
-            previewSub.Items.Add(new Separator());
-            foreach (TurnSentiment s in Enum.GetValues(typeof(TurnSentiment)))
-            {
-                var capturedSent = s;
-                previewSub.Items.Add(CheckItem("Turn Mood: " + capturedSent, previewSentiment == capturedSent, () =>
-                {
-                    previewSentiment = capturedSent;
-                    if (!previewMode) previewMode = true;
-                    ApplyResolvedMascotState();
-                }));
             }
             contextMenu.Items.Add(previewSub);
 

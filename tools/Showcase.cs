@@ -17,11 +17,11 @@ namespace AgyPet.Tools
 
             RenderSheet(Path.Combine(outDir, "showcase-classic.png"), Mascot.ClassicSkin,
                 "AgyPet · Classic Antigravity Skin",
-                "Refined CLI pixel arch in official Antigravity logo colors — all 19 live reactions + sentiment mood", 0);
+                "Refined CLI pixel arch in official Antigravity logo colors — all 18 live reactions", 0);
 
             RenderSheet(Path.Combine(outDir, "showcase-dark.png"), Mascot.DarkSkin,
                 "AgyPet · Dark Remake Skin",
-                "Monochrome obsidian & silver remake with luminous eyes — all 19 live reactions + sentiment mood", 0);
+                "Monochrome obsidian & silver remake with luminous eyes — all 18 live reactions", 0);
 
             string siteDir = args.Length > 1 ? args[1] : Path.GetFullPath(Path.Combine(outDir, "..", "site"));
             Directory.CreateDirectory(siteDir);
@@ -41,10 +41,10 @@ namespace AgyPet.Tools
                     RenderOgScreen(Path.Combine(gifDir, string.Format("preview_{0:D2}.png", f)), tick);
                     RenderSheet(Path.Combine(gifDir, string.Format("classic_{0:D2}.png", f)), Mascot.ClassicSkin,
                         "AgyPet · Classic Antigravity Skin",
-                        "Refined CLI pixel arch in official Antigravity logo colors — 19 live reactions + turn sentiment", tick);
+                        "Refined CLI pixel arch in official Antigravity logo colors — all 18 live reactions", tick);
                     RenderSheet(Path.Combine(gifDir, string.Format("dark_{0:D2}.png", f)), Mascot.DarkSkin,
                         "AgyPet · Dark Remake Skin",
-                        "Monochrome obsidian & silver remake with luminous eyes — 19 live reactions + turn sentiment", tick);
+                        "Monochrome obsidian & silver remake with luminous eyes — all 18 live reactions", tick);
                 }
                 Console.WriteLine("Rendered " + FrameCount + " animation frame sets to " + gifDir);
             }
@@ -139,7 +139,7 @@ namespace AgyPet.Tools
 
             left.Children.Add(new TextBlock
             {
-                Text = "19 live reactions, turn moods, voice sync, taskbar corner docking, and multi-session tracking.",
+                Text = "18 live reactions, App & CLI terminal perching, taskbar docking, voice sync, and multi-session tracking.",
                 Foreground = BrushHex(0x94, 0xA3, 0xB8),
                 FontSize = 19,
                 LineHeight = 28,
@@ -223,7 +223,7 @@ namespace AgyPet.Tools
                 Padding = new Thickness(14, 9, 14, 9),
                 Child = new TextBlock
                 {
-                    Text = "Perching above the chatbox with 19 live reactions.",
+                    Text = "Perching above App chatboxes & agy CLI terminals with 18 live reactions.",
                     Foreground = BrushHex(0x94, 0xA3, 0xB8),
                     FontSize = 13.5,
                     FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
@@ -263,7 +263,7 @@ namespace AgyPet.Tools
             composer.Child = compStack;
             composerWrap.Children.Add(composer);
 
-            var perchMood = frameTick >= 60 ? MascotMood.Happy
+            var perchMood = frameTick >= 60 ? MascotMood.Done
                 : frameTick >= 40 ? MascotMood.Working
                 : frameTick >= 20 ? MascotMood.Thinking
                 : MascotMood.Typing;
@@ -326,18 +326,16 @@ namespace AgyPet.Tools
         class ShowcaseItem
         {
             public MascotMood Mood;
-            public TurnSentiment Sentiment;
             public string Title, Sub;
             public int BaseTick;
-            public ShowcaseItem(MascotMood mood, string title, string sub, int tick, TurnSentiment sentiment = TurnSentiment.Neutral)
+            public ShowcaseItem(MascotMood mood, string title, string sub, int tick)
             {
-                Mood = mood; Title = title; Sub = sub; BaseTick = tick; Sentiment = sentiment;
+                Mood = mood; Title = title; Sub = sub; BaseTick = tick;
             }
         }
 
-        static ShowcaseItem[] All20ShowcaseItems(int animTick)
+        static ShowcaseItem[] All18ShowcaseItems()
         {
-            var sent20 = ((animTick / 24) % 2 == 1) ? TurnSentiment.Sad : TurnSentiment.Angry;
             return new[]
             {
                 new ShowcaseItem(MascotMood.Typing, "Typing", "Agent or you typing", 6),
@@ -345,7 +343,7 @@ namespace AgyPet.Tools
                 new ShowcaseItem(MascotMood.Working, "Working", "Editing code", 14),
                 new ShowcaseItem(MascotMood.Terminal, "Terminal", "Running commands", 10),
                 new ShowcaseItem(MascotMood.Browsing, "Browsing", "Live browser steps", 8),
-                new ShowcaseItem(MascotMood.Delegating, "Delegating", "Subagents & swarms", 10),
+                new ShowcaseItem(MascotMood.Delegating, "Delegating", "Subagent workers", 10),
                 new ShowcaseItem(MascotMood.Reading, "Reading", "Scanning files", 6),
                 new ShowcaseItem(MascotMood.Searching, "Searching", "Docs & web", 11),
                 new ShowcaseItem(MascotMood.Listening, "Listening", "Voice & dictation", 8),
@@ -355,11 +353,9 @@ namespace AgyPet.Tools
                 new ShowcaseItem(MascotMood.Alert, "Alert", "Needs approval", 5),
                 new ShowcaseItem(MascotMood.Question, "Question", "Waiting choice", 7),
                 new ShowcaseItem(MascotMood.Done, "Done", "Task complete", 4),
-                new ShowcaseItem(MascotMood.Happy, "Happy", "User praise!", 6),
                 new ShowcaseItem(MascotMood.Error, "Error", "Step hit error", 4),
                 new ShowcaseItem(MascotMood.Idle, "Idle", "Ready at rest", 4),
-                new ShowcaseItem(MascotMood.Sleeping, "Sleeping", "Idle / Quota sleep", 24),
-                new ShowcaseItem(MascotMood.Working, "Angry / Sad", "Reacts to tone", 8, sent20),
+                new ShowcaseItem(MascotMood.Sleeping, "Sleeping", "Extended quiet", 24),
             };
         }
 
@@ -416,7 +412,7 @@ namespace AgyPet.Tools
 
             left.Children.Add(new TextBlock
             {
-                Text = "Zero-dependency Windows overlay (~150 KB): 19 reactions, Angry/Sad turn moods, taskbar corner docking, voice sync, and multi-session tracking.",
+                Text = "Zero-dependency Windows overlay (~125 KB): 18 reactions, App & agy CLI terminal perching, taskbar docking, and multi-session tracking.",
                 Foreground = BrushHex(0x94, 0xA3, 0xB8),
                 FontSize = 15.5,
                 LineHeight = 22,
@@ -551,11 +547,11 @@ namespace AgyPet.Tools
             topGrid.Children.Add(cardFrame);
             page.Children.Add(topGrid);
 
-            // ---- Bottom Band: All 19 Live Reactions + Sentiment Mood (10 x 2) ----
+            // ---- Bottom Band: All 18 Live Reactions (9 x 2) ----
             var bandHdr = new Grid { Margin = new Thickness(0, 0, 0, 10) };
             bandHdr.Children.Add(new TextBlock
             {
-                Text = "ALL 19 LIVE REACTIONS + TURN SENTIMENT",
+                Text = "ALL 18 LIVE REACTIONS",
                 Foreground = BrushHex(0xE2, 0xE8, 0xF0),
                 FontSize = 12,
                 FontWeight = FontWeights.Bold,
@@ -564,7 +560,7 @@ namespace AgyPet.Tools
             });
             bandHdr.Children.Add(new TextBlock
             {
-                Text = "Includes Delegating · Happy · Error · Quota Sleep · Steam/Tear Moods · Taskbar Corners",
+                Text = "Works on Antigravity App, IDE, and agy CLI terminals · Bottom & Taskbar Docking",
                 Foreground = BrushHex(0x88, 0x92, 0xA6),
                 FontSize = 11.5,
                 HorizontalAlignment = HorizontalAlignment.Right,
@@ -572,15 +568,15 @@ namespace AgyPet.Tools
             });
             page.Children.Add(bandHdr);
 
-            var moods = All20ShowcaseItems(0);
+            var moods = All18ShowcaseItems();
             var grid = new Grid();
-            for (int c = 0; c < 10; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (int c = 0; c < 9; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             for (int r = 0; r < 2; r++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(148) });
 
             for (int i = 0; i < moods.Length; i++)
             {
                 var m = moods[i];
-                var mascot = new Mascot(3.3, Mascot.ClassicSkin) { Mood = m.Mood, Sentiment = m.Sentiment };
+                var mascot = new Mascot(3.5, Mascot.ClassicSkin) { Mood = m.Mood };
                 mascot.Snap(m.BaseTick);
 
                 var host = new Grid { Height = 56, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
@@ -592,7 +588,7 @@ namespace AgyPet.Tools
                 {
                     Text = m.Title,
                     Foreground = BrushHex(0xF8, 0xFA, 0xFC),
-                    FontSize = 12,
+                    FontSize = 12.5,
                     FontWeight = FontWeights.SemiBold,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     Margin = new Thickness(0, 7, 0, 1),
@@ -616,8 +612,8 @@ namespace AgyPet.Tools
                     Margin = new Thickness(4),
                     Child = tileStack,
                 };
-                Grid.SetRow(tile, i / 10);
-                Grid.SetColumn(tile, i % 10);
+                Grid.SetRow(tile, i / 9);
+                Grid.SetColumn(tile, i % 9);
                 grid.Children.Add(tile);
             }
             page.Children.Add(grid);
@@ -697,7 +693,7 @@ namespace AgyPet.Tools
                 Padding = new Thickness(14, 6, 14, 6),
                 Child = new TextBlock
                 {
-                    Text = skin == Mascot.DarkSkin ? "DARK REMAKE · 19 REACTIONS" : "OFFICIAL COLORS · 19 REACTIONS",
+                    Text = skin == Mascot.DarkSkin ? "DARK REMAKE · 18 REACTIONS" : "OFFICIAL COLORS · 18 REACTIONS",
                     Foreground = skin == Mascot.DarkSkin ? BrushHex(0xE4, 0xE4, 0xE7) : BrushHex(0x60, 0xA5, 0xFA),
                     FontSize = 11.5,
                     FontWeight = FontWeights.SemiBold,
@@ -708,18 +704,18 @@ namespace AgyPet.Tools
             stack.Children.Add(header);
 
             var grid = new Grid();
-            for (int c = 0; c < 5; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            for (int r = 0; r < 4; r++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(150) });
+            for (int c = 0; c < 6; c++) grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            for (int r = 0; r < 3; r++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(196) });
 
-            var moods = All20ShowcaseItems(frameTick);
+            var moods = All18ShowcaseItems();
 
             for (int i = 0; i < moods.Length; i++)
             {
                 var m = moods[i];
-                var mascot = new Mascot(4.2, skin) { Mood = m.Mood, Sentiment = m.Sentiment };
+                var mascot = new Mascot(4.6, skin) { Mood = m.Mood };
                 mascot.Snap(m.BaseTick + frameTick);
 
-                var mascotHost = new Grid { Height = 68, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
+                var mascotHost = new Grid { Height = 76, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
                 mascotHost.Children.Add(mascot);
 
                 var cardInner = new StackPanel { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
@@ -728,17 +724,17 @@ namespace AgyPet.Tools
                 {
                     Text = m.Title,
                     Foreground = BrushHex(0xF8, 0xFA, 0xFC),
-                    FontSize = 13.5,
+                    FontSize = 14,
                     FontWeight = FontWeights.SemiBold,
                     HorizontalAlignment = HorizontalAlignment.Center,
-                    Margin = new Thickness(0, 7, 0, 2),
+                    Margin = new Thickness(0, 10, 0, 2),
                     FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
                 });
                 cardInner.Children.Add(new TextBlock
                 {
                     Text = m.Sub,
                     Foreground = BrushHex(0x88, 0x92, 0xA6),
-                    FontSize = 11,
+                    FontSize = 11.5,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
                 });
@@ -748,12 +744,12 @@ namespace AgyPet.Tools
                     Background = BrushHex(0x13, 0x16, 0x1E),
                     BorderBrush = new SolidColorBrush(Color.FromArgb(0x1E, 0xFF, 0xFF, 0xFF)),
                     BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(13),
-                    Margin = new Thickness(5),
+                    CornerRadius = new CornerRadius(14),
+                    Margin = new Thickness(6),
                     Child = cardInner,
                 };
-                Grid.SetRow(tile, i / 5);
-                Grid.SetColumn(tile, i % 5);
+                Grid.SetRow(tile, i / 6);
+                Grid.SetColumn(tile, i % 6);
                 grid.Children.Add(tile);
             }
 

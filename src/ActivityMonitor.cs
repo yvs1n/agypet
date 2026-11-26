@@ -6,7 +6,6 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace AgyPet
@@ -14,7 +13,6 @@ namespace AgyPet
     public class ActivitySnapshot
     {
         public MascotMood Mood = MascotMood.Idle;
-        public TurnSentiment Sentiment = TurnSentiment.Neutral;
         public string SessionId = "";
         public string SessionTitle = "Antigravity";
         public string Source = "Antigravity";
@@ -22,7 +20,6 @@ namespace AgyPet
         public string FocusDetail = "";
         public bool IsBusy;
         public bool HasBackgroundTask;
-        public bool QuotaLimited;
         public bool HasError;
         public bool HasProgress;
         public int PercentDone;
@@ -36,10 +33,10 @@ namespace AgyPet
     // Watches Antigravity App, Antigravity IDE, and Antigravity CLI sessions natively via
     // Windows' built-in winsqlite3.dll + transcript.jsonl + task.md + FileSystemWatcher wakeup.
     // Supports:
-    //  - Active-chat matching (reacts specifically to whichever conversation you have open!)
+    //  - Active-chat & CLI source matching (reacts specifically to whichever app/CLI session you have open!)
     //  - Multi-session tracking (all simultaneous active sessions for hover card & Multitasking mood)
     //  - Background daemon / live server detection (not_fully_idle == 1 after turn completes)
-    //  - Prompt sentiment (Happy / Sad / Angry), subagent delegation, errors, and per-model quota sleep
+    //  - Subagent delegation & tool/turn error detection
     public class ActivityMonitor
     {
         static readonly string Home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -69,6 +66,7 @@ namespace AgyPet
         volatile ActivitySnapshot focusedSession = new ActivitySnapshot();
         volatile List<ActivitySnapshot> activeSessions = new List<ActivitySnapshot>();
         volatile string preferredChatTitle = "";
+        volatile string preferredSource = "";
 
         readonly HashSet<string> prevBusyIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         readonly AutoResetEvent wakeEvent = new AutoResetEvent(false);
@@ -85,6 +83,11 @@ namespace AgyPet
         {
             get { return preferredChatTitle; }
             set { preferredChatTitle = value ?? ""; }
+        }
+        public string PreferredSource
+        {
+            get { return preferredSource; }
+            set { preferredSource = value ?? ""; }
         }
         public event Action Updated;
 
@@ -237,9 +240,10 @@ namespace AgyPet
                 latest = idle;
             }
 
-            // 2. Match the SPECIFIC conversation currently open in Antigravity!
+            // 2. Match the SPECIFIC conversation/source currently open (including Antigravity CLI terminal!)
+            string wantSource = preferredSource;
             string wantTitle = preferredChatTitle;
-            SessionRow matched = FindSessionByTitle(allRows, wantTitle);
+            SessionRow matched = FindSessionForFocus(allRows, wantTitle, wantSource);
             if (matched != null)
             {
                 bool showDone = !matched.IsBusy && !matched.HasBackgroundTask && (now - lastDoneAt) < DoneHoldDuration &&
@@ -250,6 +254,35 @@ namespace AgyPet
             {
                 focusedSession = latest;
             }
+        }
+
+        static SessionRow FindSessionForFocus(List<SessionRow> rows, string title, string source)
+        {
+            if (rows.Count == 0) return null;
+            if (!string.IsNullOrWhiteSpace(source))
+            {
+                var sourceRows = new List<SessionRow>();
+                foreach (var r in rows)
+                    if (string.Equals(r.Source, source, StringComparison.OrdinalIgnoreCase))
+                        sourceRows.Add(r);
+
+                if (sourceRows.Count > 0)
+                {
+                    var byTitle = FindSessionByTitle(sourceRows, title);
+                    if (byTitle != null) return byTitle;
+
+                    SessionRow best = null;
+                    foreach (var r in sourceRows)
+                    {
+                        if (best == null) { best = r; continue; }
+                        if (r.IsBusy != best.IsBusy) { if (r.IsBusy) best = r; continue; }
+                        if (r.HasBackgroundTask != best.HasBackgroundTask) { if (r.HasBackgroundTask) best = r; continue; }
+                        if (r.Updated > best.Updated) best = r;
+                    }
+                    if (best != null) return best;
+                }
+            }
+            return FindSessionByTitle(rows, title);
         }
 
         static SessionRow FindSessionByTitle(List<SessionRow> rows, string title)
@@ -276,10 +309,8 @@ namespace AgyPet
                 SessionId = r.Id,
                 SessionTitle = string.IsNullOrWhiteSpace(r.Title) ? r.Source : r.Title,
                 Source = r.Source,
-                Sentiment = info.Sentiment,
                 IsBusy = r.IsBusy,
                 HasBackgroundTask = r.HasBackgroundTask,
-                QuotaLimited = info.QuotaLimited,
                 HasError = info.HasError,
                 UpdatedAt = r.Updated,
                 FocusDetail = info.FocusDetail,
@@ -295,15 +326,6 @@ namespace AgyPet
             {
                 snap.Mood = info.Mood == MascotMood.Done ? MascotMood.Thinking : info.Mood;
                 snap.ActionLabel = !string.IsNullOrEmpty(info.ActionLabel) ? info.ActionLabel : MoodDefaultLabel(snap.Mood);
-                return snap;
-            }
-
-            if (info.QuotaLimited)
-            {
-                snap.Sentiment = TurnSentiment.Neutral;
-                snap.Mood = MascotMood.Sleeping;
-                snap.ActionLabel = "Quota limit · Sleeping";
-                snap.FocusDetail = "Switch model to wake immediately";
                 return snap;
             }
 
@@ -324,7 +346,6 @@ namespace AgyPet
             bool recentEnd = r.Updated > DateTime.MinValue && (now - r.Updated) < TimeSpan.FromSeconds(14);
             if ((celebrateDone || recentEnd) && info.HasError)
             {
-                snap.Sentiment = TurnSentiment.Neutral;
                 snap.Mood = MascotMood.Error;
                 snap.ActionLabel = "Turn hit an error";
                 return snap;
@@ -334,9 +355,8 @@ namespace AgyPet
             if (justFinished)
             {
                 int total = info.StepsTotal > 0 ? info.StepsTotal : 1;
-                bool praise = info.Sentiment == TurnSentiment.Happy;
-                snap.Mood = praise ? MascotMood.Happy : MascotMood.Done;
-                snap.ActionLabel = praise ? "Happy to help!" : "Task complete!";
+                snap.Mood = MascotMood.Done;
+                snap.ActionLabel = "Task complete!";
                 snap.FocusDetail = !string.IsNullOrEmpty(info.FocusDetail) ? info.FocusDetail : "All steps finished";
                 snap.HasProgress = true;
                 snap.PercentDone = 100;
@@ -346,8 +366,6 @@ namespace AgyPet
                 return snap;
             }
 
-            // Sustained Angry/Sad turn mood cools down when the turn is no longer busy
-            snap.Sentiment = TurnSentiment.Neutral;
             bool sleeping = r.Updated > DateTime.MinValue && (now - r.Updated) > SleepAfterIdle;
             snap.Mood = sleeping ? MascotMood.Sleeping : MascotMood.Idle;
             snap.ActionLabel = sleeping ? "Sleeping · Quiet" : "At rest · Ready";
@@ -411,10 +429,8 @@ namespace AgyPet
         public class TranscriptInfo
         {
             public MascotMood Mood = MascotMood.Thinking;
-            public TurnSentiment Sentiment = TurnSentiment.Neutral;
             public string ActionLabel = "";
             public string FocusDetail = "";
-            public bool QuotaLimited;
             public bool HasError;
             public bool HasProgress;
             public int PercentDone;
@@ -422,72 +438,6 @@ namespace AgyPet
             public int StepsDone;
             public int StepsTotal;
             public int StepsInProgress;
-        }
-
-        // Sentiment detection adapted from Atom (https://github.com/Arnav8452/atom),
-        // MIT License, Copyright (c) 2026 Antigravity Atom Contributors.
-        // See LICENSE in the repository root for the full MIT permission notice.
-        static readonly Regex CodeBlockRe = new Regex("```[\\s\\S]*?```|`[^`\\n]*`", RegexOptions.Compiled);
-        static readonly Regex UrlRe = new Regex(@"https?://\S+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        static readonly Regex PathRe = new Regex(@"(?:^|\s)(?:~?/|(?:\./|\.\./))[A-Za-z0-9._/@-]+", RegexOptions.Compiled);
-        static readonly Regex AngryWordRe = new Regex(@"\b(wtf|wth|fu+ck+\w*|fck+\w*|fuk+\w*|sh[i1]+t+\w*|bullsh[i1]+t+\w*|b[i1]tch\w*|crap+\w*|ffs|stfu|gtfo|piss\s+off|shut\s+(?:the\s+\w+\s+|your\s+mouth\s+|it\s+)?up|still\s+(?:broken|not\s+working|failing)|broken\s+again|nothing\s+works|ugh+|argh+|are\s+you\s+(?:kidding|serious))\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        static readonly Regex SadWordRe = new Regex(@"\b(stupid(?:er|est)?(?!-simple)|dumb(?:er|est)?(?!\s+terminal)|useless|worthless|hopeless|incompetent|clueless|idiot(?:ic)?|moron(?:ic)?|pathetic|brain\s*dead|hate\s+(?:u|you)|(?:u|you)\s+suck)\b|\b(?:you(?:'re|\s+are)|this\s+(?:is|code\s+is)|that(?:'s|\s+is))\s+(?:so\s+|complete\s+|total\s+)?(?:trash|garbage|rubbish|horrible|terrible|awful)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        static readonly Regex ThanksRe = new Regex(@"\b(thanks|thank\s+you|thx|great\s+(?:job|work)|nice\s+(?:job|work|one)|good\s+(?:job|bot)|well\s+done|love\s+(?:it|this|you)|you\s+rock)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        static readonly Regex PraiseRe = new Regex(@"\b(awesome|amazing|perfect|brilliant|excellent|nice|great|beautiful)\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        static readonly Regex NegPraiseRe = new Regex(@"\b(no\s+thanks|thanks\s+for\s+nothing|not\s+(?:great|nice|good|awesome|amazing|perfect|helpful))\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        static readonly Regex QuotaErrRe = new Regex(@"reached.*quota|quota\s*(?:limit|exhaust\w*|exceed\w*)|(?:rate|usage|5[-\s]?h(?:ou)?r|weekly)\s*limit|resume\s+using\s+this\s+model|resource[_\s-]?exhausted|\b429\b", RegexOptions.Compiled | RegexOptions.IgnoreCase);
-        static readonly Regex NonShoutTokenRe = new Regex(@"[_=/\\<>\{\}\[\]\d]|::", RegexOptions.Compiled);
-
-        public static TurnSentiment DetectSentiment(string rawText)
-        {
-            if (string.IsNullOrWhiteSpace(rawText)) return TurnSentiment.Neutral;
-            string cleaned = CodeBlockRe.Replace(rawText, " ");
-            cleaned = UrlRe.Replace(cleaned, " ");
-            cleaned = PathRe.Replace(cleaned, " ").Trim();
-            if (cleaned.Length == 0) return TurnSentiment.Neutral;
-
-            if (AngryWordRe.IsMatch(cleaned) || IsShouting(cleaned))
-                return TurnSentiment.Angry;
-            if (SadWordRe.IsMatch(cleaned))
-                return TurnSentiment.Sad;
-            if (!NegPraiseRe.IsMatch(cleaned))
-            {
-                if (ThanksRe.IsMatch(cleaned)) return TurnSentiment.Happy;
-                int words = cleaned.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length;
-                if (words <= 4 && PraiseRe.IsMatch(cleaned)) return TurnSentiment.Happy;
-            }
-            return TurnSentiment.Neutral;
-        }
-
-        static bool IsShouting(string text)
-        {
-            var tokens = text.Split(new[] { ' ', '\t', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-            if (tokens.Length == 0) return false;
-            string first = tokens[0].Trim('(', ')', '.', ',', ';', ':', '!', '?', '"', '\'').ToUpperInvariant();
-            if (first == "SELECT" || first == "INSERT" || first == "UPDATE" || first == "DELETE" || first == "CREATE" || first == "ALTER" || first == "DROP")
-                return false;
-            int alphaWords = 0, upperLetters = 0, totalLetters = 0;
-            foreach (string tok in tokens)
-            {
-                if (NonShoutTokenRe.IsMatch(tok)) continue;
-                bool hasLetter = false;
-                foreach (char ch in tok)
-                {
-                    if (char.IsLetter(ch))
-                    {
-                        hasLetter = true;
-                        totalLetters++;
-                        if (char.IsUpper(ch)) upperLetters++;
-                    }
-                }
-                if (hasLetter) alphaWords++;
-            }
-            return alphaWords >= 3 && totalLetters >= 12 && (upperLetters * 10 > totalLetters * 8);
-        }
-
-        public static bool IsQuotaErrorText(string text)
-        {
-            return !string.IsNullOrEmpty(text) && QuotaErrRe.IsMatch(text);
         }
 
         public static TranscriptInfo ParseTranscriptTail(string filePath)
@@ -520,7 +470,6 @@ namespace AgyPet
             bool foundMood = false;
             bool foundSteps = false;
             bool foundFocus = false;
-            bool foundSentiment = false;
             bool sawTurnOutcome = false;
 
             for (int i = lines.Length - 1; i >= 0; i--)
@@ -528,7 +477,7 @@ namespace AgyPet
                 string line = lines[i];
                 if (string.IsNullOrWhiteSpace(line)) continue;
 
-                if (foundMood && foundSentiment && line.IndexOf("update_steps", StringComparison.Ordinal) < 0 && line.IndexOf("update_focus", StringComparison.Ordinal) < 0)
+                if (foundMood && line.IndexOf("update_steps", StringComparison.Ordinal) < 0 && line.IndexOf("update_focus", StringComparison.Ordinal) < 0)
                     continue;
 
                 Dictionary<string, object> d;
@@ -543,9 +492,7 @@ namespace AgyPet
                     if (!sawTurnOutcome)
                     {
                         sawTurnOutcome = true;
-                        if (IsQuotaErrorText(errText) || IsQuotaErrorText(Json.Str(d, "content")))
-                            info.QuotaLimited = true;
-                        else if (status == "ERROR" || !string.IsNullOrEmpty(errText))
+                        if (status == "ERROR" || !string.IsNullOrEmpty(errText))
                             info.HasError = true;
                     }
 
@@ -609,40 +556,14 @@ namespace AgyPet
                         foundMood = true;
                     }
                 }
-                else if (type == "USER_INPUT")
-                {
-                    if (!foundSentiment)
-                    {
-                        info.Sentiment = DetectSentiment(Json.Str(d, "content"));
-                        foundSentiment = true;
-                    }
-                    if (!foundMood)
-                    {
-                        info.Mood = MascotMood.Thinking;
-                        info.ActionLabel = "Thinking...";
-                        foundMood = true;
-                    }
-                }
-                else if (type == "SYSTEM_MESSAGE")
-                {
-                    if (!sawTurnOutcome)
-                    {
-                        string sysContent = Json.Str(d, "content");
-                        if (IsQuotaErrorText(sysContent))
-                        {
-                            info.QuotaLimited = true;
-                            sawTurnOutcome = true;
-                        }
-                    }
-                }
-                else if (!foundMood && type == "GENERIC")
+                else if (!foundMood && (type == "USER_INPUT" || type == "GENERIC"))
                 {
                     info.Mood = MascotMood.Thinking;
                     info.ActionLabel = "Thinking...";
                     foundMood = true;
                 }
 
-                if (foundMood && foundSteps && foundFocus && foundSentiment) break;
+                if (foundMood && foundSteps && foundFocus) break;
             }
 
             return info;
@@ -790,7 +711,6 @@ namespace AgyPet
                 case MascotMood.Alert: return "Needs approval";
                 case MascotMood.Question: return "Asking a question";
                 case MascotMood.Done: return "Task complete!";
-                case MascotMood.Happy: return "Happy to help!";
                 case MascotMood.Error: return "Step hit an error";
                 default: return "Working...";
             }
