@@ -349,8 +349,12 @@ namespace AgyPet
         public void SetPinAboveTaskbar(bool pin)
         {
             settings.PinAboveTaskbar = pin;
-            if (pin && !settings.HasCustomFreePos && !PetSettings.IsBottomOrTaskbarCorner(settings.MinimizedCorner))
-                settings.MinimizedCorner = "bottom-right";
+            if (pin)
+            {
+                settings.HasCustomFreePos = false;
+                if (!PetSettings.IsBottomOrTaskbarCorner(settings.MinimizedCorner))
+                    settings.MinimizedCorner = "bottom-right";
+            }
             settings.Save();
             userMovedWhileInFront = false;
             SnapToTarget();

@@ -73,7 +73,7 @@ A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Ant
 - **Double-click when calm**: Joyful dance groove (`Idle` / `Done`).
 - **Left-drag**: Move freely anywhere on screen (always returns above chatbox when returning to Antigravity).
 - **Hover (when outside Antigravity)**: View live status & scrollable multi-session progress card.
-- **Right-click / System Tray**: Switch skins (`Classic` / `Dark Remake`), set away location (`Top-Left` / `Top-Right` / `Bottom-Left` / `Bottom-Middle` / `Bottom-Right` / `Taskbar · Left` / `Taskbar · Middle` / `Taskbar · Right`), configure **CLI Terminal Placement** (`Bottom-Right`, `Bottom-Middle`, `Bottom-Left`, `Top-Right`, `Top-Left`, `Off`), toggle **Auto-Hide** (`Hide When Inactive` / `Hide When Minimized`), resize (`Small` / `Medium` / `Large`), preview all 18 moods, toggle `Start with Windows`, **Check for Updates**, or **Send Feedback (GitHub Issue)**.
+- **Right-click / System Tray**: Switch skins (`Classic` / `Dark Remake`), set away location (`Top-Left` / `Top-Right` / `Bottom-Left` / `Bottom-Middle` / `Bottom-Right` / `Taskbar · Left` / `Taskbar · Middle` / `Taskbar · Right`), **Pin Above Taskbar**, **Lock Position**, configure **CLI Terminal Placement** (`Bottom-Right`, `Bottom-Middle`, `Bottom-Left`, `Top-Right`, `Top-Left`, `Off`), toggle **Auto-Hide** (`Hide When Inactive` / `Hide When Minimized`), resize (`Small` / `Medium` / `Large`), preview all 18 moods, toggle `Start with Windows`, **Check for Updates**, or **Send Feedback (GitHub Issue)**.
 
 ---
 

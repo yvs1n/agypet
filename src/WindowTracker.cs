@@ -858,7 +858,9 @@ namespace AgyPet
             bool hasAttachment = false, hasProject = false, hasInteractive = false;
             InspectElementsForBand(firstBand, ref hasAttachment, ref hasProject, ref hasInteractive);
 
-            if (!hasAttachment && hasProject)
+            bool compactNamedProjectHeader = hasInteractive && firstRect.Height <= 46 &&
+                                             (cardRect.Bottom - nextRect.Top) >= inputRect.Height + 16;
+            if (!hasAttachment && (hasProject || compactNamedProjectHeader))
             {
                 double newTop = (nextRect.Top - firstRect.Bottom) > 4
                     ? Math.Max(firstRect.Bottom + 1, nextRect.Top - 4)

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.4 (2026-11-27)
+- **Inner Prompt Box Perch & Project Header Exclusion (PR `#8` by `@Dunya2200`)**:
+  - Excluded Antigravity's top `"No Project ⌄"` / project selector header bar from composer bounds (`WindowTracker`) while keeping attachments inside the box, so AgyPet sits solidly on the inner prompt input box border.
+  - Added **Pin Above Taskbar (Stay in Place)** and **Lock Position (Disable Dragging)** options in both the Right-Click and System Tray menus (both default to `false`), clearing prior free-drag overrides when pinning above the taskbar.
+
 ## 0.3.3 (2026-11-26)
 - **Auto-Hide When Inactive or Minimized (`#3` / PR `#7` by `@Bobdo-b`, requested by `@Manufacturing-Downtime`)**:
   - Added optional **Auto-Hide** settings (`Hide When Inactive (App & CLI Closed)` and `Hide When Minimized`) under both the Right-Click and System Tray menus (both default to `false` to preserve existing behavior).
