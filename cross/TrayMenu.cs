@@ -20,7 +20,7 @@ namespace AgyPet
         readonly List<NativeMenuItem> sizeStepItems = new List<NativeMenuItem>();
         readonly List<KeyValuePair<MascotMood, NativeMenuItem>> previewMoodItems = new List<KeyValuePair<MascotMood, NativeMenuItem>>();
         NativeMenuItem pinAboveTaskbarItem, lockPosItem, hoverCardItem, startupItem, autoUpdateItem;
-        NativeMenuItem hideInactiveItem, hideMinimizedItem, liveModeItem, resetItem, updateItem;
+        NativeMenuItem hideInactiveItem, hideMinimizedItem, hideFullscreenItem, liveModeItem, resetItem, updateItem;
         NativeMenu cornerMenu, cliMenu, previewMenu;
         bool disposed;
 
@@ -82,8 +82,10 @@ namespace AgyPet
             var autoHideMenu = new NativeMenu();
             hideInactiveItem = Check("Hide When Inactive (App & CLI Closed)", () => { window.SetHideWhenInactive(!settings.HideWhenInactive); SyncChecks(); });
             hideMinimizedItem = Check("Hide When Minimized", () => { window.SetHideWhenMinimized(!settings.HideWhenMinimized); SyncChecks(); });
+            hideFullscreenItem = Check("Hide When Other App Is Fullscreen", () => { window.SetHideInFullscreen(!settings.HideInFullscreen); SyncChecks(); });
             autoHideMenu.Add(hideInactiveItem);
             autoHideMenu.Add(hideMinimizedItem);
+            autoHideMenu.Add(hideFullscreenItem);
             menu.Add(new NativeMenuItem("Auto-Hide") { Menu = autoHideMenu });
 
             var sizeMenu = new NativeMenu();
@@ -226,6 +228,7 @@ namespace AgyPet
             lockPosItem.IsChecked = settings.LockPosition;
             hideInactiveItem.IsChecked = settings.HideWhenInactive;
             hideMinimizedItem.IsChecked = settings.HideWhenMinimized;
+            if (hideFullscreenItem != null) hideFullscreenItem.IsChecked = settings.HideInFullscreen;
             hoverCardItem.IsChecked = settings.ShowHoverCard;
             startupItem.IsChecked = settings.StartWithWindows;
             autoUpdateItem.IsChecked = settings.AutoUpdate;

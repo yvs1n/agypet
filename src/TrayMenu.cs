@@ -18,6 +18,7 @@ namespace AgyPet
         ToolStripMenuItem cliLocationMenu;
         ToolStripMenuItem hideInactiveItem;
         ToolStripMenuItem hideMinimizedItem;
+        ToolStripMenuItem hideFullscreenItem;
         TrackBar traySizeTrack;
         Label traySizeLabel;
 
@@ -80,6 +81,8 @@ namespace AgyPet
                 hideInactiveItem.Checked = settings.HideWhenInactive;
             if (hideMinimizedItem != null)
                 hideMinimizedItem.Checked = settings.HideWhenMinimized;
+            if (hideFullscreenItem != null)
+                hideFullscreenItem.Checked = settings.HideInFullscreen;
             if (pinAboveTaskbarItem != null)
                 pinAboveTaskbarItem.Checked = settings.PinAboveTaskbar;
             if (lockPositionItem != null)
@@ -140,7 +143,8 @@ namespace AgyPet
             var autoHideMenu = new ToolStripMenuItem("Auto-Hide");
             hideInactiveItem = new ToolStripMenuItem("Hide When Inactive (App & CLI Closed)", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.SetHideWhenInactive(!settings.HideWhenInactive))));
             hideMinimizedItem = new ToolStripMenuItem("Hide When Minimized", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.SetHideWhenMinimized(!settings.HideWhenMinimized))));
-            autoHideMenu.DropDownItems.AddRange(new ToolStripItem[] { hideInactiveItem, hideMinimizedItem });
+            hideFullscreenItem = new ToolStripMenuItem("Hide When Other App Is Fullscreen", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.SetHideInFullscreen(!settings.HideInFullscreen))));
+            autoHideMenu.DropDownItems.AddRange(new ToolStripItem[] { hideInactiveItem, hideMinimizedItem, hideFullscreenItem });
             menu.Items.Add(autoHideMenu);
 
             var sizeMenu = new ToolStripMenuItem("Size");

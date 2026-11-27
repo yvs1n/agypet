@@ -35,6 +35,9 @@ namespace AgyPet
         public bool IsCliMinimized { get; private set; }
         public bool IsInFront { get; private set; }
         public bool IsCliInFront { get; private set; }
+        public bool IsTargetFullscreen { get; private set; }
+        public bool IsOtherAppFullscreen { get; private set; }
+        public ScreenRectDip FullscreenBoundsDip { get; private set; }
         public bool IsAnyAntigravityOpen { get { return IsAppOpen || HasActiveCli; } }
         public bool TrackCliWindows { get; set; }
         public volatile bool TrackMusicAudio;
@@ -144,7 +147,7 @@ namespace AgyPet
             return list.ToArray();
         }
 
-        public void Poll(double dpiScale)
+        public void Poll(double dpiScale, ScreenRectDip[] screenBounds = null)
         {
             RefreshProcesses();
             HasActiveCli = hasCliProcess || cliHostPids.Count > 0;
@@ -152,12 +155,12 @@ namespace AgyPet
 
             if (OperatingSystem.IsMacOS())
             {
-                PollMacOs();
+                PollMacOs(screenBounds);
                 return;
             }
             if (OperatingSystem.IsLinux())
             {
-                PollLinux(dpiScale > 0.1 ? dpiScale : 1.0);
+                PollLinux(dpiScale > 0.1 ? dpiScale : 1.0, screenBounds);
                 return;
             }
 
@@ -169,9 +172,68 @@ namespace AgyPet
             HasVisibleCli = HasActiveCli;
             IsInFront = false;
             IsCliInFront = false;
+            IsTargetFullscreen = false;
+            IsOtherAppFullscreen = false;
+            FullscreenBoundsDip = default(ScreenRectDip);
             WindowBoundsDip = default(ScreenRectDip);
             ActiveChatTitle = "";
             ActiveChatCandidates = new string[0];
+        }
+
+        public static bool IsMacShellWindow(string ownerName, string title)
+        {
+            if (string.IsNullOrEmpty(ownerName)) return false;
+            if (ownerName.Equals("Dock", StringComparison.OrdinalIgnoreCase) ||
+                ownerName.Equals("Window Server", StringComparison.OrdinalIgnoreCase) ||
+                ownerName.Equals("Control Center", StringComparison.OrdinalIgnoreCase) ||
+                ownerName.Equals("Notification Center", StringComparison.OrdinalIgnoreCase) ||
+                ownerName.Equals("Spotlight", StringComparison.OrdinalIgnoreCase) ||
+                ownerName.Equals("Wallpaper", StringComparison.OrdinalIgnoreCase))
+                return true;
+            if (ownerName.Equals("Finder", StringComparison.OrdinalIgnoreCase) && string.IsNullOrEmpty(title))
+                return true;
+            return false;
+        }
+
+        public static bool TryFindCoveredScreen(ScreenRectDip bounds, ScreenRectDip[] screens, out ScreenRectDip matchedScreen)
+        {
+            matchedScreen = default(ScreenRectDip);
+            if (bounds.IsEmpty || screens == null) return false;
+            for (int i = 0; i < screens.Length; i++)
+            {
+                var sc = screens[i];
+                if (MascotCore.RectCoversScreen(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom,
+                        sc.Left, sc.Top, sc.Right, sc.Bottom, 2.0))
+                {
+                    matchedScreen = sc;
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        public static void ClassifyFullscreen(
+            bool isTargetFront,
+            ScreenRectDip activeBounds,
+            bool hasWmFullscreenHint,
+            bool isShellWindow,
+            ScreenRectDip[] screens,
+            out bool isTargetFs,
+            out bool isOtherFs,
+            out ScreenRectDip fsBounds)
+        {
+            isTargetFs = false;
+            isOtherFs = false;
+            fsBounds = default(ScreenRectDip);
+            if (isShellWindow) return;
+
+            ScreenRectDip covered;
+            bool coversScreen = TryFindCoveredScreen(activeBounds, screens, out covered);
+            if (!hasWmFullscreenHint && !coversScreen) return;
+
+            fsBounds = !covered.IsEmpty ? covered : activeBounds;
+            if (isTargetFront) isTargetFs = true;
+            else isOtherFs = true;
         }
 
         public static bool TryGetCursorDip(double dpiScale, out double x, out double y)
@@ -308,7 +370,7 @@ namespace AgyPet
             catch { }
         }
 
-        void PollMacOs()
+        void PollMacOs(ScreenRectDip[] screens)
         {
             List<MacNative.WinInfo> wins = MacNative.GetOnScreenWindows();
             int frontIdx = -1;
@@ -321,6 +383,7 @@ namespace AgyPet
             {
                 var w = wins[i];
                 if (w.OwnerPid == selfPid || w.Layer != 0 || w.Bounds.Width < 120 || w.Bounds.Height < 100) continue;
+                if (IsMacShellWindow(w.OwnerName, w.Title)) continue;
                 if (frontIdx < 0) frontIdx = i;
 
                 bool isApp = appPids.Contains(w.OwnerPid) || IsAntigravityName(w.OwnerName);
@@ -344,6 +407,17 @@ namespace AgyPet
             HasVisibleCli = anyCliVisible;
             IsCliMinimized = TrackCliWindows && HasActiveCli && !anyCliVisible;
             IsOpen = IsAppOpen || (TrackCliWindows && HasActiveCli);
+
+            bool targetInFront = (frontAppIdx >= 0 && frontIdx == frontAppIdx) || (frontCliIdx >= 0 && frontIdx == frontCliIdx);
+            bool tFs = false, oFs = false;
+            ScreenRectDip fsBounds = default(ScreenRectDip);
+            if (frontIdx >= 0)
+            {
+                ClassifyFullscreen(targetInFront, wins[frontIdx].Bounds, false, false, screens, out tFs, out oFs, out fsBounds);
+            }
+            IsTargetFullscreen = tFs;
+            IsOtherAppFullscreen = oFs;
+            FullscreenBoundsDip = fsBounds;
 
             if (frontAppIdx >= 0 && frontIdx == frontAppIdx)
             {
@@ -378,7 +452,7 @@ namespace AgyPet
             ActiveChatCandidates = new string[0];
         }
 
-        void PollLinux(double dpiScale)
+        void PollLinux(double dpiScale, ScreenRectDip[] screens)
         {
             List<X11Native.XWinInfo> wins = X11Native.QueryWindows(dpiScale);
             if (wins == null)
@@ -392,6 +466,9 @@ namespace AgyPet
                 IsInFront = false;
                 IsCliInFront = false;
                 IsMinimized = false;
+                IsTargetFullscreen = false;
+                IsOtherAppFullscreen = false;
+                FullscreenBoundsDip = default(ScreenRectDip);
                 WindowBoundsDip = default(ScreenRectDip);
                 ActiveChatTitle = "";
                 ActiveChatCandidates = new string[0];
@@ -400,7 +477,7 @@ namespace AgyPet
 
             bool anyAppVisible = false, anyAppHidden = false;
             bool anyCliVisible = false, anyCliHidden = false;
-            X11Native.XWinInfo activeApp = null, activeCli = null;
+            X11Native.XWinInfo activeApp = null, activeCli = null, activeOther = null;
 
             for (int i = 0; i < wins.Count; i++)
             {
@@ -426,6 +503,10 @@ namespace AgyPet
                         if (w.IsActive && activeCli == null) activeCli = w;
                     }
                 }
+                else if (w.IsActive && !w.IsMinimized && !w.IsDesktopOrDock && activeOther == null)
+                {
+                    activeOther = w;
+                }
             }
 
             IsAppOpen = appPids.Count > 0 || anyAppVisible || anyAppHidden;
@@ -433,6 +514,21 @@ namespace AgyPet
             HasVisibleCli = anyCliVisible;
             IsCliMinimized = TrackCliWindows && (HasActiveCli || anyCliHidden) && !anyCliVisible;
             IsOpen = IsAppOpen || (TrackCliWindows && HasActiveCli);
+
+            X11Native.XWinInfo activeTarget = activeApp ?? activeCli;
+            bool tFs = false, oFs = false;
+            ScreenRectDip fsBounds = default(ScreenRectDip);
+            if (activeTarget != null)
+            {
+                ClassifyFullscreen(true, activeTarget.Bounds, activeTarget.IsFullscreen, false, screens, out tFs, out oFs, out fsBounds);
+            }
+            else if (activeOther != null)
+            {
+                ClassifyFullscreen(false, activeOther.Bounds, activeOther.IsFullscreen, activeOther.IsDesktopOrDock, screens, out tFs, out oFs, out fsBounds);
+            }
+            IsTargetFullscreen = tFs;
+            IsOtherAppFullscreen = oFs;
+            FullscreenBoundsDip = fsBounds;
 
             if (activeApp != null)
             {
@@ -588,7 +684,7 @@ namespace AgyPet
             {
                 public int Pid;
                 public string Title;
-                public bool IsActive, IsMinimized;
+                public bool IsActive, IsMinimized, IsFullscreen, IsDesktopOrDock;
                 public ScreenRectDip Bounds;
             }
 
@@ -662,6 +758,10 @@ namespace AgyPet
                     IntPtr aWmName = XInternAtom(dpy, "WM_NAME", false);
                     IntPtr aState = XInternAtom(dpy, "_NET_WM_STATE", false);
                     IntPtr aHidden = XInternAtom(dpy, "_NET_WM_STATE_HIDDEN", false);
+                    IntPtr aFullscreen = XInternAtom(dpy, "_NET_WM_STATE_FULLSCREEN", false);
+                    IntPtr aType = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", false);
+                    IntPtr aTypeDesktop = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", false);
+                    IntPtr aTypeDock = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DOCK", false);
 
                     IntPtr activeWin = ReadSingleWindow(dpy, root, aActive);
                     IntPtr[] clients = ReadWindowArray(dpy, root, aList);
@@ -676,6 +776,8 @@ namespace AgyPet
                         string title = ReadStringProp(dpy, w, aName);
                         if (string.IsNullOrEmpty(title)) title = ReadStringProp(dpy, w, aWmName);
                         bool hidden = HasAtomInProp(dpy, w, aState, aHidden);
+                        bool isFs = HasAtomInProp(dpy, w, aState, aFullscreen);
+                        bool isDesktopOrDock = HasAtomInProp(dpy, w, aType, aTypeDesktop) || HasAtomInProp(dpy, w, aType, aTypeDock);
                         XWindowAttributes attrs;
                         if (XGetWindowAttributes(dpy, w, out attrs) == 0) continue;
                         if (attrs.map_state != 2) hidden = true; // IsViewable == 2
@@ -693,6 +795,8 @@ namespace AgyPet
                             Title = title ?? "",
                             IsActive = w == activeWin,
                             IsMinimized = hidden,
+                            IsFullscreen = isFs,
+                            IsDesktopOrDock = isDesktopOrDock,
                             Bounds = new ScreenRectDip(sx / dpiScale, sy / dpiScale, attrs.width / dpiScale, attrs.height / dpiScale)
                         });
                     }

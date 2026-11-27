@@ -34,6 +34,10 @@ namespace AgyPet
         public bool IsInFront { get; private set; }
         public bool IsTargetVisible { get; private set; }
         public bool IsCliInFront { get; private set; }
+        public bool IsTargetFullscreen { get; private set; }
+        public bool IsOtherAppFullscreen { get; private set; }
+        public Rect FullscreenMonitorBoundsPx { get; private set; }
+        public Rect TargetMonitorBoundsPx { get; private set; }
         public bool TrackCliWindows { get; set; }
         public string CliPlacementMode { get; set; }
         public volatile bool TrackTaskbarItems;
@@ -310,6 +314,14 @@ namespace AgyPet
             IsCliInFront = IsTargetVisible && (fgInTarget ? (preferCli || fgIsCli || ((fgIsSelf || fgTransient) && wasCli)) : candidateIsCli);
             visible = candidateTarget;
             if (IsTargetVisible) WindowHandle = candidateTarget;
+
+            bool targetFs, otherFs;
+            Rect fsMon, targetMon;
+            DetectFullscreenState(fg, visible, fgIsSelf, fgIsApp, fgIsCli, out targetFs, out otherFs, out fsMon, out targetMon);
+            IsTargetFullscreen = targetFs;
+            IsOtherAppFullscreen = otherFs;
+            FullscreenMonitorBoundsPx = fsMon;
+            TargetMonitorBoundsPx = targetMon;
 
             if (visible != IntPtr.Zero)
             {
@@ -1304,6 +1316,118 @@ namespace AgyPet
             return GetWindowRect(hwnd, out rect);
         }
 
+        static bool IsDesktopShellClass(string className)
+        {
+            if (string.IsNullOrEmpty(className)) return false;
+            return className.Equals("Progman", StringComparison.OrdinalIgnoreCase)
+                || className.Equals("WorkerW", StringComparison.OrdinalIgnoreCase)
+                || className.Equals("Shell_TrayWnd", StringComparison.OrdinalIgnoreCase)
+                || className.Equals("Shell_SecondaryTrayWnd", StringComparison.OrdinalIgnoreCase)
+                || className.Equals("NotifyIconOverflowWindow", StringComparison.OrdinalIgnoreCase);
+        }
+
+        static Rect GetMonitorBoundsPx(IntPtr hwnd)
+        {
+            if (hwnd == IntPtr.Zero) return Rect.Empty;
+            try
+            {
+                IntPtr hMon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+                if (hMon == IntPtr.Zero) return Rect.Empty;
+                var mi = new MONITORINFO { cbSize = Marshal.SizeOf(typeof(MONITORINFO)) };
+                if (!GetMonitorInfo(hMon, ref mi)) return Rect.Empty;
+                return new Rect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right - mi.rcMonitor.Left, mi.rcMonitor.Bottom - mi.rcMonitor.Top);
+            }
+            catch { return Rect.Empty; }
+        }
+
+        public static bool IsWindowFullscreenOnMonitor(
+            Rect winRect,
+            Rect monitorRect,
+            Rect workRect,
+            bool hasCaptionStyle,
+            bool isDesktopShell)
+        {
+            if (isDesktopShell || monitorRect.IsEmpty || winRect.IsEmpty) return false;
+            if (!MascotCore.RectCoversScreen(winRect.Left, winRect.Top, winRect.Right, winRect.Bottom,
+                    monitorRect.Left, monitorRect.Top, monitorRect.Right, monitorRect.Bottom, 1.0))
+                return false;
+
+            // Distinguish a normal maximized caption window when the OS taskbar is auto-hidden (work ~= monitor)
+            bool workEqualsMonitor = !workRect.IsEmpty && MascotCore.RectCoversScreen(
+                workRect.Left, workRect.Top, workRect.Right, workRect.Bottom,
+                monitorRect.Left, monitorRect.Top, monitorRect.Right, monitorRect.Bottom, 2.0);
+            if (workEqualsMonitor && hasCaptionStyle)
+                return false;
+
+            return true;
+        }
+
+        void DetectFullscreenState(
+            IntPtr fg,
+            IntPtr activeTargetHwnd,
+            bool fgIsSelf,
+            bool fgIsApp,
+            bool fgIsCli,
+            out bool targetFs,
+            out bool otherFs,
+            out Rect fsMon,
+            out Rect targetMon)
+        {
+            targetFs = false;
+            otherFs = false;
+            fsMon = Rect.Empty;
+            targetMon = GetMonitorBoundsPx(activeTargetHwnd);
+
+            if (fg == IntPtr.Zero || fgIsSelf || !IsWindowVisible(fg) || IsIconic(fg))
+                return;
+
+            bool fgIsTarget = fgIsApp || fgIsCli;
+            string cls = "";
+            try
+            {
+                var sb = new StringBuilder(64);
+                GetClassName(fg, sb, sb.Capacity);
+                cls = sb.ToString();
+            }
+            catch { }
+
+            bool shell = IsDesktopShellClass(cls);
+            IntPtr hMon = MonitorFromWindow(fg, MONITOR_DEFAULTTONEAREST);
+            if (hMon == IntPtr.Zero) return;
+            var mi = new MONITORINFO { cbSize = Marshal.SizeOf(typeof(MONITORINFO)) };
+            if (!GetMonitorInfo(hMon, ref mi)) return;
+
+            var monRect = new Rect(mi.rcMonitor.Left, mi.rcMonitor.Top, mi.rcMonitor.Right - mi.rcMonitor.Left, mi.rcMonitor.Bottom - mi.rcMonitor.Top);
+            var workRect = new Rect(mi.rcWork.Left, mi.rcWork.Top, mi.rcWork.Right - mi.rcWork.Left, mi.rcWork.Bottom - mi.rcWork.Top);
+
+            RECT wr;
+            bool gotRect = GetVisualWindowRect(fg, out wr);
+            var winRect = gotRect && wr.Right > wr.Left && wr.Bottom > wr.Top
+                ? new Rect(wr.Left, wr.Top, wr.Right - wr.Left, wr.Bottom - wr.Top)
+                : Rect.Empty;
+
+            int style = GetWindowLong(fg, GWL_STYLE);
+            bool hasCaption = (style & WS_CAPTION) == WS_CAPTION;
+            bool isFs = IsWindowFullscreenOnMonitor(winRect, monRect, workRect, hasCaption, shell);
+
+            if (!isFs && !fgIsTarget && !shell)
+            {
+                try
+                {
+                    int quns;
+                    if (SHQueryUserNotificationState(out quns) == 0 &&
+                        (quns == QUNS_RUNNING_D3D_FULL_SCREEN || quns == QUNS_PRESENTATION_MODE))
+                        isFs = true;
+                }
+                catch { }
+            }
+
+            if (!isFs) return;
+            fsMon = monRect;
+            if (fgIsTarget) targetFs = true;
+            else otherFs = true;
+        }
+
         // Zero-dependency Windows Core Audio peak meter to distinguish Antigravity speaking vs user speaking in Voice Mode
         static class AudioMeter
         {
@@ -1366,17 +1490,35 @@ namespace AgyPet
 
         const uint GW_HWNDPREV = 3;
         const uint GW_OWNER = 4;
+        const uint MONITOR_DEFAULTTONEAREST = 2;
+        const int GWL_STYLE = -16;
+        const int WS_CAPTION = 0x00C00000;
         const int GWL_EXSTYLE = -20;
         const int WS_EX_TRANSPARENT = 0x00000020;
         const int WS_EX_LAYERED = 0x00080000;
+        const int QUNS_RUNNING_D3D_FULL_SCREEN = 3;
+        const int QUNS_PRESENTATION_MODE = 4;
         const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
         const int DWMWA_CLOAKED = 14;
         const uint TH32CS_SNAPPROCESS = 0x00000002;
         static readonly IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1);
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct MONITORINFO
+        {
+            public int cbSize;
+            public RECT rcMonitor;
+            public RECT rcWork;
+            public int dwFlags;
+        }
+
         delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
         [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
         [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
         [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+        [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+        [DllImport("user32.dll", CharSet = CharSet.Auto)] static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+        [DllImport("shell32.dll")] static extern int SHQueryUserNotificationState(out int pquns);
         [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc fn, IntPtr l);
         [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr hParent, EnumWindowsProc fn, IntPtr l);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string cls, string title);

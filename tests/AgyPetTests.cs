@@ -686,6 +686,36 @@ namespace AgyPet.Tests
                 AssertEq(6, m.AirLayer.Children.Count);
             });
 
+            Run("Fullscreen logic hides during other fullscreen apps, spares Antigravity fullscreen, and skips shells", () =>
+            {
+                var defaults = new PetSettings();
+                AssertTrue(defaults.HideInFullscreen, "HideInFullscreen should default to true");
+
+                AssertTrue(PetWindow.ShouldHideMascot(false, false, true, false, false, false, false, false, false, true, true),
+                    "Should hide when another app is fullscreen and HideInFullscreen is enabled");
+                AssertTrue(!PetWindow.ShouldHideMascot(false, false, true, false, false, false, false, false, false, false, true),
+                    "Should stay visible when HideInFullscreen is disabled");
+                AssertTrue(!PetWindow.ShouldHideMascot(false, false, true, false, false, false, false, false, false, true, false),
+                    "Should stay visible when Antigravity itself is fullscreen (otherAppFullscreen=false)");
+                AssertTrue(!PetWindow.ShouldHideMascot(false, false, false, false, false, false, false, true, false, true, true),
+                    "Preview mode must keep mascot visible during fullscreen");
+                AssertTrue(!PetWindow.ShouldHideMascot(false, false, false, false, false, false, false, false, true, true, true),
+                    "Open menu must keep mascot visible during fullscreen");
+
+                var mon = new System.Windows.Rect(0, 0, 1920, 1080);
+                var work = new System.Windows.Rect(0, 0, 1920, 1032);
+                AssertTrue(WindowTracker.IsWindowFullscreenOnMonitor(mon, mon, work, false, false),
+                    "Borderless fullscreen window covering monitor must trigger fullscreen");
+                AssertTrue(!WindowTracker.IsWindowFullscreenOnMonitor(work, mon, work, true, false),
+                    "Normal maximized window stopping at taskbar must not trigger fullscreen");
+                AssertTrue(!WindowTracker.IsWindowFullscreenOnMonitor(mon, mon, work, false, true),
+                    "Desktop shell window (Progman/WorkerW) must never trigger fullscreen");
+                AssertTrue(!WindowTracker.IsWindowFullscreenOnMonitor(mon, mon, mon, true, false),
+                    "Maximized caption window when taskbar auto-hides must not falsely trigger fullscreen");
+                AssertTrue(WindowTracker.IsWindowFullscreenOnMonitor(mon, mon, mon, false, false),
+                    "Borderless fullscreen with auto-hidden taskbar must trigger fullscreen");
+            });
+
             Console.WriteLine("Tests complete: " + passed + " passed, " + failed + " failed.");
             return failed == 0 ? 0 : 1;
         }

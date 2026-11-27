@@ -474,6 +474,13 @@ namespace AgyPet
             SyncVisibility();
         }
 
+        public void SetHideInFullscreen(bool hide)
+        {
+            settings.HideInFullscreen = hide;
+            settings.Save();
+            SyncVisibility();
+        }
+
         public void SetHeadphones(bool enabled)
         {
             settings.Headphones = enabled;
@@ -492,19 +499,31 @@ namespace AgyPet
             bool hasVisibleCli,
             bool isCliMinimized,
             bool previewMode,
-            bool menuActive)
+            bool menuActive,
+            bool hideInFullscreen = false,
+            bool otherAppFullscreen = false)
         {
-            if (previewMode || menuActive) return false;
-            bool anyRunning = isAppOpen || hasActiveCli;
-            if (hideWhenInactive && !anyRunning) return true;
-            bool hasVisibleTarget = (isAppOpen && !isAppMinimized) || hasVisibleCli;
-            bool anyMinimized = isAppMinimized || isCliMinimized;
-            if (hideWhenMinimized && anyMinimized && !hasVisibleTarget) return true;
-            return false;
+            return MascotCore.ShouldHideMascot(
+                hideWhenInactive, hideWhenMinimized, isAppOpen, isAppMinimized,
+                hasActiveCli, hasVisibleCli, isCliMinimized, previewMode, menuActive,
+                hideInFullscreen, otherAppFullscreen);
+        }
+
+        Rect GetMascotMonitorBoundsPx()
+        {
+            if (!settings.PinAboveTaskbar && tracker.IsTargetVisible && !tracker.TargetMonitorBoundsPx.IsEmpty)
+                return tracker.TargetMonitorBoundsPx;
+            double dpiX, dpiY;
+            GetDpiScale(out dpiX, out dpiY);
+            return new Rect(0, 0, SystemParameters.PrimaryScreenWidth * dpiX, SystemParameters.PrimaryScreenHeight * dpiY);
         }
 
         bool SyncVisibility()
         {
+            Rect mascotMon = GetMascotMonitorBoundsPx();
+            bool otherAppFullscreen = tracker.IsOtherAppFullscreen &&
+                (tracker.FullscreenMonitorBoundsPx.IsEmpty || tracker.FullscreenMonitorBoundsPx.IntersectsWith(mascotMon));
+
             bool shouldHide = ShouldHideMascot(
                 settings.HideWhenInactive,
                 settings.HideWhenMinimized,
@@ -514,7 +533,9 @@ namespace AgyPet
                 tracker.HasVisibleCli,
                 tracker.IsCliMinimized,
                 previewMode,
-                contextMenuOpen || externalMenuOpen);
+                contextMenuOpen || externalMenuOpen,
+                settings.HideInFullscreen,
+                otherAppFullscreen);
 
             if (shouldHide)
             {
@@ -1326,6 +1347,16 @@ namespace AgyPet
             GetDpiScale(out dpiX, out dpiY);
             Rect work = SystemParameters.WorkArea;
             Rect screen = new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
+            Rect targetScreen = !tracker.TargetMonitorBoundsPx.IsEmpty
+                ? new Rect(
+                    tracker.TargetMonitorBoundsPx.Left / dpiX,
+                    tracker.TargetMonitorBoundsPx.Top / dpiY,
+                    tracker.TargetMonitorBoundsPx.Width / dpiX,
+                    tracker.TargetMonitorBoundsPx.Height / dpiY)
+                : screen;
+            bool targetFullscreen = !settings.PinAboveTaskbar && tracker.IsTargetVisible && !tracker.IsMinimized && tracker.IsTargetFullscreen;
+            Rect activeBounds = targetFullscreen ? targetScreen : work;
+
             double spriteW = 11.0 * ActivePixelSize;
             double spriteH = 9.0 * ActivePixelSize;
             double petW = spriteW + StagePadX * 2;
@@ -1342,7 +1373,7 @@ namespace AgyPet
                     tracker.WindowBoundsPx.Top / dpiY,
                     tracker.WindowBoundsPx.Width / dpiX,
                     tracker.WindowBoundsPx.Height / dpiY);
-                Point p = PlaceOnCliWindow(settings.CliPlacement, winDip, work, spriteW, spriteH, StagePadX, StagePadY);
+                Point p = PlaceOnCliWindow(settings.CliPlacement, winDip, activeBounds, spriteW, spriteH, StagePadX, StagePadY);
                 petLeft = p.X;
                 petTop = p.Y;
             }
@@ -1397,11 +1428,12 @@ namespace AgyPet
             bool pinnedAway = !tracker.IsTargetVisible || settings.PinAboveTaskbar;
             bool allowTaskbarBand = pinnedAway && (settings.HasCustomFreePos ||
                 effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase));
-            double maxBottom = allowTaskbarBand ? Math.Max(work.Bottom, screen.Bottom) : work.Bottom;
-            double minTop = allowTaskbarBand ? Math.Min(work.Top, screen.Top) : work.Top;
+            Rect clampArea = targetFullscreen ? targetScreen : work;
+            double maxBottom = targetFullscreen ? targetScreen.Bottom : (allowTaskbarBand ? Math.Max(work.Bottom, screen.Bottom) : work.Bottom);
+            double minTop = targetFullscreen ? targetScreen.Top : (allowTaskbarBand ? Math.Min(work.Top, screen.Top) : work.Top);
 
-            double minLeftBound = allowTaskbarBand && !settings.HasCustomFreePos ? (work.Left - StagePadX) : (work.Left - StagePadX * 0.5);
-            double maxLeftBound = allowTaskbarBand && !settings.HasCustomFreePos ? (work.Right - spriteW - StagePadX) : (work.Right - petW + StagePadX * 0.5);
+            double minLeftBound = allowTaskbarBand && !settings.HasCustomFreePos ? (clampArea.Left - StagePadX) : (clampArea.Left - StagePadX * 0.5);
+            double maxLeftBound = allowTaskbarBand && !settings.HasCustomFreePos ? (clampArea.Right - spriteW - StagePadX) : (clampArea.Right - petW + StagePadX * 0.5);
             petLeft = Math.Max(minLeftBound, Math.Min(maxLeftBound, petLeft));
             petTop = Math.Max(minTop - StagePadY * 0.4, Math.Min(maxBottom - spriteH - StagePadY, petTop));
             return new Point(petLeft, petTop);
@@ -1628,6 +1660,7 @@ namespace AgyPet
             var autoHideMenu = new MenuItem { Header = "Auto-Hide" };
             autoHideMenu.Items.Add(CheckItem("Hide When Inactive (App & CLI Closed)", settings.HideWhenInactive, () => SetHideWhenInactive(!settings.HideWhenInactive)));
             autoHideMenu.Items.Add(CheckItem("Hide When Minimized", settings.HideWhenMinimized, () => SetHideWhenMinimized(!settings.HideWhenMinimized)));
+            autoHideMenu.Items.Add(CheckItem("Hide When Other App Is Fullscreen", settings.HideInFullscreen, () => SetHideInFullscreen(!settings.HideInFullscreen)));
             contextMenu.Items.Add(autoHideMenu);
 
             var sizeMenu = new MenuItem { Header = "Size" };

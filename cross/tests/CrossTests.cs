@@ -206,6 +206,33 @@ namespace AgyPet.CrossTests
                 AssertEq(6, mv.AirLayer.Children.Count);
             });
 
+            Run("Cross-platform fullscreen classification distinguishes other fullscreen apps from Antigravity & shells", () =>
+            {
+                var defaults = new PetSettings();
+                AssertTrue(defaults.HideInFullscreen, "HideInFullscreen should default to true");
+
+                AssertTrue(PetWindow.ShouldHideMascot(false, false, true, false, false, false, false, false, false, true, true),
+                    "HideInFullscreen hides mascot when another app is fullscreen");
+                AssertTrue(!PetWindow.ShouldHideMascot(false, false, true, false, false, false, false, false, false, true, false),
+                    "Stays visible when Antigravity itself is fullscreen");
+
+                var screens = new[] { new ScreenRectDip(0, 0, 1440, 900) };
+                bool targetFs, otherFs;
+                ScreenRectDip fsBounds;
+
+                PlatformWindowTracker.ClassifyFullscreen(false, screens[0], false, false, screens, out targetFs, out otherFs, out fsBounds);
+                AssertTrue(otherFs && !targetFs, "Other app covering full screen sets IsOtherAppFullscreen");
+
+                PlatformWindowTracker.ClassifyFullscreen(true, screens[0], true, false, screens, out targetFs, out otherFs, out fsBounds);
+                AssertTrue(targetFs && !otherFs, "Antigravity/CLI fullscreen sets IsTargetFullscreen only");
+
+                PlatformWindowTracker.ClassifyFullscreen(false, new ScreenRectDip(0, 25, 1440, 827), false, false, screens, out targetFs, out otherFs, out fsBounds);
+                AssertTrue(!targetFs && !otherFs, "Normal window below menu bar and above dock is not fullscreen");
+
+                AssertTrue(PlatformWindowTracker.IsMacShellWindow("Finder", ""), "macOS Finder desktop background ignored");
+                AssertTrue(!PlatformWindowTracker.IsMacShellWindow("Finder", "Downloads"), "macOS Finder window allowed");
+            });
+
             Console.WriteLine("Cross tests complete: " + passed + " passed, " + failed + " failed.");
             return failed == 0 ? 0 : 1;
         }

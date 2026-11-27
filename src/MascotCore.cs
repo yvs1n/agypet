@@ -312,5 +312,39 @@ namespace AgyPet
                 (byte)Math.Max(0, Math.Round(c.G * k)),
                 (byte)Math.Max(0, Math.Round(c.B * k)));
         }
+
+        public static bool RectCoversScreen(
+            double wLeft, double wTop, double wRight, double wBottom,
+            double sLeft, double sTop, double sRight, double sBottom,
+            double tolerance = 1.0)
+        {
+            if (sRight <= sLeft || sBottom <= sTop) return false;
+            if (wRight <= wLeft || wBottom <= wTop) return false;
+            return wLeft <= sLeft + tolerance && wTop <= sTop + tolerance &&
+                   wRight >= sRight - tolerance && wBottom >= sBottom - tolerance;
+        }
+
+        public static bool ShouldHideMascot(
+            bool hideWhenInactive,
+            bool hideWhenMinimized,
+            bool isAppOpen,
+            bool isAppMinimized,
+            bool hasActiveCli,
+            bool hasVisibleCli,
+            bool isCliMinimized,
+            bool previewMode,
+            bool menuActive,
+            bool hideInFullscreen = false,
+            bool otherAppFullscreen = false)
+        {
+            if (previewMode || menuActive) return false;
+            if (hideInFullscreen && otherAppFullscreen) return true;
+            bool anyRunning = isAppOpen || hasActiveCli;
+            if (hideWhenInactive && !anyRunning) return true;
+            bool hasVisibleTarget = (isAppOpen && !isAppMinimized) || hasVisibleCli;
+            bool anyMinimized = isAppMinimized || isCliMinimized;
+            if (hideWhenMinimized && anyMinimized && !hasVisibleTarget) return true;
+            return false;
+        }
     }
 }

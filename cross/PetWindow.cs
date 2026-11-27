@@ -257,6 +257,21 @@ namespace AgyPet
             }
         }
 
+        ScreenRectDip[] GetAllScreensDip()
+        {
+            if (Screens == null || Screens.All == null || Screens.All.Count == 0)
+                return new[] { new ScreenRectDip(0, 0, 1440, 900) };
+            var arr = new ScreenRectDip[Screens.All.Count];
+            for (int i = 0; i < Screens.All.Count; i++)
+            {
+                var sc = Screens.All[i];
+                double s = sc.Scaling > 0.1 ? sc.Scaling : 1.0;
+                var b = sc.Bounds;
+                arr[i] = new ScreenRectDip(b.X / s, b.Y / s, b.Width / s, b.Height / s);
+            }
+            return arr;
+        }
+
         void GetScreenRectsDip(out ScreenRectDip work, out ScreenRectDip screen)
         {
             var sc = ActiveScreen;
@@ -482,6 +497,14 @@ namespace AgyPet
             NotifyStateChanged();
         }
 
+        public void SetHideInFullscreen(bool hide)
+        {
+            settings.HideInFullscreen = hide;
+            settings.Save();
+            SyncVisibility();
+            NotifyStateChanged();
+        }
+
         public void SetHeadphones(bool enabled)
         {
             settings.Headphones = enabled;
@@ -509,24 +532,31 @@ namespace AgyPet
             bool hasVisibleCli,
             bool isCliMinimized,
             bool previewMode,
-            bool menuActive)
+            bool menuActive,
+            bool hideInFullscreen = false,
+            bool otherAppFullscreen = false)
         {
-            if (previewMode || menuActive) return false;
-            bool anyRunning = isAppOpen || hasActiveCli;
-            if (hideWhenInactive && !anyRunning) return true;
-            bool hasVisibleTarget = (isAppOpen && !isAppMinimized) || hasVisibleCli;
-            bool anyMinimized = isAppMinimized || isCliMinimized;
-            if (hideWhenMinimized && anyMinimized && !hasVisibleTarget) return true;
-            return false;
+            return MascotCore.ShouldHideMascot(
+                hideWhenInactive, hideWhenMinimized, isAppOpen, isAppMinimized,
+                hasActiveCli, hasVisibleCli, isCliMinimized, previewMode, menuActive,
+                hideInFullscreen, otherAppFullscreen);
         }
 
         bool SyncVisibility()
         {
+            ScreenRectDip work, screen;
+            GetScreenRectsDip(out work, out screen);
+            bool otherFs = tracker.IsOtherAppFullscreen &&
+                (tracker.FullscreenBoundsDip.IsEmpty ||
+                 !(tracker.FullscreenBoundsDip.Right <= screen.Left || tracker.FullscreenBoundsDip.Left >= screen.Right ||
+                   tracker.FullscreenBoundsDip.Bottom <= screen.Top || tracker.FullscreenBoundsDip.Top >= screen.Bottom));
+
             bool shouldHide = ShouldHideMascot(
                 settings.HideWhenInactive, settings.HideWhenMinimized,
                 tracker.IsAppOpen, tracker.IsAppMinimized,
                 tracker.HasActiveCli, tracker.HasVisibleCli, tracker.IsCliMinimized,
-                previewMode, isMenuOpen);
+                previewMode, isMenuOpen,
+                settings.HideInFullscreen, otherFs);
 
             if (shouldHide)
             {
@@ -828,7 +858,7 @@ namespace AgyPet
         {
             tracker.TrackCliWindows = settings.CliPlacement != "off";
             tracker.TrackMusicAudio = settings.Headphones;
-            tracker.Poll(CurrentScaling);
+            tracker.Poll(CurrentScaling, GetAllScreensDip());
 
             monitor.PreferredChatCandidates = tracker.ActiveChatCandidates;
             monitor.PreferredChatTitle = tracker.ActiveChatTitle;
@@ -896,7 +926,7 @@ namespace AgyPet
         void SnapToTarget()
         {
             tracker.TrackCliWindows = settings.CliPlacement != "off";
-            tracker.Poll(CurrentScaling);
+            tracker.Poll(CurrentScaling, GetAllScreensDip());
             wasOnChatScreen = !settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && !tracker.WindowBoundsDip.IsEmpty;
             if (!dragging) EnsureEffectiveSize();
             double dx, dy;
@@ -967,6 +997,9 @@ namespace AgyPet
             string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
             string awayCorner = ResolveAwayCornerForPlatform(OperatingSystem.IsMacOS(), tracker.IsAnyAntigravityOpen, effectiveCorner);
 
+            bool targetFullscreen = !settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && tracker.IsTargetFullscreen;
+            ScreenRectDip effectiveWork = targetFullscreen ? screen : work;
+
             if (!settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && !tracker.WindowBoundsDip.IsEmpty)
             {
                 var winDip = tracker.WindowBoundsDip;
@@ -980,8 +1013,8 @@ namespace AgyPet
                         : isCenter ? (winDip.Left + (winDip.Width - petW) * 0.5)
                         : (winDip.Right - 22.0 - spriteW - StagePadX);
                     double vBot = isTop
-                        ? Math.Max(work.Top + spriteH + 6.0, winDip.Top + 2.0)
-                        : Math.Min(work.Bottom, winDip.Bottom - 20.0);
+                        ? Math.Max(effectiveWork.Top + spriteH + 6.0, winDip.Top + 2.0)
+                        : Math.Min(effectiveWork.Bottom, winDip.Bottom - 20.0);
                     petTop = vBot - spriteH - StagePadY;
                 }
                 else
@@ -989,7 +1022,7 @@ namespace AgyPet
                     // Perch neatly along the bottom-right composer area or top-right header edge inside Antigravity
                     double rightInset = Math.Min(42.0, Math.Max(22.0, winDip.Width * 0.04));
                     petLeft = winDip.Right - rightInset - spriteW - StagePadX;
-                    double perchBottom = Math.Max(work.Top + spriteH + 8.0, winDip.Top + 28.0);
+                    double perchBottom = Math.Max(effectiveWork.Top + spriteH + 8.0, winDip.Top + 28.0);
                     petTop = perchBottom - spriteH - StagePadY;
                 }
             }
@@ -1004,10 +1037,11 @@ namespace AgyPet
             }
 
             bool pinnedAway = !tracker.IsInFront || settings.PinAboveTaskbar;
-            bool allowBar = pinnedAway && (settings.HasCustomFreePos || awayCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase));
+            bool allowBar = targetFullscreen || (pinnedAway && (settings.HasCustomFreePos || awayCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase)));
+            ScreenRectDip clampX = targetFullscreen ? screen : work;
             double maxBottom = allowBar ? Math.Max(work.Bottom, screen.Bottom) : work.Bottom;
             double minTop = allowBar ? Math.Min(work.Top, screen.Top) : work.Top;
-            petLeft = Math.Max(work.Left - StagePadX, Math.Min(work.Right - spriteW - StagePadX, petLeft));
+            petLeft = Math.Max(clampX.Left - StagePadX, Math.Min(clampX.Right - spriteW - StagePadX, petLeft));
             petTop = Math.Max(minTop - StagePadY * 0.4, Math.Min(maxBottom - spriteH - StagePadY, petTop));
         }
 
@@ -1291,6 +1325,7 @@ namespace AgyPet
             {
                 CheckRow("Hide When Inactive (App & CLI Closed)", settings.HideWhenInactive, () => SetHideWhenInactive(!settings.HideWhenInactive)),
                 CheckRow("Hide When Minimized", settings.HideWhenMinimized, () => SetHideWhenMinimized(!settings.HideWhenMinimized)),
+                CheckRow("Hide When Other App Is Fullscreen", settings.HideInFullscreen, () => SetHideInFullscreen(!settings.HideInFullscreen)),
             }));
 
             rows.Children.Add(SubmenuRow("Size", () => new Control[]

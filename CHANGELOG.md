@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.11 (2026-11-27)
+- **Fullscreen Awareness Across All OSes**: Added automatic fullscreen detection across Windows (`WindowTracker`, `SHQueryUserNotificationState`, DWM monitor bounds), macOS (`CGWindowListCopyWindowInfo`), and Linux (`_NET_WM_STATE_FULLSCREEN` + desktop/dock filtering).
+- **Smart Auto-Hide Toggle (`Hide When Other App Is Fullscreen`)**: Defaults to enabled so AgyPet automatically hides behind fullscreen videos, games, and presentations on the same monitor, while staying visible and perched cleanly across full screen bounds whenever Antigravity App or `agy` CLI itself goes fullscreen.
+
 ## 0.4.10 (2026-11-27)
 - **Unified Single Musical Note Across Dancing & Active Audio**: Updated dancing (`DrawDanceNotes`) across Windows ([src/Mascot.cs](src/Mascot.cs)), macOS/Linux ([cross/MascotView.cs](cross/MascotView.cs)), and the website ([site/app.js](site/app.js)) to share the same single eighth-note glyph (`♪` via `DrawEighthNote` / `drawEighthNote`) used when speakers/headphones audio is active.
 

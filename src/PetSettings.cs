@@ -92,6 +92,7 @@ namespace AgyPet
         public bool ShowHoverCard { get; set; }
         public bool HideWhenInactive { get; set; }
         public bool HideWhenMinimized { get; set; }
+        public bool HideInFullscreen { get; set; }
         public bool PinAboveTaskbar { get; set; }
         public bool LockPosition { get; set; }
         public bool Headphones { get; set; }
@@ -129,6 +130,7 @@ namespace AgyPet
             ShowHoverCard = true;
             HideWhenInactive = false;
             HideWhenMinimized = false;
+            HideInFullscreen = true;
             PinAboveTaskbar = false;
             LockPosition = false;
             Headphones = false;
