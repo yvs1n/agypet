@@ -14,39 +14,9 @@ trap 'rm -rf "$STAGE"' EXIT
 APP="$STAGE/AgyPet.app"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$STAGE/icon.iconset"
 
-cp "$ARM64_BIN" "$APP/Contents/MacOS/AgyPet-arm64"
-cp "$X64_BIN" "$APP/Contents/MacOS/AgyPet-x64"
-chmod +x "$APP/Contents/MacOS/AgyPet-arm64" "$APP/Contents/MacOS/AgyPet-x64"
-
-# Compile tiny Universal Mach-O (arm64 + x86_64) dispatcher executable
-cat > "$STAGE/main.c" << 'EOF'
-#include <libgen.h>
-#include <limits.h>
-#include <mach-o/dyld.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-
-int main(int argc, char *argv[]) {
-    char raw[PATH_MAX];
-    uint32_t sz = sizeof(raw);
-    if (_NSGetExecutablePath(raw, &sz) != 0) return 1;
-    char resolved[PATH_MAX];
-    char *dir = realpath(raw, resolved) ? dirname(resolved) : dirname(raw);
-    char target[PATH_MAX];
-#if defined(__aarch64__)
-    snprintf(target, sizeof(target), "%s/AgyPet-arm64", dir);
-#else
-    snprintf(target, sizeof(target), "%s/AgyPet-x64", dir);
-#endif
-    argv[0] = target;
-    execv(target, argv);
-    perror("AgyPet launch failed");
-    return 1;
-}
-EOF
-clang -arch arm64 -arch x86_64 -mmacosx-version-min=11.0 -O2 "$STAGE/main.c" -o "$APP/Contents/MacOS/AgyPet"
+# Combine arm64 & x86_64 .NET 8 single-file binaries into one true Universal Mach-O
+# executable (avoids execv pidversion mismatch with macOS MenuBarAgent / RunningBoard).
+lipo -create "$ARM64_BIN" "$X64_BIN" -output "$APP/Contents/MacOS/AgyPet"
 chmod +x "$APP/Contents/MacOS/AgyPet"
 
 # Render multi-size Antigravity icon PNGs & assemble AgyPet.icns

@@ -175,13 +175,13 @@ namespace AgyPet
 
             icon = new TrayIcon
             {
-                Icon = OperatingSystem.IsMacOS() ? PetTheme.CreateMacMenuBarIcon() : PetTheme.CreateMascotWindowIcon(),
                 ToolTipText = "AgyPet — Antigravity Companion",
                 Menu = menu,
                 IsVisible = true,
             };
             if (OperatingSystem.IsMacOS())
                 MacOSProperties.SetIsTemplateIcon(icon, true);
+            icon.Icon = OperatingSystem.IsMacOS() ? PetTheme.CreateMacMenuBarIcon() : PetTheme.CreateMascotWindowIcon();
 
             if (Application.Current != null)
             {
