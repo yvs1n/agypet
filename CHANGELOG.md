@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.4 (2026-11-27)
+- **macOS & Linux Right-Click Submenu Crash & Overlay Fix**: Stopped `OpenSubmenu` from re-parenting a previously attached `StackPanel` when hovering back and forth across submenus or clicking a submenu row (building fresh submenu controls per open and detaching closed menu contents cleanly), coordinated menu deactivation timers across `menuWindow` and `submenuWindow`, ignored AgyPet's own windows in `PollMacOs` / `PollLinux`, and preserved macOS `NSWindow` overlay ordering (`setHidesOnDeactivate: false` + `orderFrontRegardless`) when menus deactivate or close.
+- **Taskbar Preview Sizing Fix**: Kept `Preview Mood` at the same taskbar-fitted pixel size when Antigravity is minimized and docked in the taskbar instead of swelling back up to the larger in-app slider size.
+
 ## 0.4.3 (2026-11-27)
 - **Anchored Eyes & Live Pupil Tracking**: Kept eye sockets firmly anchored in place while pupils smoothly track your cursor in `Idle` / `Listening` and animate dynamically across `Thinking`, `Reading`, `Working`, `Terminal`, `Searching`, `Browsing`, `Multitasking`, `Delegating`, `Speaking`, `Typing`, `Alert`, and `Question` in both `Classic` and `Dark Remake` skins.
 - **Clean Eyebrow-Free Focus & Proportional Speaking Mouth**: Removed floating eyebrows from focused working/terminal states and resized `Speaking` mouth frames (`0.72×0.24` closed / `0.86×0.42` open) to sit cleanly between the eyes above the inner arch cutout.

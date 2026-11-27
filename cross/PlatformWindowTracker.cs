@@ -296,7 +296,7 @@ namespace AgyPet
             for (int i = 0; i < wins.Count; i++)
             {
                 var w = wins[i];
-                if (w.Layer != 0 || w.Bounds.Width < 120 || w.Bounds.Height < 100) continue;
+                if (w.OwnerPid == selfPid || w.Layer != 0 || w.Bounds.Width < 120 || w.Bounds.Height < 100) continue;
                 if (frontIdx < 0) frontIdx = i;
 
                 bool isApp = appPids.Contains(w.OwnerPid) || IsAntigravityName(w.OwnerName);
@@ -381,6 +381,7 @@ namespace AgyPet
             for (int i = 0; i < wins.Count; i++)
             {
                 var w = wins[i];
+                if (w.Pid == selfPid) continue;
                 bool isApp = appPids.Contains(w.Pid) || (!string.IsNullOrEmpty(w.Title) && w.Title.EndsWith("Antigravity", StringComparison.OrdinalIgnoreCase));
                 bool isCli = TrackCliWindows && cliHostPids.Contains(w.Pid);
                 if (isApp)

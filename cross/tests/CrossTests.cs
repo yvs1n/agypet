@@ -90,6 +90,9 @@ namespace AgyPet.CrossTests
                 var work = new ScreenRectDip(0, 25, 1440, 827); // 48 DIP dock at bottom
                 AssertEq("medium", PetWindow.ResolveEffectiveSize("small", "taskbar-right", false, false, true, false, work, screen));
                 AssertEq("small", PetWindow.ResolveEffectiveSize("small", "taskbar-right", false, false, false, false, work, screen));
+                AssertEq(
+                    PetWindow.ResolveEffectivePixelSize(6.3, "taskbar-right", false, false, true, false, work, screen),
+                    PetWindow.ResolveEffectivePixelSize(6.3, "taskbar-right", false, false, true, true, work, screen));
 
                 double lx, ty;
                 PetWindow.PlaceInCorner("bottom-right", work, screen, 46.2, 37.8, 36, 24, out lx, out ty);
@@ -115,6 +118,11 @@ namespace AgyPet.CrossTests
                 back.Normalize();
                 AssertEq(5.4, back.PixelSize);
                 AssertEq("large", back.Size);
+
+                // Submenu body factory creates distinct instances per hover so re-entering a submenu never crashes
+                var firstSub = PetWindow.BuildFreshMenuBody(() => new Avalonia.Controls.Control[] { new Avalonia.Controls.TextBlock { Text = "A" } });
+                var secondSub = PetWindow.BuildFreshMenuBody(() => new Avalonia.Controls.Control[] { new Avalonia.Controls.TextBlock { Text = "A" } });
+                AssertTrue(!object.ReferenceEquals(firstSub, secondSub), "Each submenu open must produce a fresh detached body");
             });
 
             Console.WriteLine("Cross tests complete: " + passed + " passed, " + failed + " failed.");

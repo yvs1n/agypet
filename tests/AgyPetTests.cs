@@ -483,6 +483,10 @@ namespace AgyPet.Tests
                 AssertEq(6.3, PetWindow.ResolveEffectivePixelSize(6.3, "taskbar-right", false, false, false, false, win11Work, screen));
                 AssertTrue(PetWindow.ResolveEffectivePixelSize(6.3, "taskbar-right", false, false, true, false, win11Work, screen) <= 4.61,
                     "Oversized slider value should smoothly scale to keep 6 DIP buffer inside 48 DIP taskbar");
+                AssertEq(
+                    PetWindow.ResolveEffectivePixelSize(6.3, "taskbar-right", false, false, true, false, win11Work, screen),
+                    PetWindow.ResolveEffectivePixelSize(6.3, "taskbar-right", false, false, true, true, win11Work, screen));
+                AssertEq("medium", PetWindow.ResolveEffectiveSize("large", "taskbar-right", false, false, true, true, win11Work, screen));
 
                 // Standard 48 DIP Win11 taskbar: avoids edge-to-edge large, uses medium with comfortable buffer outside app
                 AssertEq("medium", PetWindow.ResolveEffectiveSize("small", "taskbar-right", false, false, true, false, win11Work, screen));

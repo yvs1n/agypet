@@ -287,7 +287,7 @@ namespace AgyPet
             Rect screenBounds)
         {
             double clamped = PetSettings.ClampPixelSize(userPx);
-            if (previewMode || !outsideApp || hasCustomFreePos)
+            if (!outsideApp || hasCustomFreePos)
                 return clamped;
 
             string effectiveCorner = PetSettings.ResolvePinnedCorner(corner, pinAboveTaskbar);
@@ -316,7 +316,7 @@ namespace AgyPet
             Rect screenBounds)
         {
             string normalizedSize = (userSize == "small" || userSize == "large") ? userSize : "medium";
-            if (previewMode || !outsideApp || hasCustomFreePos)
+            if (!outsideApp || hasCustomFreePos)
                 return normalizedSize;
 
             string effectiveCorner = PetSettings.ResolvePinnedCorner(corner, pinAboveTaskbar);

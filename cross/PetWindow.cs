@@ -40,12 +40,14 @@ namespace AgyPet
         // Custom website-themed dark rounded right-click menu overlay (with hoverable submenus)
         Window menuWindow;
         Window submenuWindow;
+        Control activeSubmenuRow;
         bool isMenuOpen;
 
         MascotView mascot;
         readonly DispatcherTimer pollTimer;
         readonly DispatcherTimer animTimer;
         readonly DispatcherTimer hoverLeaveTimer;
+        readonly DispatcherTimer menuDeactivateTimer;
 
         bool mouseDown;
         bool dragging;
@@ -166,6 +168,14 @@ namespace AgyPet
             hoverLeaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(240) };
             hoverLeaveTimer.Tick += (s, e) => { hoverLeaveTimer.Stop(); HideCard(); };
 
+            menuDeactivateTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(75) };
+            menuDeactivateTimer.Tick += (s, e) =>
+            {
+                menuDeactivateTimer.Stop();
+                if ((menuWindow == null || !menuWindow.IsActive) && (submenuWindow == null || !submenuWindow.IsActive))
+                    CloseContextMenu();
+            };
+
             pollTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(100) };
             pollTimer.Tick += (s, e) => PollTarget();
             pollTimer.Start();
@@ -181,6 +191,10 @@ namespace AgyPet
                 SyncActivity();
                 SnapToTarget();
             };
+            Deactivated += (s, e) =>
+            {
+                if (IsVisible) ConfigureNativeOverlayWindow(this);
+            };
             Closed += (s, e) =>
             {
                 CloseContextMenu();
@@ -189,14 +203,14 @@ namespace AgyPet
             };
         }
 
-        static void ConfigureNativeOverlayWindow(Window win)
+        static void ConfigureNativeOverlayWindow(Window win, bool bringFront = false)
         {
             if (!OperatingSystem.IsMacOS()) return;
             try
             {
                 var ph = win.TryGetPlatformHandle();
                 if (ph == null || ph.Handle == IntPtr.Zero) return;
-                MacOverlay.ConfigureWindow(ph.Handle);
+                MacOverlay.ConfigureWindow(ph.Handle, bringFront);
             }
             catch { }
         }
@@ -265,7 +279,7 @@ namespace AgyPet
             ScreenRectDip screenBounds)
         {
             string normalizedSize = (userSize == "small" || userSize == "large") ? userSize : "medium";
-            if (previewMode || !outsideApp || hasCustomFreePos)
+            if (!outsideApp || hasCustomFreePos)
                 return normalizedSize;
 
             string effectiveCorner = PetSettings.ResolvePinnedCorner(corner, pinAboveTaskbar);
@@ -295,7 +309,7 @@ namespace AgyPet
             ScreenRectDip screenBounds)
         {
             double clamped = PetSettings.ClampPixelSize(userPx);
-            if (previewMode || !outsideApp || hasCustomFreePos)
+            if (!outsideApp || hasCustomFreePos)
                 return clamped;
 
             string effectiveCorner = PetSettings.ResolvePinnedCorner(corner, pinAboveTaskbar);
@@ -1134,11 +1148,42 @@ namespace AgyPet
             }
         }
 
+        static void CloseMenuWindowSafely(Window win)
+        {
+            if (win == null) return;
+            try
+            {
+                var border = win.Content as Border;
+                var scroll = border != null ? border.Child as ScrollViewer : null;
+                if (scroll != null) scroll.Content = null;
+                win.Content = null;
+            }
+            catch { }
+            try { win.Close(); } catch { }
+        }
+
+        void ScheduleMenuFocusCheck()
+        {
+            if (menuDeactivateTimer == null) return;
+            menuDeactivateTimer.Stop();
+            menuDeactivateTimer.Start();
+        }
+
         void CloseContextMenu()
         {
+            if (menuDeactivateTimer != null) menuDeactivateTimer.Stop();
             isMenuOpen = false;
-            if (submenuWindow != null) { try { submenuWindow.Close(); } catch { } submenuWindow = null; }
-            if (menuWindow != null) { try { menuWindow.Close(); } catch { } menuWindow = null; }
+            activeSubmenuRow = null;
+            CloseMenuWindowSafely(submenuWindow);
+            submenuWindow = null;
+            CloseMenuWindowSafely(menuWindow);
+            menuWindow = null;
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!IsVisible) return;
+                Topmost = true;
+                ConfigureNativeOverlayWindow(this, bringFront: true);
+            });
         }
 
         void OpenContextMenu(PointerPressedEventArgs e)
@@ -1147,58 +1192,67 @@ namespace AgyPet
             isMenuOpen = true;
 
             var rows = new StackPanel { Spacing = 1 };
-            rows.Children.Add(SubmenuRow("Skin", new[]
+            rows.Children.Add(SubmenuRow("Skin", () => new Control[]
             {
                 CheckRow("Classic (Official Antigravity Colors)", settings.Skin == MascotCore.ClassicSkin, () => ApplySkin(MascotCore.ClassicSkin)),
                 CheckRow("Dark Remake (Monochrome)", settings.Skin == MascotCore.DarkSkin, () => ApplySkin(MascotCore.DarkSkin)),
             }));
 
-            var awayRows = new List<Control>();
-            bool addedSep = false;
-            foreach (var opt in PetSettings.AwayLocations)
+            rows.Children.Add(SubmenuRow("Location When Away / Minimized", () =>
             {
-                if (!addedSep && opt.Id.StartsWith("taskbar-", StringComparison.Ordinal))
+                var awayRows = new List<Control>();
+                bool addedSep = false;
+                foreach (var opt in PetSettings.AwayLocations)
                 {
-                    awayRows.Add(MenuSeparator());
-                    addedSep = true;
+                    if (!addedSep && opt.Id.StartsWith("taskbar-", StringComparison.Ordinal))
+                    {
+                        awayRows.Add(MenuSeparator());
+                        addedSep = true;
+                    }
+                    string id = opt.Id;
+                    awayRows.Add(CheckRow(opt.Label, !settings.HasCustomFreePos && settings.MinimizedCorner == id, () => SetMinimizedCorner(id)));
                 }
-                string id = opt.Id;
-                awayRows.Add(CheckRow(opt.Label, !settings.HasCustomFreePos && settings.MinimizedCorner == id, () => SetMinimizedCorner(id)));
-            }
-            rows.Children.Add(SubmenuRow("Location When Away / Minimized", awayRows));
+                return awayRows;
+            }));
             rows.Children.Add(CheckRow("Pin Above Taskbar (Stay in Place)", settings.PinAboveTaskbar, () => SetPinAboveTaskbar(!settings.PinAboveTaskbar)));
             rows.Children.Add(CheckRow("Lock Position (Disable Dragging)", settings.LockPosition, () => SetLockPosition(!settings.LockPosition)));
 
-            var cliRows = new List<Control>();
-            foreach (var opt in PetSettings.CliLocations)
+            rows.Children.Add(SubmenuRow("CLI Terminal Placement", () =>
             {
-                string id = opt.Id;
-                cliRows.Add(CheckRow(opt.Label, settings.CliPlacement == id, () => SetCliPlacement(id)));
-            }
-            rows.Children.Add(SubmenuRow("CLI Terminal Placement", cliRows));
+                var cliRows = new List<Control>();
+                foreach (var opt in PetSettings.CliLocations)
+                {
+                    string id = opt.Id;
+                    cliRows.Add(CheckRow(opt.Label, settings.CliPlacement == id, () => SetCliPlacement(id)));
+                }
+                return cliRows;
+            }));
 
-            rows.Children.Add(SubmenuRow("Auto-Hide", new[]
+            rows.Children.Add(SubmenuRow("Auto-Hide", () => new Control[]
             {
                 CheckRow("Hide When Inactive (App & CLI Closed)", settings.HideWhenInactive, () => SetHideWhenInactive(!settings.HideWhenInactive)),
                 CheckRow("Hide When Minimized", settings.HideWhenMinimized, () => SetHideWhenMinimized(!settings.HideWhenMinimized)),
             }));
 
-            rows.Children.Add(SubmenuRow("Size", new Control[]
+            rows.Children.Add(SubmenuRow("Size", () => new Control[]
             {
                 BuildSizeSliderPanel(),
                 MenuSeparator(),
                 ActionRow("Reset Default (100% · 4.2 px)", () => ApplyPixelSize(PetSettings.DefaultPixelSize, true)),
             }));
 
-            var prevRows = new List<Control>();
-            prevRows.Add(CheckRow("Live Mode (Auto-react to Antigravity)", !previewMode, () => SetPreviewMood(null)));
-            prevRows.Add(MenuSeparator());
-            foreach (MascotMood m in Enum.GetValues(typeof(MascotMood)))
+            rows.Children.Add(SubmenuRow("Preview Mood", () =>
             {
-                var captured = m;
-                prevRows.Add(CheckRow(captured.ToString(), previewMode && previewMood == captured, () => SetPreviewMood(captured)));
-            }
-            rows.Children.Add(SubmenuRow("Preview Mood", prevRows));
+                var prevRows = new List<Control>();
+                prevRows.Add(CheckRow("Live Mode (Auto-react to Antigravity)", !previewMode, () => SetPreviewMood(null)));
+                prevRows.Add(MenuSeparator());
+                foreach (MascotMood m in Enum.GetValues(typeof(MascotMood)))
+                {
+                    var captured = m;
+                    prevRows.Add(CheckRow(captured.ToString(), previewMode && previewMood == captured, () => SetPreviewMood(captured)));
+                }
+                return prevRows;
+            }));
 
             rows.Children.Add(MenuSeparator());
             rows.Children.Add(CheckRow("Show Hover Progress Card", settings.ShowHoverCard, () =>
@@ -1223,7 +1277,7 @@ namespace AgyPet
                 rows.Children.Add(ActionRow(updLabel, () => updater.CheckNow()));
             }
             rows.Children.Add(ActionRow("Send Feedback (GitHub Issue)...", () => FeedbackWindow.ShowDialogOnce(settings.Skin, settings.Size)));
-            rows.Children.Add(SubmenuRow("Credits", new[]
+            rows.Children.Add(SubmenuRow("Credits", () => new Control[]
             {
                 ActionRow("Made by Yassin Ragab (yassinr.me)", () => OpenUrl("https://yassinr.me")),
                 ActionRow("GitHub: yvs1n/agypet", () => OpenUrl("https://github.com/yvs1n/agypet")),
@@ -1240,14 +1294,7 @@ namespace AgyPet
             double ax = anchorPx.X / scale;
             double ay = anchorPx.Y / scale;
 
-            menuWindow.Deactivated += (s, ev) =>
-            {
-                Dispatcher.UIThread.Post(() =>
-                {
-                    if ((menuWindow == null || !menuWindow.IsActive) && (submenuWindow == null || !submenuWindow.IsActive))
-                        CloseContextMenu();
-                });
-            };
+            menuWindow.Deactivated += (s, ev) => ScheduleMenuFocusCheck();
             menuWindow.KeyDown += (s, ke) => { if (ke.Key == Key.Escape) CloseContextMenu(); };
 
             menuWindow.Show();
@@ -1375,21 +1422,35 @@ namespace AgyPet
             });
         }
 
-        Control SubmenuRow(string label, IEnumerable<Control> items)
+        internal static Control BuildFreshMenuBody(Func<IEnumerable<Control>> buildItems)
         {
             var stack = new StackPanel { Spacing = 1 };
-            foreach (var it in items) stack.Children.Add(it);
+            if (buildItems != null)
+            {
+                foreach (var it in buildItems())
+                    if (it != null) stack.Children.Add(it);
+            }
+            return stack;
+        }
+
+        Control SubmenuRow(string label, Func<IEnumerable<Control>> buildItems)
+        {
             Border row = null;
-            row = BuildMenuRow(label, false, true, () => OpenSubmenu(row, stack));
-            row.PointerEntered += (s, e) => OpenSubmenu(row, stack);
+            row = BuildMenuRow(label, false, true, () => OpenSubmenu(row, buildItems));
+            row.PointerEntered += (s, e) => OpenSubmenu(row, buildItems);
             return row;
         }
 
-        void OpenSubmenu(Control anchorRow, Control subBody)
+        void OpenSubmenu(Control anchorRow, Func<IEnumerable<Control>> buildItems)
         {
-            if (submenuWindow != null) { try { submenuWindow.Close(); } catch { } submenuWindow = null; }
             if (menuWindow == null || anchorRow == null) return;
-            submenuWindow = CreateDarkMenuWindow(subBody);
+            if (activeSubmenuRow == anchorRow && submenuWindow != null) return;
+            CloseMenuWindowSafely(submenuWindow);
+            submenuWindow = null;
+            activeSubmenuRow = anchorRow;
+
+            submenuWindow = CreateDarkMenuWindow(BuildFreshMenuBody(buildItems));
+            submenuWindow.Deactivated += (s, ev) => ScheduleMenuFocusCheck();
             submenuWindow.KeyDown += (s, ke) => { if (ke.Key == Key.Escape) CloseContextMenu(); };
             submenuWindow.Show();
 
@@ -1470,8 +1531,9 @@ namespace AgyPet
                 row.BorderBrush = PetTheme.BorderSubtle;
                 if (!hasSubmenu && submenuWindow != null)
                 {
-                    try { submenuWindow.Close(); } catch { }
+                    CloseMenuWindowSafely(submenuWindow);
                     submenuWindow = null;
+                    activeSubmenuRow = null;
                 }
             };
             row.PointerExited += (s, e) =>
@@ -1496,20 +1558,23 @@ namespace AgyPet
             catch { }
         }
 
-        // macOS Objective-C NSWindow helper so overlay stays visible across Spaces without stealing focus
+        // macOS Objective-C NSWindow helper so overlay stays visible across Spaces without hiding when menus deactivate
         static class MacOverlay
         {
             const string ObjC = "/usr/lib/libobjc.A.dylib";
             [DllImport(ObjC)] static extern IntPtr sel_registerName(string name);
+            [DllImport(ObjC, EntryPoint = "objc_msgSend")] static extern void SendVoid(IntPtr receiver, IntPtr selector);
             [DllImport(ObjC, EntryPoint = "objc_msgSend")] static extern void SendULong(IntPtr receiver, IntPtr selector, ulong arg);
             [DllImport(ObjC, EntryPoint = "objc_msgSend")] static extern void SendBool(IntPtr receiver, IntPtr selector, bool arg);
 
-            public static void ConfigureWindow(IntPtr nsWindow)
+            public static void ConfigureWindow(IntPtr nsWindow, bool bringFront = false)
             {
                 if (nsWindow == IntPtr.Zero) return;
                 // NSWindowCollectionBehaviorCanJoinAllSpaces (1) | NSWindowCollectionBehaviorFullScreenAuxiliary (256)
                 SendULong(nsWindow, sel_registerName("setCollectionBehavior:"), 1UL | 256UL);
                 SendBool(nsWindow, sel_registerName("setHidesOnDeactivate:"), false);
+                if (bringFront)
+                    SendVoid(nsWindow, sel_registerName("orderFrontRegardless"));
             }
         }
     }
