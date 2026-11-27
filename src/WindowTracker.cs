@@ -370,42 +370,8 @@ namespace AgyPet
             ref DateTime lastAudioActiveUtc,
             ref bool wasPlaying)
         {
-            if (inVoiceMode)
-            {
-                audioFirstSeenUtc = DateTime.MinValue;
-                lastAudioActiveUtc = DateTime.MinValue;
-                wasPlaying = false;
-                return false;
-            }
-
-            if (peak > 0.01f)
-            {
-                if (audioFirstSeenUtc == DateTime.MinValue ||
-                    lastAudioActiveUtc == DateTime.MinValue ||
-                    (nowUtc - lastAudioActiveUtc).TotalSeconds > 1.8)
-                {
-                    audioFirstSeenUtc = nowUtc;
-                }
-                lastAudioActiveUtc = nowUtc;
-                if ((nowUtc - audioFirstSeenUtc).TotalMilliseconds >= 350)
-                {
-                    wasPlaying = true;
-                    return true;
-                }
-                return wasPlaying;
-            }
-
-            if (wasPlaying && lastAudioActiveUtc != DateTime.MinValue &&
-                (nowUtc - lastAudioActiveUtc).TotalSeconds <= 2.4)
-            {
-                return true;
-            }
-
-            if (lastAudioActiveUtc == DateTime.MinValue || (nowUtc - lastAudioActiveUtc).TotalSeconds > 2.4)
-                audioFirstSeenUtc = DateTime.MinValue;
-
-            wasPlaying = false;
-            return false;
+            return MascotCore.UpdateMusicPlaybackState(
+                peak, inVoiceMode, nowUtc, ref audioFirstSeenUtc, ref lastAudioActiveUtc, ref wasPlaying);
         }
 
         // Checks whether a typing key is currently down without installing any global keyboard hook.

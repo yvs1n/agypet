@@ -156,21 +156,6 @@ namespace AgyPet
             "....................",
         };
 
-        // Editable pixel-art headphones texture (0.5px grid: '.'=empty, 'O'=main frame, '#'=darker shade detail)
-        static readonly string[] HeadphonesMask =
-        {
-            ".......OOOOOOOO.......",
-            "......O........O......",
-            ".....O..........O.....",
-            ".....O..........O.....",
-            "....OO..........OO....",
-            "...O#O..........O#O...",
-            "...O#O..........O#O...",
-            "...O#O..........O#O...",
-            "...O#O..........O#O...",
-            "....OO..........OO....",
-        };
-
         readonly double px;
         readonly Canvas sprite = new Canvas();
         readonly Canvas archNormalLayer = new Canvas();
@@ -1143,20 +1128,22 @@ namespace AgyPet
 
         void DrawHeadphones(bool compact)
         {
-            double yBase = compact ? 1.3 : -0.5;
-            Brush mainCol = Frozen(Color.FromRgb(0xC0, 0xC0, 0xC0));
-            Brush darkDetail = Frozen(Color.FromRgb(0xB0, 0xB0, 0xB0));
+            double yBase = compact ? 1.4 : -0.45;
+            Brush frameCol = IsDark ? MonoMid : Steel;
+            Brush cushionCol = IsDark ? DarkScreen : Paper;
+            Brush accentCol = IsDark ? MonoBright : GlassLit;
 
-            for (int r = 0; r < HeadphonesMask.Length; r++)
+            var mask = MascotCore.HeadphonesMask;
+            for (int r = 0; r < mask.Length; r++)
             {
-                string row = HeadphonesMask[r];
+                string row = mask[r];
                 for (int c = 0; c < row.Length; c++)
                 {
                     char ch = row[c];
                     if (ch == '.') continue;
-                    Brush fill = ch == '#' ? darkDetail : mainCol;
+                    Brush fill = ch == 'A' ? accentCol : (ch == 'C' ? cushionCol : frameCol);
                     bool hasRight = c + 1 < row.Length && row[c + 1] == ch;
-                    bool hasBottom = r + 1 < HeadphonesMask.Length && HeadphonesMask[r + 1][c] == ch;
+                    bool hasBottom = r + 1 < mask.Length && mask[r + 1][c] == ch;
                     Dot(gear, fill, c * 0.5, yBase + r * 0.5, 0.5 + (hasRight ? 0.03 : 0.0), 0.5 + (hasBottom ? 0.03 : 0.0));
                 }
             }
@@ -1169,8 +1156,8 @@ namespace AgyPet
             double lift1 = (t1 <= 3 ? t1 : 6 - t1) * 0.28;
             double lift2 = (t2 <= 3 ? t2 : 6 - t2) * 0.28;
 
-            Brush c1 = Frozen(Color.FromRgb(0xF4, 0x3F, 0x5E)); // rose red-pink
-            Brush c2 = Frozen(Color.FromRgb(0xFB, 0x71, 0x85)); // soft pink-red
+            Brush c1 = IsDark ? MonoBright : GlassLit;
+            Brush c2 = IsDark ? MonoMid : AgyGoldBrush;
 
             // Left beamed double-note (♫)
             double lx = 0.2;

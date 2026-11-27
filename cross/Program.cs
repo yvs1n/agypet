@@ -29,6 +29,7 @@ namespace AgyPet
                 desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
                 settings = PetSettings.Load();
+                try { settings.SyncStartupIfEnabled(Environment.ProcessPath ?? ""); } catch { }
                 monitor = new ActivityMonitor();
                 monitor.Start();
                 updater = new Updater(

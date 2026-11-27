@@ -173,6 +173,19 @@
     return cells;
   }
 
+  const HEADPHONES_MASK = [
+    ".......OOOOOOOO.......",
+    "......O........O......",
+    ".....O..........O.....",
+    ".....O..........O.....",
+    "....OC..........CO....",
+    "...OAC..........CAO...",
+    "...OAC..........CAO...",
+    "...OAC..........CAO...",
+    "...OAC..........CAO...",
+    "....OC..........CO....",
+  ];
+
   const CACHE = {
     classic: {
       normal: buildMaskCache('classic', 'normal'),
@@ -563,6 +576,42 @@
       }
     }
 
+    if (state && state.headphones) {
+      const yBase = compact ? 1.4 : -0.45;
+      const frameCol = isDark ? '#A1A1AA' : '#94A3B8';
+      const cushionCol = isDark ? '#18181B' : '#0F172A';
+      const accentCol = isDark ? '#F4F4F5' : '#38BDF8';
+      for (let r = 0; r < HEADPHONES_MASK.length; r++) {
+        const row = HEADPHONES_MASK[r];
+        for (let c = 0; c < row.length; c++) {
+          const ch = row[c];
+          if (ch === '.') continue;
+          const fill = ch === 'A' ? accentCol : (ch === 'C' ? cushionCol : frameCol);
+          const bleedR = c + 1 < row.length && row[c + 1] === ch ? 0.03 : 0;
+          const bleedB = r + 1 < HEADPHONES_MASK.length && HEADPHONES_MASK[r + 1][c] === ch ? 0.03 : 0;
+          dot(fill, c * 0.5, yBase + r * 0.5, 0.5 + bleedR, 0.5 + bleedB);
+        }
+      }
+      if (!(isIdle && dancing)) {
+        const t1 = Math.floor(tick / 3) % 6;
+        const t2 = (Math.floor(tick / 3) + 3) % 6;
+        const lift1 = (t1 <= 3 ? t1 : 6 - t1) * 0.28;
+        const lift2 = (t2 <= 3 ? t2 : 6 - t2) * 0.28;
+        const c1 = isDark ? '#F4F4F5' : '#38BDF8';
+        const c2 = isDark ? '#A1A1AA' : '#F8C618';
+        const lx = 0.2, ly = -0.3 - lift1;
+        dot(c1, lx, ly, 1.75, 0.38, false);
+        dot(c1, lx, ly + 0.38, 0.38, 0.95, false);
+        dot(c1, lx + 1.37, ly + 0.38, 0.38, 0.95, false);
+        dot(c1, lx - 0.32, ly + 1.1, 0.72, 0.46, false);
+        dot(c1, lx + 1.05, ly + 1.1, 0.72, 0.46, false);
+        const rx = 9.5, ry = -0.5 - lift2;
+        dot(c2, rx, ry, 0.38, 1.25, false);
+        dot(c2, rx + 0.38, ry, 0.55, 0.4, false);
+        dot(c2, rx - 0.32, ry + 1.0, 0.72, 0.46, false);
+      }
+    }
+
     if (hurt) {
       const ey = compact ? 3.85 : 3.05;
       dot(eyeMain, 3.65, ey, 0.4, 0.35); dot(eyeMain, 4.05, ey + 0.32, 0.45, 0.35); dot(eyeMain, 3.65, ey + 0.64, 0.4, 0.35);
@@ -643,6 +692,7 @@
   let heroPx = 4.2;
   let awayMode = 'none'; // 'none' | 'multi' | 'one'
   let dictationOn = false;
+  let headphonesOn = false;
   let userTypingTimer = 0;
   let motionPaused = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let globalTick = 0;
@@ -1024,7 +1074,15 @@
   btnAwayOne.addEventListener('click', () => setAwayMode('one'));
   document.getElementById('btn-restore-app').addEventListener('click', () => setAwayMode('none'));
 
-  // Precise continuous size slider
+  // Precise continuous size slider & headphones preview toggle
+  const btnHeadphones = document.getElementById('btn-headphones');
+  if (btnHeadphones) {
+    btnHeadphones.addEventListener('click', () => {
+      headphonesOn = !headphonesOn;
+      btnHeadphones.setAttribute('aria-pressed', String(headphonesOn));
+      renderAllOnce();
+    });
+  }
   const sizeSlider = document.getElementById('size-slider');
   const sizeReadout = document.getElementById('size-readout');
   if (sizeSlider) {
@@ -1231,7 +1289,7 @@
 
   function renderAllOnce() {
     drawMascot(navMeta.ctx, navMeta.w, navMeta.h, 2.1, currentSkin, 'Idle', globalTick, 0, navMeta.dpr, 3, simLookX, simLookY);
-    drawMascot(heroMeta.ctx, heroMeta.w, heroMeta.h, heroPx, currentSkin, heroMood, globalTick, { hurt: hurtTicks, press: pressTicks, dance: danceTicks }, heroMeta.dpr, 3, simLookX, simLookY);
+    drawMascot(heroMeta.ctx, heroMeta.w, heroMeta.h, heroPx, currentSkin, heroMood, globalTick, { hurt: hurtTicks, press: pressTicks, dance: danceTicks, headphones: headphonesOn }, heroMeta.dpr, 3, simLookX, simLookY);
     moodTiles.forEach((t, i) => drawMascot(t.ctx, t.w, t.h, 3.6, currentSkin, t.mood, globalTick + i * 3, 0, t.dpr, 3, t.mood === 'Idle' ? simLookX : 0, t.mood === 'Idle' ? simLookY : 0));
     skinSamples.forEach((s, i) => drawMascot(s.ctx, s.w, s.h, 4.2, s.skin, s.mood, globalTick + i * 5, 0, s.dpr));
   }

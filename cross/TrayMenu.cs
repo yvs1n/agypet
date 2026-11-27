@@ -15,7 +15,7 @@ namespace AgyPet
         readonly PetSettings settings;
         readonly Updater updater;
 
-        NativeMenuItem skinClassicItem, skinDarkItem;
+        NativeMenuItem skinClassicItem, skinDarkItem, headphonesItem;
         static readonly double[] TraySizeSteps = { 2.5, 3.2, 3.7, 4.2, 4.7, 5.2, 6.0, 7.0 };
         readonly List<NativeMenuItem> sizeStepItems = new List<NativeMenuItem>();
         readonly List<KeyValuePair<MascotMood, NativeMenuItem>> previewMoodItems = new List<KeyValuePair<MascotMood, NativeMenuItem>>();
@@ -44,6 +44,9 @@ namespace AgyPet
             skinMenu.Add(skinClassicItem);
             skinMenu.Add(skinDarkItem);
             menu.Add(new NativeMenuItem("Skin") { Menu = skinMenu });
+
+            headphonesItem = Check("Headphones (Music Notes)", () => { window.SetHeadphones(!settings.Headphones); SyncChecks(); });
+            menu.Add(headphonesItem);
 
             cornerMenu = new NativeMenu();
             bool sepAdded = false;
@@ -209,6 +212,7 @@ namespace AgyPet
         {
             skinClassicItem.IsChecked = settings.Skin == MascotCore.ClassicSkin;
             skinDarkItem.IsChecked = settings.Skin == MascotCore.DarkSkin;
+            if (headphonesItem != null) headphonesItem.IsChecked = settings.Headphones;
             int nearestIdx = 0;
             double bestDiff = double.MaxValue;
             for (int i = 0; i < TraySizeSteps.Length; i++)

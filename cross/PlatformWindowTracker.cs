@@ -37,6 +37,8 @@ namespace AgyPet
         public bool IsCliInFront { get; private set; }
         public bool IsAnyAntigravityOpen { get { return IsAppOpen || HasActiveCli; } }
         public bool TrackCliWindows { get; set; }
+        public volatile bool TrackMusicAudio;
+        public bool IsMusicPlaying { get; private set; }
         public ScreenRectDip WindowBoundsDip { get; private set; }
         public string ActiveChatTitle { get; private set; }
         public string[] ActiveChatCandidates { get; private set; }
@@ -46,6 +48,13 @@ namespace AgyPet
         readonly HashSet<int> terminalPids = new HashSet<int>();
         bool hasCliProcess;
         DateTime pidsRefreshed = DateTime.MinValue;
+        DateTime audioFirstSeenUtc = DateTime.MinValue;
+        DateTime lastAudioActiveUtc = DateTime.MinValue;
+        DateTime lastAudioProbeUtc = DateTime.MinValue;
+        DateTime lastLinuxPactlUtc = DateTime.MinValue;
+        bool musicPlayingState;
+        volatile float latestAudioPeak;
+        volatile bool audioProbeInFlight;
         readonly int selfPid = Environment.ProcessId;
 
         public static bool IsCliProcessName(string name)
@@ -139,6 +148,7 @@ namespace AgyPet
         {
             RefreshProcesses();
             HasActiveCli = hasCliProcess || cliHostPids.Count > 0;
+            UpdateAudioState();
 
             if (OperatingSystem.IsMacOS())
             {
@@ -756,6 +766,179 @@ namespace AgyPet
                 for (int i = 0; i < atoms.Length; i++)
                     if (atoms[i] == wantedAtom) return true;
                 return false;
+            }
+        }
+
+        void UpdateAudioState()
+        {
+            if (!TrackMusicAudio)
+            {
+                audioFirstSeenUtc = DateTime.MinValue;
+                lastAudioActiveUtc = DateTime.MinValue;
+                musicPlayingState = false;
+                latestAudioPeak = 0f;
+                IsMusicPlaying = false;
+                return;
+            }
+
+            DateTime now = DateTime.UtcNow;
+            if (!audioProbeInFlight && (now - lastAudioProbeUtc).TotalMilliseconds >= 240)
+            {
+                lastAudioProbeUtc = now;
+                audioProbeInFlight = true;
+                System.Threading.ThreadPool.QueueUserWorkItem(_ =>
+                {
+                    try { latestAudioPeak = ProbePlatformAudioPeak(); }
+                    catch { latestAudioPeak = 0f; }
+                    finally { audioProbeInFlight = false; }
+                });
+            }
+
+            IsMusicPlaying = MascotCore.UpdateMusicPlaybackState(
+                latestAudioPeak,
+                false,
+                now,
+                ref audioFirstSeenUtc,
+                ref lastAudioActiveUtc,
+                ref musicPlayingState);
+        }
+
+        float ProbePlatformAudioPeak()
+        {
+            if (OperatingSystem.IsMacOS())
+                return MacAudio.IsDefaultOutputRunning() ? 1.0f : 0.0f;
+            if (OperatingSystem.IsLinux())
+                return IsLinuxAudioPlaying() ? 1.0f : 0.0f;
+            return 0.0f;
+        }
+
+        bool IsLinuxAudioPlaying()
+        {
+            try
+            {
+                if (Directory.Exists("/proc/asound"))
+                {
+                    foreach (string cardDir in Directory.GetDirectories("/proc/asound", "card*"))
+                    {
+                        foreach (string pcmDir in Directory.GetDirectories(cardDir, "pcm*p"))
+                        {
+                            foreach (string subDir in Directory.GetDirectories(pcmDir, "sub*"))
+                            {
+                                string statusFile = Path.Combine(subDir, "status");
+                                if (File.Exists(statusFile) && IsAlsaStatusRunning(File.ReadAllText(statusFile)))
+                                    return true;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            DateTime now = DateTime.UtcNow;
+            if ((now - lastLinuxPactlUtc).TotalMilliseconds < 1000)
+                return latestAudioPeak > 0.01f;
+            lastLinuxPactlUtc = now;
+
+            try
+            {
+                var psi = new ProcessStartInfo("pactl", "list sink-inputs")
+                {
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                };
+                using (var proc = Process.Start(psi))
+                {
+                    if (proc == null) return false;
+                    string output = proc.StandardOutput.ReadToEnd();
+                    proc.WaitForExit(350);
+                    return IsPactlOutputPlaying(output);
+                }
+            }
+            catch { return false; }
+        }
+
+        public static bool IsAlsaStatusRunning(string statusText)
+        {
+            if (string.IsNullOrEmpty(statusText)) return false;
+            return statusText.IndexOf("state: RUNNING", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        public static bool IsPactlOutputPlaying(string pactlOutput)
+        {
+            if (string.IsNullOrWhiteSpace(pactlOutput)) return false;
+            string[] blocks = pactlOutput.Split(new[] { "Sink Input #" }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < blocks.Length; i++)
+            {
+                string block = blocks[i];
+                bool uncorked = block.IndexOf("Corked: no", StringComparison.OrdinalIgnoreCase) >= 0;
+                bool muted = block.IndexOf("Mute: yes", StringComparison.OrdinalIgnoreCase) >= 0;
+                if (uncorked && !muted)
+                    return true;
+            }
+            return false;
+        }
+
+        static class MacAudio
+        {
+            const string CoreAudioLib = "/System/Library/Frameworks/CoreAudio.framework/CoreAudio";
+            const uint kAudioObjectSystemObject = 1;
+            const uint kAudioHardwarePropertyDefaultOutputDevice = 0x644F7574; // 'dOut'
+            const uint kAudioDevicePropertyDeviceIsRunningSomewhere = 0x676F6E65; // 'gone'
+            const uint kAudioObjectPropertyScopeGlobal = 0x676C6F62; // 'glob'
+            const uint kAudioObjectPropertyScopeOutput = 0x6F757470; // 'outp'
+
+            [StructLayout(LayoutKind.Sequential)]
+            struct AudioObjectPropertyAddress
+            {
+                public uint mSelector;
+                public uint mScope;
+                public uint mElement;
+            }
+
+            [DllImport(CoreAudioLib)]
+            static extern int AudioObjectGetPropertyData(
+                uint inObjectID,
+                ref AudioObjectPropertyAddress inAddress,
+                uint inQualifierDataSize,
+                IntPtr inQualifierData,
+                ref uint ioDataSize,
+                out uint outData);
+
+            public static bool IsDefaultOutputRunning()
+            {
+                try
+                {
+                    var devAddr = new AudioObjectPropertyAddress
+                    {
+                        mSelector = kAudioHardwarePropertyDefaultOutputDevice,
+                        mScope = kAudioObjectPropertyScopeGlobal,
+                        mElement = 0,
+                    };
+                    uint size = 4;
+                    uint devId;
+                    if (AudioObjectGetPropertyData(kAudioObjectSystemObject, ref devAddr, 0, IntPtr.Zero, ref size, out devId) != 0 || devId == 0)
+                        return false;
+
+                    var runAddr = new AudioObjectPropertyAddress
+                    {
+                        mSelector = kAudioDevicePropertyDeviceIsRunningSomewhere,
+                        mScope = kAudioObjectPropertyScopeOutput,
+                        mElement = 0,
+                    };
+                    size = 4;
+                    uint running;
+                    if (AudioObjectGetPropertyData(devId, ref runAddr, 0, IntPtr.Zero, ref size, out running) != 0)
+                    {
+                        runAddr.mScope = kAudioObjectPropertyScopeGlobal;
+                        size = 4;
+                        if (AudioObjectGetPropertyData(devId, ref runAddr, 0, IntPtr.Zero, ref size, out running) != 0)
+                            return false;
+                    }
+                    return running != 0;
+                }
+                catch { return false; }
             }
         }
     }

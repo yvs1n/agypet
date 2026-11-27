@@ -62,6 +62,8 @@ namespace AgyPet
         MascotMood lastClickMood = MascotMood.Idle;
         double lookX, lookY, lookTargetX, lookTargetY;
         int activeSessionCount = 3;
+        bool showHeadphones;
+        bool isPlayingMusic;
 
         public MascotMood Mood { get; set; }
         public int ActiveSessionCount
@@ -69,10 +71,22 @@ namespace AgyPet
             get { return activeSessionCount; }
             set { activeSessionCount = value; }
         }
+        public bool ShowHeadphones
+        {
+            get { return showHeadphones; }
+            set { showHeadphones = value; }
+        }
+        public bool IsPlayingMusic
+        {
+            get { return isPlayingMusic; }
+            set { isPlayingMusic = value; }
+        }
         public string SkinName { get; private set; }
         public bool IsHurt { get { return hurtTicks > 0; } }
         public bool IsPressed { get { return pressTicks > 0; } }
         public bool IsDancing { get { return danceTicks > 0; } }
+        internal Canvas GearLayer { get { return gear; } }
+        internal Canvas AirLayer { get { return air; } }
         bool IsDark { get { return SkinName == DarkSkin; } }
 
         public MascotView(double pixelSize, string skin = ClassicSkin)
@@ -180,6 +194,19 @@ namespace AgyPet
         {
             lookTargetX = Math.Max(-1.0, Math.Min(1.0, nx));
             lookTargetY = Math.Max(-1.0, Math.Min(1.0, ny));
+        }
+
+        public void Snap(int atTick)
+        {
+            tick = atTick;
+            blinkLeft = 0;
+            glance = 0;
+            Step();
+        }
+
+        public void RefreshVisuals()
+        {
+            Step(false);
         }
 
         void BuildSprite()
@@ -438,6 +465,13 @@ namespace AgyPet
                     DrawArmsUp();
                     DrawErrorLightning();
                     break;
+            }
+
+            if (showHeadphones && isPlayingMusic)
+            {
+                DrawHeadphones(compact);
+                if (!(mood == MascotMood.Idle && dancing))
+                    DrawMusicNotes();
             }
 
             if (hurt)
@@ -874,6 +908,54 @@ namespace AgyPet
             Dot(air, IsDark ? MonoBright : AgyGoldBrush, -0.65, 1.5 - n * 0.3, 0.65, 0.48);
             Dot(air, IsDark ? MonoMid : Blue, 10.2, 0.2 - (n + 2) % 4 * 0.3, 0.48, 1.2);
             Dot(air, IsDark ? MonoMid : Blue, 9.75, 1.1 - (n + 2) % 4 * 0.3, 0.65, 0.48);
+        }
+
+        void DrawHeadphones(bool compact)
+        {
+            double yBase = compact ? 1.4 : -0.45;
+            IBrush frameCol = IsDark ? MonoMid : Steel;
+            IBrush cushionCol = IsDark ? DarkScreen : Paper;
+            IBrush accentCol = IsDark ? MonoBright : GlassLit;
+
+            var mask = MascotCore.HeadphonesMask;
+            for (int r = 0; r < mask.Length; r++)
+            {
+                string row = mask[r];
+                for (int c = 0; c < row.Length; c++)
+                {
+                    char ch = row[c];
+                    if (ch == '.') continue;
+                    IBrush fill = ch == 'A' ? accentCol : (ch == 'C' ? cushionCol : frameCol);
+                    bool hasRight = c + 1 < row.Length && row[c + 1] == ch;
+                    bool hasBottom = r + 1 < mask.Length && mask[r + 1][c] == ch;
+                    Dot(gear, fill, c * 0.5, yBase + r * 0.5, 0.5 + (hasRight ? 0.03 : 0.0), 0.5 + (hasBottom ? 0.03 : 0.0));
+                }
+            }
+        }
+
+        void DrawMusicNotes()
+        {
+            int t1 = tick / 3 % 6;
+            int t2 = (tick / 3 + 3) % 6;
+            double lift1 = (t1 <= 3 ? t1 : 6 - t1) * 0.28;
+            double lift2 = (t2 <= 3 ? t2 : 6 - t2) * 0.28;
+
+            IBrush c1 = IsDark ? MonoBright : GlassLit;
+            IBrush c2 = IsDark ? MonoMid : AgyGoldBrush;
+
+            double lx = 0.2;
+            double ly = -0.3 - lift1;
+            Dot(air, c1, lx, ly, 1.75, 0.38);
+            Dot(air, c1, lx, ly + 0.38, 0.38, 0.95);
+            Dot(air, c1, lx + 1.37, ly + 0.38, 0.38, 0.95);
+            Dot(air, c1, lx - 0.32, ly + 1.1, 0.72, 0.46);
+            Dot(air, c1, lx + 1.05, ly + 1.1, 0.72, 0.46);
+
+            double rx = 9.5;
+            double ry = -0.5 - lift2;
+            Dot(air, c2, rx, ry, 0.38, 1.25);
+            Dot(air, c2, rx + 0.38, ry, 0.55, 0.4);
+            Dot(air, c2, rx - 0.32, ry + 1.0, 0.72, 0.46);
         }
     }
 }

@@ -119,6 +119,22 @@ namespace AgyPet
             "..................##",
         };
 
+        // Editable 22 x 10 pixel-art headphones mask (0.5px grid, centered at x = 5.5):
+        //  'O' = headband frame & outer cup shell, 'C' = inner ear cushion, 'A' = glowing skin accent stripe
+        public static readonly string[] HeadphonesMask =
+        {
+            ".......OOOOOOOO.......",
+            "......O........O......",
+            ".....O..........O.....",
+            ".....O..........O.....",
+            "....OC..........CO....",
+            "...OAC..........CAO...",
+            "...OAC..........CAO...",
+            "...OAC..........CAO...",
+            "...OAC..........CAO...",
+            "....OC..........CO....",
+        };
+
         // Compact rounded capsule for Sleeping
         public static readonly string[] AgyCompactMask =
         {
@@ -162,6 +178,54 @@ namespace AgyPet
         {
             if (activeSessionCount <= 0) return 3;
             return Math.Max(2, Math.Min(8, activeSessionCount));
+        }
+
+        // Smoothed audio playback detector shared across Windows (WASAPI) and macOS/Linux (CoreAudio/ALSA):
+        // requires >= 350ms of audio before turning on and holds through quiet beats <= 2.4s; suppressed in Voice Mode.
+        public static bool UpdateMusicPlaybackState(
+            float peak,
+            bool inVoiceMode,
+            DateTime nowUtc,
+            ref DateTime audioFirstSeenUtc,
+            ref DateTime lastAudioActiveUtc,
+            ref bool wasPlaying)
+        {
+            if (inVoiceMode)
+            {
+                audioFirstSeenUtc = DateTime.MinValue;
+                lastAudioActiveUtc = DateTime.MinValue;
+                wasPlaying = false;
+                return false;
+            }
+
+            if (peak > 0.01f)
+            {
+                if (audioFirstSeenUtc == DateTime.MinValue ||
+                    lastAudioActiveUtc == DateTime.MinValue ||
+                    (nowUtc - lastAudioActiveUtc).TotalSeconds > 1.8)
+                {
+                    audioFirstSeenUtc = nowUtc;
+                }
+                lastAudioActiveUtc = nowUtc;
+                if ((nowUtc - audioFirstSeenUtc).TotalMilliseconds >= 350)
+                {
+                    wasPlaying = true;
+                    return true;
+                }
+                return wasPlaying;
+            }
+
+            if (wasPlaying && lastAudioActiveUtc != DateTime.MinValue &&
+                (nowUtc - lastAudioActiveUtc).TotalSeconds <= 2.4)
+            {
+                return true;
+            }
+
+            if (lastAudioActiveUtc == DateTime.MinValue || (nowUtc - lastAudioActiveUtc).TotalSeconds > 2.4)
+                audioFirstSeenUtc = DateTime.MinValue;
+
+            wasPlaying = false;
+            return false;
         }
 
         public static RgbColor BodyRgbAt(bool isDark, double x, double y)

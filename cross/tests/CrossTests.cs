@@ -156,6 +156,34 @@ namespace AgyPet.CrossTests
                 AssertTrue(!object.ReferenceEquals(firstSub, secondSub), "Each submenu open must produce a fresh detached body");
             });
 
+            Run("Themed headphones & cross-platform audio detection work cleanly for Classic and Dark", () =>
+            {
+                AssertTrue(MascotCore.HeadphonesMask.Length == 10 && MascotCore.HeadphonesMask[0].Length == 22, "Headphones mask should stay 22x10 centered");
+                AssertTrue(PlatformWindowTracker.IsAlsaStatusRunning("state: RUNNING\nowner_pid : 123"), "ALSA RUNNING state detected");
+                AssertTrue(!PlatformWindowTracker.IsAlsaStatusRunning("closed"), "ALSA closed state ignored");
+                AssertTrue(PlatformWindowTracker.IsPactlOutputPlaying("Sink Input #12\n\tCorked: no\n\tMute: no"), "Uncorked Pulse/PipeWire stream detected");
+                AssertTrue(!PlatformWindowTracker.IsPactlOutputPlaying("Sink Input #12\n\tCorked: yes\n\tMute: no"), "Corked stream ignored");
+
+                DateTime first = DateTime.MinValue, last = DateTime.MinValue;
+                bool playing = false;
+                var t0 = new DateTime(2026, 11, 27, 19, 0, 0, DateTimeKind.Utc);
+                AssertTrue(!MascotCore.UpdateMusicPlaybackState(1.0f, false, t0, ref first, ref last, ref playing), "Needs sustained playback");
+                AssertTrue(MascotCore.UpdateMusicPlaybackState(1.0f, false, t0.AddMilliseconds(400), ref first, ref last, ref playing), "Sustained playback turns headphones on");
+
+                foreach (string skin in new[] { MascotView.ClassicSkin, MascotView.DarkSkin })
+                {
+                    var mv = new MascotView(4.2, skin) { Mood = MascotMood.Idle, ShowHeadphones = true, IsPlayingMusic = false };
+                    mv.Snap(1);
+                    int baseGear = mv.GearLayer.Children.Count;
+                    int baseAir = mv.AirLayer.Children.Count;
+
+                    mv.IsPlayingMusic = true;
+                    mv.Snap(2);
+                    AssertTrue(mv.GearLayer.Children.Count > baseGear, skin + ": headphones should render on gear layer");
+                    AssertTrue(mv.AirLayer.Children.Count > baseAir, skin + ": music notes should render on air layer");
+                }
+            });
+
             Console.WriteLine("Cross tests complete: " + passed + " passed, " + failed + " failed.");
             return failed == 0 ? 0 : 1;
         }

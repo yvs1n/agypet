@@ -54,15 +54,18 @@
         "name": "AgyPet",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Windows 10, Windows 11, macOS 11+, Linux",
-        "softwareVersion": "0.4.5",
+        "softwareVersion": "0.4.6",
         "license": "https://opensource.org/licenses/MIT",
         "description": "A single-file install-and-play pixel companion overlay for Google Antigravity App, Antigravity IDE, and Antigravity CLI across Windows, macOS, and Linux.",
         "featureList": [
           "18 live reactions: Typing, Thinking, Working, Terminal, Browsing, Delegating, Reading, Searching, Listening, Speaking, Multitasking, Background, Alert, Question, Done, Error, Idle, Sleeping",
-          "Antigravity App and Antigravity IDE inner prompt box perch (ignoring outer project headers while keeping attachments)",
-          "Native agy CLI terminal perching across Windows Terminal, PowerShell, pwsh, CMD, Alacritty, WezTerm, Warp, Hyper, Tabby, and Mintty",
+          "Optional Headphones (Music Notes) synced to system audio across Windows, macOS, and Linux",
+          "Continuous Size slider (2.4 to 7.2 px) and anchored cursor-following pupils",
+          "Antigravity App and Antigravity IDE inner prompt box perch with side-by-side Z-order awareness",
+          "Native agy CLI terminal perching across Windows Terminal, PowerShell, pwsh, CMD, Alacritty, WezTerm, Warp, Hyper, Tabby, iTerm2, and Ghostty",
           "Per-chat awareness matching the currently focused Antigravity App, IDE, or CLI conversation",
-          "Taskbar docking, Pin Above Taskbar, Lock Position, Auto-Hide when inactive or minimized, and Wake-on-Nudge from Sleep",
+          "macOS Universal Menu Bar template icon + right-click parity, Taskbar/Dock placement, Pin, Auto-Hide, and Wake-on-Nudge from Sleep"
+        ],
           "Live Voice Mode and dictation sync (Listening vs Speaking) plus Classic Official and Dark Remake pixel skins"
         ],
         "screenshot": "./og-screen.png",
@@ -236,7 +239,8 @@
               <button type="button" class="chip-btn" id="btn-away-one" aria-pressed="false">Minimized (1 session)</button>
             </div>
 
-            <div class="sim-group" role="group" aria-label="Mascot size and motion">
+            <div class="sim-group" role="group" aria-label="Mascot size, headphones, and motion">
+              <button type="button" class="chip-btn" id="btn-headphones" aria-pressed="false">Headphones</button>
               <label class="size-slider-wrap" for="size-slider">
                 <span class="size-slider-label">Size</span>
                 <input type="range" class="size-slider" id="size-slider" min="2.4" max="7.2" step="0.1" value="4.2" aria-label="Mascot size" />
@@ -494,9 +498,9 @@
           <article class="feature-card reveal-on-scroll">
             <div class="feature-head">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-              <h3 class="feature-title">Inner prompt perch, Pin &amp; Auto-Hide</h3>
+              <h3 class="feature-title">Headphones, anchored gaze &amp; smart perch</h3>
             </div>
-            <p class="feature-body">Perches cleanly inside the prompt border above attachments. Includes taskbar docking, Pin Above Taskbar, Auto-Hide, and Wake-on-Nudge.</p>
+            <p class="feature-body">Wears theme-matched pixel headphones to live music on Windows, macOS, and Linux, tracks your cursor with anchored pupils, and scales cleanly from 2.4 to 7.2 px.</p>
           </article>
 
           <article class="feature-card reveal-on-scroll">
@@ -504,7 +508,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
               <h3 class="feature-title">One-file install across Windows, macOS &amp; Linux</h3>
             </div>
-            <p class="feature-body">One download per OS: <code>AgyPet.exe</code>, Universal <code>AgyPet-macOS.dmg</code>, and standalone Linux binaries.</p>
+            <p class="feature-body">One download per OS: portable <code>AgyPet.exe</code>, Universal <code>AgyPet-macOS.dmg</code> with native Menu Bar controls + right-click, and trimmed Linux binaries.</p>
           </article>
         </div>
       </div>

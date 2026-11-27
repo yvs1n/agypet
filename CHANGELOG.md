@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.6 (2026-11-27)
+- **Themed Headphones & Full Windows/macOS/Linux Audio Sync**: Added optional **Headphones (Music Notes)** toggle across Windows, macOS (`CoreAudio`), and Linux (`/proc/asound` + PulseAudio/PipeWire `pactl`), sharing `MascotCore.UpdateMusicPlaybackState` hysteresis and static cached brushes:
+  - **Classic**: Metallic slate band, midnight cushions, sky-blue accent strips, and cyan/gold musical notes.
+  - **Dark Remake**: Monochrome graphite/obsidian/silver headphones and monochrome notes matching the Dark Remake palette.
+- **Smart Z-Order Perch & Startup Path Sync (PR #10)**: Keeps Agy perched on Antigravity on Windows while clicking the tray or working side-by-side whenever the target spot remains visible (`IsTargetVisible`), and syncs moved/updated executable startup paths (`SyncStartupIfEnabled`).
+- **Updated Landing Page & Docs**: Added interactive **Headphones** preview toggle to [site/index.html](site/index.html) and updated [README.md](README.md) with all cross-platform features and build commands.
+
 ## 0.4.5 (2026-11-27)
 - **macOS Menu Bar + Right-Click Parity**: Merged true Universal `lipo` packaging (`tools/package-macos.sh`), monochrome menu bar template icon (`RenderMacMenuBarPng` + `MacOSProperties.SetIsTemplateIcon`), `agy`/`agy-cli`/`antigravity-cli` process detection, and `"Dock"` terminology while keeping both the top menu bar icon and mascot right-click (including `Ctrl+Click`) synchronized live (`StateChanged`).
 - **Default Above-Dock Without Hard-Override**: Set `"bottom-center"` as the first-run/fallback macOS default in `PetSettings` (`DefaultMinimizedCornerFor`) instead of overriding explicit user choices in `Location When Away / Minimized` when Antigravity is closed.

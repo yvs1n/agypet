@@ -482,6 +482,16 @@ namespace AgyPet
             NotifyStateChanged();
         }
 
+        public void SetHeadphones(bool enabled)
+        {
+            settings.Headphones = enabled;
+            settings.Save();
+            tracker.TrackMusicAudio = enabled;
+            ApplyResolvedMascotState();
+            if (mascot != null) mascot.RefreshVisuals();
+            NotifyStateChanged();
+        }
+
         public void ResetPosition()
         {
             settings.HasCustomFreePos = false;
@@ -592,6 +602,8 @@ namespace AgyPet
             }
             var actives = monitor.ActiveSessions;
             mascot.ActiveSessionCount = previewMode ? 3 : (actives != null && actives.Count > 0 ? actives.Count : 3);
+            mascot.ShowHeadphones = settings.Headphones;
+            mascot.IsPlayingMusic = settings.Headphones && (tracker.IsMusicPlaying || (previewMode && previewMood == MascotMood.Listening));
             mascot.Mood = nextMood;
         }
 
@@ -815,6 +827,7 @@ namespace AgyPet
         void PollTarget()
         {
             tracker.TrackCliWindows = settings.CliPlacement != "off";
+            tracker.TrackMusicAudio = settings.Headphones;
             tracker.Poll(CurrentScaling);
 
             monitor.PreferredChatCandidates = tracker.ActiveChatCandidates;
@@ -1242,6 +1255,7 @@ namespace AgyPet
                 CheckRow("Classic (Official Antigravity Colors)", settings.Skin == MascotCore.ClassicSkin, () => ApplySkin(MascotCore.ClassicSkin)),
                 CheckRow("Dark Remake (Monochrome)", settings.Skin == MascotCore.DarkSkin, () => ApplySkin(MascotCore.DarkSkin)),
             }));
+            rows.Children.Add(CheckRow("Headphones (Music Notes)", settings.Headphones, () => SetHeadphones(!settings.Headphones)));
 
             rows.Children.Add(SubmenuRow("Location When Away / Minimized", () =>
             {
