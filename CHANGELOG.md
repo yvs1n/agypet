@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.9 (2026-11-27)
+- **Bottom-Anchored Petting Squish Across All OSes**: Fixed clicking/petting the mascot on Windows (`src/Mascot.cs`) and macOS/Linux (`cross/MascotView.cs`) so the inner sprite canvas has explicit pixel dimensions (`11 * px` × `9 * px`) and scales strictly around the bottom-center feet pivot `(5.5 * px, 9.0 * px)` instead of collapsing to top-left `(0, 0)` and lifting his legs. Removed vertical `pressDip` / `hurt` offsets across Windows, macOS, Linux, and [site/app.js](site/app.js) (`ScaleX = 1.06, ScaleY = 0.90` on press) so his legs stay 100% planted while petting squishes him smoothly.
+
 ## 0.4.8 (2026-11-27)
 - **Orb-Free Scrolling-Code Working Animation**: Restored the classic multi-line scrolling syntax-highlighted `DrawLaptop` animation with blinking cursor and tapping fingers across Windows (`src/Mascot.cs`), macOS/Linux (`cross/MascotView.cs`), and the website (`site/app.js`), without the two floating orbs above the laptop.
 - **Full 18-Animation Desktop Parity & Top-of-Page Logo Navigation**: Synced `Sleeping`, `Speaking`, `Searching`, `Reading`, `Terminal`, `Working`, `Multitasking`, and `Done` on [site/app.js](site/app.js) pixel-for-pixel with the desktop mascot, and updated clicking the navbar logo to scroll cleanly to the very top of the page (`y = 0`).

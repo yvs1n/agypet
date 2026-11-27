@@ -656,6 +656,31 @@ namespace AgyPet.Tests
                     "Window covering the chatbox perch spot must occlude it");
             });
 
+            Run("Clicking/petting squishes mascot from bottom-center feet anchor without moving legs", () =>
+            {
+                var m = new Mascot(4.2, Mascot.ClassicSkin) { Mood = MascotMood.Idle };
+                m.Snap(1);
+                AssertEq(11.0 * 4.2, m.SpriteLayer.Width);
+                AssertEq(9.0 * 4.2, m.SpriteLayer.Height);
+                AssertEq(5.5 * 4.2, m.RecoilTransform.CenterX);
+                AssertEq(9.0 * 4.2, m.RecoilTransform.CenterY);
+
+                m.Press();
+                AssertTrue(m.IsPressed, "Press should activate press state");
+                AssertTrue(m.RecoilTransform.ScaleY < 1.0 && m.RecoilTransform.ScaleX > 1.0,
+                    "Press should squish vertically and widen slightly horizontally");
+                AssertTrue(Math.Abs(System.Windows.Controls.Canvas.GetTop(m.SpriteLayer)) < 0.001,
+                    "Idle Press must not shift sprite Canvas Top vertically");
+
+                var feetBefore = new System.Windows.Point(5.5 * 4.2, 9.0 * 4.2);
+                var feetAfter = m.RecoilTransform.Transform(feetBefore);
+                var headAfter = m.RecoilTransform.Transform(new System.Windows.Point(5.5 * 4.2, 0.0));
+                AssertTrue(Math.Abs(feetAfter.Y - feetBefore.Y) < 0.001,
+                    "Feet bottom pivot must stay fixed at 0 vertical shift during squish");
+                AssertTrue(headAfter.Y > 0.3 * 4.2,
+                    "Head top must dip downward when petting squish is active");
+            });
+
             Console.WriteLine("Tests complete: " + passed + " passed, " + failed + " failed.");
             return failed == 0 ? 0 : 1;
         }

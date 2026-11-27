@@ -184,6 +184,24 @@ namespace AgyPet.CrossTests
                 }
             });
 
+            Run("Clicking/petting squishes MascotView around bottom-center feet without moving legs", () =>
+            {
+                var mv = new MascotView(4.2, MascotView.ClassicSkin) { Mood = MascotMood.Idle };
+                mv.Snap(1);
+                AssertEq(11.0 * 4.2, mv.SpriteLayer.Width);
+                AssertEq(9.0 * 4.2, mv.SpriteLayer.Height);
+                AssertEq(Avalonia.RelativeUnit.Absolute, mv.SpriteLayer.RenderTransformOrigin.Unit);
+                AssertEq(5.5 * 4.2, mv.SpriteLayer.RenderTransformOrigin.Point.X);
+                AssertEq(9.0 * 4.2, mv.SpriteLayer.RenderTransformOrigin.Point.Y);
+
+                mv.Press();
+                AssertTrue(mv.IsPressed, "Press should activate press state");
+                AssertTrue(mv.RecoilTransform.ScaleY < 1.0 && mv.RecoilTransform.ScaleX > 1.0,
+                    "Press should squish vertically and widen slightly horizontally");
+                AssertTrue(Math.Abs(Avalonia.Controls.Canvas.GetTop(mv.SpriteLayer)) < 0.001,
+                    "Idle Press must not shift sprite Canvas Top vertically");
+            });
+
             Console.WriteLine("Cross tests complete: " + passed + " passed, " + failed + " failed.");
             return failed == 0 ? 0 : 1;
         }

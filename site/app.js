@@ -235,8 +235,7 @@
     const doneHop = mood === 'Done' ? -Math.round(Math.abs(Math.sin(tick * 0.45)) * 1.1) * px : 0;
     const baseBob = dancing ? danceBob : doneHop;
     const wiggles = mood === 'Alert' || mood === 'Question' || mood === 'Error';
-    const pressDip = (pressed && pressT >= 2) ? px * 0.3 : 0;
-    const bobY = (hurt && hurtT >= 4 ? baseBob + px * 0.45 : baseBob) + pressDip;
+    const bobY = baseBob;
     const danceShift = dancing ? (hopStep === 0 ? -0.18 * px : (hopStep === 2 ? 0.18 * px : 0)) : 0;
     const wigX = hurt && hurtT >= 4 ? ((hurtT % 2 === 0 ? -0.28 : 0.28) * px)
       : (mood === 'Error' && tick % 6 < 2) ? ((tick % 2 === 0 ? -0.4 : 0.4) * px)
@@ -272,14 +271,14 @@
 
     ctx.save();
     if (hurt && hurtT >= 4) {
-      const cx = (ox + 5.5 * px) * dpr, cy = (oy + 7.6 * px) * dpr;
+      const cx = (ox + 5.5 * px) * dpr, cy = (oy + 9.0 * px) * dpr;
       ctx.translate(cx, cy);
-      ctx.scale(1.05, 0.94);
+      ctx.scale(1.05, 0.93);
       ctx.translate(-cx, -cy);
     } else if (pressed && pressT >= 2) {
-      const cx = (ox + 5.5 * px) * dpr, cy = (oy + 7.6 * px) * dpr;
+      const cx = (ox + 5.5 * px) * dpr, cy = (oy + 9.0 * px) * dpr;
       ctx.translate(cx, cy);
-      ctx.scale(1.06, 0.92);
+      ctx.scale(1.06, 0.90);
       ctx.translate(-cx, -cy);
     }
 

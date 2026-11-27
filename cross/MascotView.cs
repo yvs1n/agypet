@@ -87,6 +87,8 @@ namespace AgyPet
         public bool IsDancing { get { return danceTicks > 0; } }
         internal Canvas GearLayer { get { return gear; } }
         internal Canvas AirLayer { get { return air; } }
+        internal Canvas SpriteLayer { get { return sprite; } }
+        internal ScaleTransform RecoilTransform { get { return recoilTransform; } }
         bool IsDark { get { return SkinName == DarkSkin; } }
 
         public MascotView(double pixelSize, string skin = ClassicSkin)
@@ -94,7 +96,7 @@ namespace AgyPet
             px = pixelSize;
             SkinName = MascotCore.NormalizeSkin(skin);
             ClipToBounds = false;
-            sprite.RenderTransformOrigin = new RelativePoint(0.5, 0.85, RelativeUnit.Relative);
+            sprite.RenderTransformOrigin = new RelativePoint(5.5 * px, 9.0 * px, RelativeUnit.Absolute);
             sprite.RenderTransform = recoilTransform;
             air.IsHitTestVisible = false;
             Children.Add(sprite);
@@ -213,6 +215,9 @@ namespace AgyPet
         {
             Width = 11.0 * px;
             Height = 9.0 * px;
+            sprite.Width = Width;
+            sprite.Height = Height;
+            sprite.RenderTransformOrigin = new RelativePoint(5.5 * px, 9.0 * px, RelativeUnit.Absolute);
 
             sprite.Children.Clear();
             archNormalLayer.Children.Clear();
@@ -322,8 +327,7 @@ namespace AgyPet
             double baseBob = dancing ? danceBob : doneHop;
             bool wiggles = mood == MascotMood.Alert || mood == MascotMood.Question || mood == MascotMood.Error;
 
-            double pressDip = pressed && pressTicks >= 2 ? px * 0.3 : 0;
-            double y = hurt && hurtTicks >= 4 ? baseBob + px * 0.45 : baseBob + pressDip;
+            double y = baseBob;
             SetTop(sprite, y);
 
             bool typing = mood == MascotMood.Working && tick % 90 < 72;
@@ -337,12 +341,12 @@ namespace AgyPet
             if (hurt && hurtTicks >= 4)
             {
                 recoilTransform.ScaleX = 1.05;
-                recoilTransform.ScaleY = 0.94;
+                recoilTransform.ScaleY = 0.93;
             }
             else if (pressed && pressTicks >= 2)
             {
                 recoilTransform.ScaleX = 1.06;
-                recoilTransform.ScaleY = 0.92;
+                recoilTransform.ScaleY = 0.90;
             }
             else if (recoilTransform.ScaleX != 1.0 || recoilTransform.ScaleY != 1.0)
             {
