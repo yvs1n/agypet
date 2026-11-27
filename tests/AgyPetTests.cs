@@ -569,6 +569,93 @@ namespace AgyPet.Tests
                 if (staErr != null) throw staErr;
             });
 
+            Run("Startup registry helper detects path changes and formats quoted command", () =>
+            {
+                string exeA = @"C:\Users\User\Downloads\AgyPet.exe";
+                string exeB = @"C:\Apps\AgyPet\AgyPet.exe";
+                AssertEq("\"" + exeA + "\"", PetSettings.FormatStartupCommand(exeA));
+                AssertTrue(!PetSettings.ShouldUpdateStartupValue("\"" + exeA + "\"", exeA), "Identical path should not require registry update");
+                AssertTrue(!PetSettings.ShouldUpdateStartupValue("\"" + exeA.ToLowerInvariant() + "\"", exeA), "Case-only difference on Windows should match");
+                AssertTrue(PetSettings.ShouldUpdateStartupValue("\"" + exeA + "\"", exeB), "Launching from a new exe path should trigger startup update");
+                AssertTrue(PetSettings.ShouldUpdateStartupValue(null, exeB), "Missing startup value should trigger update");
+                AssertTrue(!PetSettings.ShouldUpdateStartupValue(null, ""), "Empty exe path must not update startup");
+            });
+
+            Run("Headphones option draws headgear and music detector smooths playback with floating notes", () =>
+            {
+                var defaults = new PetSettings();
+                AssertTrue(!defaults.Headphones, "Headphones should default to false");
+
+                DateTime first = DateTime.MinValue, last = DateTime.MinValue;
+                bool playing = false;
+                var t0 = new DateTime(2026, 11, 27, 17, 0, 0, DateTimeKind.Utc);
+
+                // Brief single notification ding (< 350ms) should not trigger music notes
+                AssertTrue(!WindowTracker.UpdateMusicPlaybackState(0.25f, false, t0, ref first, ref last, ref playing),
+                    "Single brief audio spike must not immediately turn on music notes");
+                // Sustained audio >= 350ms turns on music notes
+                AssertTrue(WindowTracker.UpdateMusicPlaybackState(0.20f, false, t0.AddMilliseconds(450), ref first, ref last, ref playing),
+                    "Sustained audio playback should enable music notes");
+                // Holds through short quiet beats (<= 2.4s)
+                AssertTrue(WindowTracker.UpdateMusicPlaybackState(0.001f, false, t0.AddSeconds(1.8), ref first, ref last, ref playing),
+                    "Should hold music state through brief quiet passages");
+                // Turns off after silence (> 2.4s)
+                AssertTrue(!WindowTracker.UpdateMusicPlaybackState(0.0f, false, t0.AddSeconds(3.2), ref first, ref last, ref playing),
+                    "Should turn off music notes after sustained silence");
+                // Suppressed while Voice Mode is active
+                WindowTracker.UpdateMusicPlaybackState(0.3f, false, t0.AddSeconds(4.0), ref first, ref last, ref playing);
+                WindowTracker.UpdateMusicPlaybackState(0.3f, false, t0.AddSeconds(4.5), ref first, ref last, ref playing);
+                AssertTrue(!WindowTracker.UpdateMusicPlaybackState(0.3f, true, t0.AddSeconds(4.8), ref first, ref last, ref playing),
+                    "Voice Mode must suppress music notes");
+
+                foreach (string skin in new[] { Mascot.ClassicSkin, Mascot.DarkSkin })
+                {
+                    var m = new Mascot(4.2, skin) { Mood = MascotMood.Idle, ShowHeadphones = false, IsPlayingMusic = false };
+                    m.Snap(1);
+                    int baseGear = m.GearLayer.Children.Count;
+                    int baseAir = m.AirLayer.Children.Count;
+
+                    m.ShowHeadphones = true;
+                    m.Snap(2);
+                    AssertEq(baseGear, m.GearLayer.Children.Count);
+                    AssertEq(baseAir, m.AirLayer.Children.Count);
+
+                    m.IsPlayingMusic = true;
+                    m.Snap(3);
+                    AssertTrue(m.GearLayer.Children.Count > baseGear, skin + ": headphones should render on gear layer when music plays");
+                    AssertTrue(m.AirLayer.Children.Count > baseAir, skin + ": music playback should draw floating notes in air layer");
+
+                    // Sleeping compact posture also keeps headphones cleanly
+                    m.Mood = MascotMood.Sleeping;
+                    m.Snap(4);
+                    AssertTrue(m.GearLayer.Children.Count > 4, skin + ": sleeping compact posture should still draw headphones");
+                }
+            });
+
+            Run("Z-order spot visibility keeps Agy perched when tray or non-overlapping windows are open", () =>
+            {
+                var chatBox = new System.Windows.Rect(1000, 740, 820, 140);
+                var appSpot = WindowTracker.ComputeAppSpotPx(chatBox);
+
+                // Taskbar at bottom and a browser on the left do NOT cover the chatbox perch spot
+                var nonCovering = new[]
+                {
+                    new System.Windows.Rect(0, 1032, 1920, 48),   // Windows taskbar
+                    new System.Windows.Rect(1620, 860, 280, 168), // System tray popup in bottom-right corner below chatbox
+                    new System.Windows.Rect(0, 0, 960, 1032),     // Side-by-side window on left half
+                };
+                AssertTrue(!WindowTracker.IsSpotOccludedByWindows(appSpot, nonCovering),
+                    "Taskbar, non-covering tray popup, and left-half window must not occlude right-side chatbox spot");
+
+                // A window covering the chatbox spot DOES occlude it
+                var covering = new[]
+                {
+                    new System.Windows.Rect(900, 620, 950, 300),
+                };
+                AssertTrue(WindowTracker.IsSpotOccludedByWindows(appSpot, covering),
+                    "Window covering the chatbox perch spot must occlude it");
+            });
+
             Console.WriteLine("Tests complete: " + passed + " passed, " + failed + " failed.");
             return failed == 0 ? 0 : 1;
         }

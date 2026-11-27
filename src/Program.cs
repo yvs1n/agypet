@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Windows;
 
@@ -22,6 +23,7 @@ namespace AgyPet
             if (!created) return;
 
             var settings = PetSettings.Load();
+            try { settings.SyncStartupIfEnabled(Process.GetCurrentProcess().MainModule.FileName); } catch { }
             var monitor = new ActivityMonitor();
             monitor.Start();
 

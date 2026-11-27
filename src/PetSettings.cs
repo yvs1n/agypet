@@ -94,6 +94,7 @@ namespace AgyPet
         public bool HideWhenMinimized { get; set; }
         public bool PinAboveTaskbar { get; set; }
         public bool LockPosition { get; set; }
+        public bool Headphones { get; set; }
         public bool StartWithWindows { get; set; }
         public bool AutoUpdate { get; set; }
 
@@ -130,6 +131,7 @@ namespace AgyPet
             HideWhenMinimized = false;
             PinAboveTaskbar = false;
             LockPosition = false;
+            Headphones = false;
             StartWithWindows = false;
             AutoUpdate = true;
         }
@@ -260,6 +262,24 @@ namespace AgyPet
             if (double.IsNaN(ChatOffsetFromTop) || ChatOffsetFromTop < 8 || ChatOffsetFromTop > 1200) ChatOffsetFromTop = 64;
         }
 
+        public static string FormatStartupCommand(string exePath)
+        {
+            return string.IsNullOrEmpty(exePath) ? "" : ("\"" + exePath + "\"");
+        }
+
+        public static bool ShouldUpdateStartupValue(string existingValue, string exePath)
+        {
+            string desired = FormatStartupCommand(exePath);
+            if (string.IsNullOrEmpty(desired)) return false;
+            return !string.Equals((existingValue ?? "").Trim(), desired, StringComparison.OrdinalIgnoreCase);
+        }
+
+        public void SyncStartupIfEnabled(string exePath)
+        {
+            if (StartWithWindows && !string.IsNullOrEmpty(exePath))
+                ApplyStartup(true, exePath);
+        }
+
         public static void ApplyStartup(bool enable, string exePath)
         {
             try
@@ -320,7 +340,11 @@ namespace AgyPet
                 {
                     if (key == null) return;
                     if (enable && !string.IsNullOrEmpty(exePath))
-                        key.SetValue(RunValueName, "\"" + exePath + "\"");
+                    {
+                        string existing = key.GetValue(RunValueName) as string;
+                        if (ShouldUpdateStartupValue(existing, exePath))
+                            key.SetValue(RunValueName, FormatStartupCommand(exePath));
+                    }
                     else
                         key.DeleteValue(RunValueName, false);
                 }

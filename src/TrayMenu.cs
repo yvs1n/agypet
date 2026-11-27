@@ -11,6 +11,7 @@ namespace AgyPet
         readonly PetSettings settings;
         readonly Updater updater;
         ToolStripMenuItem updateItem;
+        ToolStripMenuItem headphonesItem;
         ToolStripMenuItem locationMenu;
         ToolStripMenuItem pinAboveTaskbarItem;
         ToolStripMenuItem lockPositionItem;
@@ -83,6 +84,8 @@ namespace AgyPet
                 pinAboveTaskbarItem.Checked = settings.PinAboveTaskbar;
             if (lockPositionItem != null)
                 lockPositionItem.Checked = settings.LockPosition;
+            if (headphonesItem != null)
+                headphonesItem.Checked = settings.Headphones;
             if (traySizeTrack != null)
             {
                 int val = Math.Max(traySizeTrack.Minimum, Math.Min(traySizeTrack.Maximum, (int)Math.Round(settings.PixelSize * 10.0)));
@@ -97,6 +100,8 @@ namespace AgyPet
             var menu = new ContextMenuStrip();
             menu.Items.Add("Skin: Classic (Official Colors)", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.ApplySkin(Mascot.ClassicSkin))));
             menu.Items.Add("Skin: Dark Remake (Monochrome)", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.ApplySkin(Mascot.DarkSkin))));
+            headphonesItem = new ToolStripMenuItem("Headphones (Music Notes)", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.SetHeadphones(!settings.Headphones))));
+            menu.Items.Add(headphonesItem);
             locationMenu = new ToolStripMenuItem("Location When Away / Minimized");
             bool addedSep = false;
             foreach (var opt in PetSettings.AwayLocations)
