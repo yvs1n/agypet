@@ -32,9 +32,12 @@ namespace AgyPet
         public bool HasVisibleCli { get; private set; }
         public bool IsCliMinimized { get; private set; }
         public bool IsInFront { get; private set; }
+        public bool IsTargetVisible { get; private set; }
         public bool IsCliInFront { get; private set; }
         public bool TrackCliWindows { get; set; }
+        public string CliPlacementMode { get; set; }
         public volatile bool TrackTaskbarItems;
+        public volatile bool TrackMusicAudio;
         public Rect WindowBoundsPx { get; private set; }
         public Rect ChatBoxBoundsPx { get; private set; }
         public IntPtr WindowHandle { get; private set; }
@@ -45,6 +48,7 @@ namespace AgyPet
         public bool InDictation { get; private set; }
         public bool InVoiceMode { get; private set; }
         public bool VoiceAgentSpeaking { get; private set; }
+        public bool IsMusicPlaying { get; private set; }
 
         HashSet<uint> targetPids = new HashSet<uint>();
         HashSet<uint> cliHostPids = new HashSet<uint>();
@@ -55,7 +59,10 @@ namespace AgyPet
 
         volatile IntPtr probeHwnd = IntPtr.Zero;
         volatile bool probeActive;
-        volatile bool probedVoice, probedDictation, probedAgentSpeaking;
+        volatile bool probedVoice, probedDictation, probedAgentSpeaking, probedMusicPlaying;
+        DateTime audioFirstSeenUtc = DateTime.MinValue;
+        DateTime lastAudioActiveUtc = DateTime.MinValue;
+        bool musicPlayingState;
         Rect probedChatBox = Rect.Empty;
         string[] probedChatCandidates = new string[0];
         TaskbarSpan[] probedTaskbarSpansPx = new TaskbarSpan[0];
@@ -247,8 +254,62 @@ namespace AgyPet
             bool fgIsCli = visibleCli != IntPtr.Zero && (visibleCli == fg || (fgPid != 0 && (cliHostPids.Contains(fgPid) || (hasActiveCliProcess && terminalPids.Contains(fgPid)))));
 
             bool wasCli = IsCliInFront;
-            IsInFront = visible != IntPtr.Zero && (fgIsApp || fgIsCli || ((fgIsSelf || fgTransient) && IsInFront));
-            IsCliInFront = IsInFront && (preferCli || fgIsCli || ((fgIsSelf || fgTransient) && wasCli));
+            bool wasTargetVisible = IsTargetVisible;
+            bool fgInTarget = visible != IntPtr.Zero && (fgIsApp || fgIsCli || ((fgIsSelf || fgTransient) && IsInFront));
+
+            // Keep sticky target preference when neither App nor CLI holds foreground (e.g. tray open or side-by-side app)
+            IntPtr candidateTarget = visible;
+            bool candidateIsCli = preferCli;
+            if (!fgInTarget && visibleApp != IntPtr.Zero && visibleCli != IntPtr.Zero)
+            {
+                if (wasCli && wasTargetVisible)
+                {
+                    candidateTarget = visibleCli;
+                    candidateIsCli = true;
+                }
+                else
+                {
+                    candidateTarget = visibleApp;
+                    candidateIsCli = false;
+                }
+            }
+
+            bool spotVisible = false;
+            if (candidateTarget != IntPtr.Zero)
+            {
+                if (fgInTarget)
+                {
+                    spotVisible = true;
+                }
+                else
+                {
+                    RECT tr;
+                    if (GetVisualWindowRect(candidateTarget, out tr) && tr.Right > tr.Left && tr.Bottom > tr.Top)
+                    {
+                        Rect targetBounds = new Rect(tr.Left, tr.Top, tr.Right - tr.Left, tr.Bottom - tr.Top);
+                        if (candidateIsCli)
+                        {
+                            Rect cliSpot = ComputeCliSpotPx(targetBounds, CliPlacementMode);
+                            spotVisible = IsSpotUncoveredInZOrder(candidateTarget, cliSpot);
+                        }
+                        else
+                        {
+                            Rect chatBoxSnapshot;
+                            lock (chatLock) { chatBoxSnapshot = probedChatBox; }
+                            Rect appSpot = !chatBoxSnapshot.IsEmpty
+                                ? ComputeAppSpotPx(chatBoxSnapshot)
+                                : new Rect(targetBounds.Left + targetBounds.Width * 0.35, targetBounds.Top + targetBounds.Height * 0.45, Math.Max(40, targetBounds.Width * 0.55), Math.Max(40, targetBounds.Height * 0.45));
+                            spotVisible = IsSpotUncoveredInZOrder(candidateTarget, appSpot);
+                        }
+                    }
+                }
+            }
+
+            IsInFront = fgInTarget;
+            IsTargetVisible = candidateTarget != IntPtr.Zero && (fgInTarget || spotVisible);
+            IsCliInFront = IsTargetVisible && (fgInTarget ? (preferCli || fgIsCli || ((fgIsSelf || fgTransient) && wasCli)) : candidateIsCli);
+            visible = candidateTarget;
+            if (IsTargetVisible) WindowHandle = candidateTarget;
 
             if (visible != IntPtr.Zero)
             {
@@ -279,13 +340,14 @@ namespace AgyPet
                 ActiveChatTitle = "";
             }
 
-            // UIA Electron composer probe runs ONLY for Antigravity App / IDE windows (never CLI terminals)
-            probeHwnd = (IsInFront && !IsCliInFront) ? visible : IntPtr.Zero;
-            probeActive = IsInFront && !IsCliInFront;
+            // UIA Electron composer probe runs while Antigravity App / IDE is focused OR uncovered on screen (never CLI terminals)
+            bool shouldProbeApp = IsTargetVisible && !IsCliInFront && visible != IntPtr.Zero;
+            probeHwnd = shouldProbeApp ? visible : IntPtr.Zero;
+            probeActive = shouldProbeApp;
 
             lock (chatLock)
             {
-                ChatBoxBoundsPx = (IsInFront && !IsCliInFront) ? probedChatBox : Rect.Empty;
+                ChatBoxBoundsPx = shouldProbeApp ? probedChatBox : Rect.Empty;
             }
 
             // Detect live user typing strictly while App chatbox OR active CLI terminal is focused
@@ -297,6 +359,53 @@ namespace AgyPet
             InVoiceMode = IsInFront && !IsCliInFront && probedVoice;
             InDictation = IsInFront && !IsCliInFront && !probedVoice && probedDictation;
             VoiceAgentSpeaking = InVoiceMode && probedAgentSpeaking;
+            IsMusicPlaying = TrackMusicAudio && !InVoiceMode && probedMusicPlaying;
+        }
+
+        internal static bool UpdateMusicPlaybackState(
+            float peak,
+            bool inVoiceMode,
+            DateTime nowUtc,
+            ref DateTime audioFirstSeenUtc,
+            ref DateTime lastAudioActiveUtc,
+            ref bool wasPlaying)
+        {
+            if (inVoiceMode)
+            {
+                audioFirstSeenUtc = DateTime.MinValue;
+                lastAudioActiveUtc = DateTime.MinValue;
+                wasPlaying = false;
+                return false;
+            }
+
+            if (peak > 0.01f)
+            {
+                if (audioFirstSeenUtc == DateTime.MinValue ||
+                    lastAudioActiveUtc == DateTime.MinValue ||
+                    (nowUtc - lastAudioActiveUtc).TotalSeconds > 1.8)
+                {
+                    audioFirstSeenUtc = nowUtc;
+                }
+                lastAudioActiveUtc = nowUtc;
+                if ((nowUtc - audioFirstSeenUtc).TotalMilliseconds >= 350)
+                {
+                    wasPlaying = true;
+                    return true;
+                }
+                return wasPlaying;
+            }
+
+            if (wasPlaying && lastAudioActiveUtc != DateTime.MinValue &&
+                (nowUtc - lastAudioActiveUtc).TotalSeconds <= 2.4)
+            {
+                return true;
+            }
+
+            if (lastAudioActiveUtc == DateTime.MinValue || (nowUtc - lastAudioActiveUtc).TotalSeconds > 2.4)
+                audioFirstSeenUtc = DateTime.MinValue;
+
+            wasPlaying = false;
+            return false;
         }
 
         // Checks whether a typing key is currently down without installing any global keyboard hook.
@@ -427,12 +536,31 @@ namespace AgyPet
                         TaskbarSpan[] spans = ScanTaskbarOccupiedSpansPx(taskbarItemCond);
                         lock (chatLock) { probedTaskbarSpansPx = spans; }
                     }
+
+                    if (TrackMusicAudio)
+                    {
+                        float peak = AudioMeter.GetSystemOutputPeak();
+                        probedMusicPlaying = UpdateMusicPlaybackState(
+                            peak,
+                            probedVoice,
+                            DateTime.UtcNow,
+                            ref audioFirstSeenUtc,
+                            ref lastAudioActiveUtc,
+                            ref musicPlayingState);
+                    }
+                    else
+                    {
+                        audioFirstSeenUtc = DateTime.MinValue;
+                        lastAudioActiveUtc = DateTime.MinValue;
+                        musicPlayingState = false;
+                        probedMusicPlaying = false;
+                    }
                 }
                 catch
                 {
                     cachedInputEl = null;
                 }
-                Thread.Sleep(probeActive ? 140 : (TrackTaskbarItems ? 250 : 600));
+                Thread.Sleep(probeActive ? 140 : ((TrackTaskbarItems || TrackMusicAudio) ? 240 : 600));
             }
         }
 
@@ -1113,6 +1241,103 @@ namespace AgyPet
             return new Rect(left, top, Math.Max(80, right - left), inputRect.Height + 36);
         }
 
+        internal static Rect ComputeAppSpotPx(Rect chatBoxPx)
+        {
+            double rightInset = Math.Min(28.0, Math.Max(14.0, chatBoxPx.Width * 0.12));
+            double spotW = 48.0;
+            double spotH = 40.0;
+            return new Rect(chatBoxPx.Right - rightInset - spotW, chatBoxPx.Top - spotH + 4.0, spotW, spotH);
+        }
+
+        internal static Rect ComputeCliSpotPx(Rect winPx, string cliPlacement)
+        {
+            string mode = string.IsNullOrWhiteSpace(cliPlacement) ? "bottom-right" : cliPlacement.Trim().ToLowerInvariant();
+            double spotW = 48.0;
+            double spotH = 40.0;
+            double x = mode.EndsWith("-left", StringComparison.Ordinal) ? (winPx.Left + 22.0)
+                : mode.EndsWith("-center", StringComparison.Ordinal) ? (winPx.Left + (winPx.Width - spotW) * 0.5)
+                : (winPx.Right - 22.0 - spotW);
+            double y = mode.StartsWith("top-", StringComparison.Ordinal)
+                ? (winPx.Top - spotH + 4.0)
+                : (winPx.Bottom - 20.0 - spotH);
+            return new Rect(x, y, spotW, spotH);
+        }
+
+        internal static bool IsSpotOccludedByWindows(Rect spotPx, IEnumerable<Rect> aboveWindowRects)
+        {
+            if (spotPx.IsEmpty || spotPx.Width <= 0 || spotPx.Height <= 0) return false;
+            double spotArea = spotPx.Width * spotPx.Height;
+            double cx = spotPx.Left + spotPx.Width * 0.5;
+            double cy = spotPx.Top + spotPx.Height * 0.5;
+
+            foreach (Rect r in aboveWindowRects)
+            {
+                if (r.IsEmpty || r.Width <= 4 || r.Height <= 4) continue;
+                if (cx >= r.Left && cx <= r.Right && cy >= r.Top && cy <= r.Bottom)
+                    return true;
+
+                Rect inter = Rect.Intersect(spotPx, r);
+                if (!inter.IsEmpty && (inter.Width * inter.Height) >= spotArea * 0.35)
+                    return true;
+            }
+            return false;
+        }
+
+        bool IsSpotUncoveredInZOrder(IntPtr targetHwnd, Rect spotPx)
+        {
+            if (targetHwnd == IntPtr.Zero || spotPx.IsEmpty) return false;
+            var aboveRects = new List<Rect>();
+            IntPtr cur = targetHwnd;
+            int safety = 0;
+
+            while (safety++ < 256)
+            {
+                cur = GetWindow(cur, GW_HWNDPREV);
+                if (cur == IntPtr.Zero) break;
+                if (!IsWindowVisible(cur) || IsIconic(cur)) continue;
+
+                uint pid;
+                GetWindowThreadProcessId(cur, out pid);
+                if (pid == selfPid) continue;
+
+                int ex = GetWindowLong(cur, GWL_EXSTYLE);
+                if ((ex & WS_EX_TRANSPARENT) != 0 && (ex & WS_EX_LAYERED) != 0) continue;
+                if (IsWindowCloaked(cur)) continue;
+
+                RECT r;
+                if (!GetVisualWindowRect(cur, out r)) continue;
+                int w = r.Right - r.Left;
+                int h = r.Bottom - r.Top;
+                if (w <= 4 || h <= 4) continue;
+
+                aboveRects.Add(new Rect(r.Left, r.Top, w, h));
+            }
+
+            return !IsSpotOccludedByWindows(spotPx, aboveRects);
+        }
+
+        static bool IsWindowCloaked(IntPtr hwnd)
+        {
+            try
+            {
+                int cloaked;
+                return DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, out cloaked, Marshal.SizeOf(typeof(int))) == 0 && cloaked != 0;
+            }
+            catch { return false; }
+        }
+
+        static bool GetVisualWindowRect(IntPtr hwnd, out RECT rect)
+        {
+            try
+            {
+                if (DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, out rect, Marshal.SizeOf(typeof(RECT))) == 0 &&
+                    rect.Right > rect.Left && rect.Bottom > rect.Top)
+                    return true;
+            }
+            catch { }
+            return GetWindowRect(hwnd, out rect);
+        }
+
         // Zero-dependency Windows Core Audio peak meter to distinguish Antigravity speaking vs user speaking in Voice Mode
         static class AudioMeter
         {
@@ -1173,10 +1398,19 @@ namespace AgyPet
             public string szExeFile;
         }
 
+        const uint GW_HWNDPREV = 3;
         const uint GW_OWNER = 4;
+        const int GWL_EXSTYLE = -20;
+        const int WS_EX_TRANSPARENT = 0x00000020;
+        const int WS_EX_LAYERED = 0x00080000;
+        const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
+        const int DWMWA_CLOAKED = 14;
         const uint TH32CS_SNAPPROCESS = 0x00000002;
         static readonly IntPtr INVALID_HANDLE_VALUE = new IntPtr(-1);
         delegate bool EnumWindowsProc(IntPtr h, IntPtr l);
+        [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
+        [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
+        [DllImport("user32.dll")] static extern int GetWindowLong(IntPtr hWnd, int nIndex);
         [DllImport("user32.dll")] static extern bool EnumWindows(EnumWindowsProc fn, IntPtr l);
         [DllImport("user32.dll")] static extern bool EnumChildWindows(IntPtr hParent, EnumWindowsProc fn, IntPtr l);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern IntPtr FindWindow(string cls, string title);

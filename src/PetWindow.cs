@@ -344,7 +344,7 @@ namespace AgyPet
             barTop = 0;
             barHeight = 0;
             if (settings.HasCustomFreePos) return false;
-            if (tracker.IsInFront && !settings.PinAboveTaskbar) return false;
+            if (tracker.IsTargetVisible && !settings.PinAboveTaskbar) return false;
             string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
             if (!effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase)) return false;
 
@@ -371,7 +371,7 @@ namespace AgyPet
         {
             Rect work = SystemParameters.WorkArea;
             Rect screen = new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
-            bool outsideApp = !tracker.IsInFront || tracker.IsMinimized;
+            bool outsideApp = !tracker.IsTargetVisible || tracker.IsMinimized;
             return ResolveEffectivePixelSize(
                 settings.PixelSize,
                 settings.MinimizedCorner,
@@ -417,7 +417,7 @@ namespace AgyPet
         {
             get
             {
-                return !settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && !userMovedWhileInFront &&
+                return !settings.PinAboveTaskbar && tracker.IsTargetVisible && !tracker.IsMinimized && !userMovedWhileInFront &&
                        (tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty);
             }
         }
@@ -474,6 +474,15 @@ namespace AgyPet
             SyncVisibility();
         }
 
+        public void SetHeadphones(bool enabled)
+        {
+            settings.Headphones = enabled;
+            settings.Save();
+            tracker.TrackMusicAudio = enabled;
+            ApplyResolvedMascotState();
+            if (mascot != null) mascot.RefreshVisuals();
+        }
+
         public static bool ShouldHideMascot(
             bool hideWhenInactive,
             bool hideWhenMinimized,
@@ -524,7 +533,7 @@ namespace AgyPet
                 Top = targetTop = desired.Y;
                 Visibility = Visibility.Visible;
                 string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
-                if ((!tracker.IsInFront || settings.PinAboveTaskbar) && !settings.HasCustomFreePos &&
+                if ((!tracker.IsTargetVisible || settings.PinAboveTaskbar) && !settings.HasCustomFreePos &&
                     effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
                 {
                     EnsureTopmost();
@@ -541,7 +550,7 @@ namespace AgyPet
             bool isTaskbar = settings.MinimizedCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase);
             tracker.TrackTaskbarItems = isTaskbar;
             if (isTaskbar) tracker.RefreshTaskbarSpansNow();
-            if (!tracker.IsInFront || settings.PinAboveTaskbar) SnapToTarget();
+            if (!tracker.IsTargetVisible || settings.PinAboveTaskbar) SnapToTarget();
         }
 
         public void SetPinAboveTaskbar(bool pin)
@@ -569,7 +578,8 @@ namespace AgyPet
             settings.CliPlacement = PetSettings.NormalizeCliPlacement(placement);
             settings.Save();
             tracker.TrackCliWindows = settings.CliPlacement != "off";
-            if (tracker.IsInFront && tracker.IsCliInFront)
+            tracker.CliPlacementMode = settings.CliPlacement;
+            if (tracker.IsTargetVisible && tracker.IsCliInFront)
             {
                 userMovedWhileInFront = false;
                 SnapToTarget();
@@ -635,7 +645,7 @@ namespace AgyPet
             return ResolveMood(
                 previewMode,
                 previewMood,
-                tracker.IsInFront,
+                tracker.IsTargetVisible,
                 settings.PinAboveTaskbar,
                 hasSurface,
                 tracker.InVoiceMode,
@@ -681,6 +691,8 @@ namespace AgyPet
             }
             var actives = monitor.ActiveSessions;
             mascot.ActiveSessionCount = previewMode ? 3 : (actives != null && actives.Count > 0 ? actives.Count : 3);
+            mascot.ShowHeadphones = settings.Headphones;
+            mascot.IsPlayingMusic = settings.Headphones && (tracker.IsMusicPlaying || (previewMode && previewMood == MascotMood.Listening));
             mascot.Mood = nextMood;
         }
 
@@ -938,6 +950,8 @@ namespace AgyPet
         {
             if (dragging || IsAnyMenuActive) return;
             tracker.TrackCliWindows = settings.CliPlacement != "off";
+            tracker.CliPlacementMode = settings.CliPlacement;
+            tracker.TrackMusicAudio = settings.Headphones;
             tracker.Poll();
             if (!previewMode && tracker.IsInFront && (tracker.IsUserTyping || tracker.InVoiceMode || tracker.InDictation) &&
                 (DateTime.UtcNow - lastTypingWakeUtc).TotalSeconds >= 2.0)
@@ -948,18 +962,18 @@ namespace AgyPet
             monitor.PreferredChatCandidates = tracker.ActiveChatCandidates;
             monitor.PreferredChatTitle = tracker.ActiveChatTitle;
             monitor.PreferredSource = tracker.IsCliInFront ? "Antigravity CLI" : "";
-            monitor.PreferAppOnly = tracker.IsInFront && !tracker.IsCliInFront;
+            monitor.PreferAppOnly = tracker.IsTargetVisible && !tracker.IsCliInFront;
 
             if (!previewMode)
                 ApplyResolvedMascotState();
 
             if (SyncVisibility()) return;
 
-            bool nowInFront = tracker.IsInFront;
+            bool nowInFront = tracker.IsTargetVisible;
             bool hasTargetBox = tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty;
             bool nowOnChatScreen = !settings.PinAboveTaskbar && nowInFront && !tracker.IsMinimized && hasTargetBox;
 
-            if (nowInFront && isHoverOpen)
+            if (tracker.IsInFront && isHoverOpen)
                 CloseHoverWindow();
 
             // Whenever the user enters an Antigravity chat (from another app OR back from Antigravity Settings),
@@ -1028,12 +1042,13 @@ namespace AgyPet
         void SnapToTarget()
         {
             tracker.TrackCliWindows = settings.CliPlacement != "off";
+            tracker.CliPlacementMode = settings.CliPlacement;
             string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
             tracker.TrackTaskbarItems = effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase) && !settings.HasCustomFreePos;
             if (tracker.TrackTaskbarItems) tracker.RefreshTaskbarSpansNow();
             tracker.Poll();
             bool hasTargetBox = tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty;
-            wasOnChatScreen = !settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && hasTargetBox;
+            wasOnChatScreen = !settings.PinAboveTaskbar && tracker.IsTargetVisible && !tracker.IsMinimized && hasTargetBox;
             if (!dragging) EnsureEffectiveSize();
             Point desired = ComputeDesiredPosition();
             Left = targetLeft = desired.X;
@@ -1318,8 +1333,8 @@ namespace AgyPet
             double petLeft, petTop;
             string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
 
-            // Perch above Antigravity chatbox OR on active agy CLI terminal window when focused (unless pinned above taskbar)
-            if (!settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && tracker.IsCliInFront &&
+            // Perch above Antigravity chatbox OR on active agy CLI terminal window when visible (unless pinned above taskbar)
+            if (!settings.PinAboveTaskbar && tracker.IsTargetVisible && !tracker.IsMinimized && tracker.IsCliInFront &&
                 settings.CliPlacement != "off" && !tracker.WindowBoundsPx.IsEmpty)
             {
                 Rect winDip = new Rect(
@@ -1331,7 +1346,7 @@ namespace AgyPet
                 petLeft = p.X;
                 petTop = p.Y;
             }
-            else if (!settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && !tracker.IsCliInFront && !tracker.ChatBoxBoundsPx.IsEmpty)
+            else if (!settings.PinAboveTaskbar && tracker.IsTargetVisible && !tracker.IsMinimized && !tracker.IsCliInFront && !tracker.ChatBoxBoundsPx.IsEmpty)
             {
                 Rect boxDip = new Rect(
                     tracker.ChatBoxBoundsPx.Left / dpiX,
@@ -1379,7 +1394,7 @@ namespace AgyPet
                 }
             }
 
-            bool pinnedAway = !tracker.IsInFront || settings.PinAboveTaskbar;
+            bool pinnedAway = !tracker.IsTargetVisible || settings.PinAboveTaskbar;
             bool allowTaskbarBand = pinnedAway && (settings.HasCustomFreePos ||
                 effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase));
             double maxBottom = allowTaskbarBand ? Math.Max(work.Bottom, screen.Bottom) : work.Bottom;
@@ -1559,7 +1574,7 @@ namespace AgyPet
             targetLeft = Left;
             targetTop = Top;
 
-            if (tracker.IsInFront && !settings.PinAboveTaskbar)
+            if (tracker.IsTargetVisible && !settings.PinAboveTaskbar)
             {
                 userMovedWhileInFront = true;
             }
@@ -1582,6 +1597,8 @@ namespace AgyPet
             skinMenu.Items.Add(CheckItem("Classic (Official Antigravity Colors)", settings.Skin == Mascot.ClassicSkin, () => ApplySkin(Mascot.ClassicSkin)));
             skinMenu.Items.Add(CheckItem("Dark Remake (Monochrome)", settings.Skin == Mascot.DarkSkin, () => ApplySkin(Mascot.DarkSkin)));
             contextMenu.Items.Add(skinMenu);
+
+            contextMenu.Items.Add(CheckItem("Headphones (Music Notes)", settings.Headphones, () => SetHeadphones(!settings.Headphones)));
 
             var cornerMenu = new MenuItem { Header = "Location When Away / Minimized" };
             bool insertedSep = false;

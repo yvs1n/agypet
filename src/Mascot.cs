@@ -156,6 +156,21 @@ namespace AgyPet
             "....................",
         };
 
+        // Editable pixel-art headphones texture (0.5px grid: '.'=empty, 'O'=main frame, '#'=darker shade detail)
+        static readonly string[] HeadphonesMask =
+        {
+            ".......OOOOOOOO.......",
+            "......O........O......",
+            ".....O..........O.....",
+            ".....O..........O.....",
+            "....OO..........OO....",
+            "...O#O..........O#O...",
+            "...O#O..........O#O...",
+            "...O#O..........O#O...",
+            "...O#O..........O#O...",
+            "....OO..........OO....",
+        };
+
         readonly double px;
         readonly Canvas sprite = new Canvas();
         readonly Canvas archNormalLayer = new Canvas();
@@ -177,6 +192,8 @@ namespace AgyPet
         MascotMood lastClickMood = MascotMood.Idle;
         double lookX, lookY, lookTargetX, lookTargetY;
         int activeSessionCount = 3;
+        bool showHeadphones;
+        bool isPlayingMusic;
 
         public MascotMood Mood { get; set; }
         public int ActiveSessionCount
@@ -184,11 +201,22 @@ namespace AgyPet
             get { return activeSessionCount; }
             set { activeSessionCount = value; }
         }
+        public bool ShowHeadphones
+        {
+            get { return showHeadphones; }
+            set { showHeadphones = value; }
+        }
+        public bool IsPlayingMusic
+        {
+            get { return isPlayingMusic; }
+            set { isPlayingMusic = value; }
+        }
         public string SkinName { get; private set; }
         public bool IsHurt { get { return hurtTicks > 0; } }
         public bool IsPressed { get { return pressTicks > 0; } }
         public bool IsDancing { get { return danceTicks > 0; } }
         internal Canvas GearLayer { get { return gear; } }
+        internal Canvas AirLayer { get { return air; } }
 
         public Mascot(double pixelSize, string skin = ClassicSkin)
         {
@@ -331,6 +359,11 @@ namespace AgyPet
         internal void StepFrame()
         {
             Step();
+        }
+
+        public void RefreshVisuals()
+        {
+            Step(false);
         }
 
         bool IsDark { get { return SkinName == DarkSkin; } }
@@ -589,6 +622,14 @@ namespace AgyPet
                     DrawArmsUp();
                     DrawErrorLightning();
                     break;
+            }
+
+            // Headphones overlay & floating musical notes ONLY when listening to audio
+            if (showHeadphones && isPlayingMusic)
+            {
+                DrawHeadphones(compact);
+                if (!(mood == MascotMood.Idle && dancing))
+                    DrawMusicNotes();
             }
 
             // Subtle "> <" wince eyes on rapid clicks
@@ -1098,6 +1139,54 @@ namespace AgyPet
             Dot(air, c, -0.65, 1.5 - t * 0.3, 0.65, 0.48);
             Dot(air, IsDark ? MonoMid : GlassLit, 10.2, 0.2 - ((t + 2) % 4) * 0.3, 0.48, 1.2);
             Dot(air, IsDark ? MonoMid : GlassLit, 9.75, 1.1 - ((t + 2) % 4) * 0.3, 0.65, 0.48);
+        }
+
+        void DrawHeadphones(bool compact)
+        {
+            double yBase = compact ? 1.3 : -0.5;
+            Brush mainCol = Frozen(Color.FromRgb(0xC0, 0xC0, 0xC0));
+            Brush darkDetail = Frozen(Color.FromRgb(0xB0, 0xB0, 0xB0));
+
+            for (int r = 0; r < HeadphonesMask.Length; r++)
+            {
+                string row = HeadphonesMask[r];
+                for (int c = 0; c < row.Length; c++)
+                {
+                    char ch = row[c];
+                    if (ch == '.') continue;
+                    Brush fill = ch == '#' ? darkDetail : mainCol;
+                    bool hasRight = c + 1 < row.Length && row[c + 1] == ch;
+                    bool hasBottom = r + 1 < HeadphonesMask.Length && HeadphonesMask[r + 1][c] == ch;
+                    Dot(gear, fill, c * 0.5, yBase + r * 0.5, 0.5 + (hasRight ? 0.03 : 0.0), 0.5 + (hasBottom ? 0.03 : 0.0));
+                }
+            }
+        }
+
+        void DrawMusicNotes()
+        {
+            int t1 = tick / 3 % 6;
+            int t2 = (tick / 3 + 3) % 6;
+            double lift1 = (t1 <= 3 ? t1 : 6 - t1) * 0.28;
+            double lift2 = (t2 <= 3 ? t2 : 6 - t2) * 0.28;
+
+            Brush c1 = Frozen(Color.FromRgb(0xF4, 0x3F, 0x5E)); // rose red-pink
+            Brush c2 = Frozen(Color.FromRgb(0xFB, 0x71, 0x85)); // soft pink-red
+
+            // Left beamed double-note (♫)
+            double lx = 0.2;
+            double ly = -0.3 - lift1;
+            Dot(air, c1, lx, ly, 1.75, 0.38);
+            Dot(air, c1, lx, ly + 0.38, 0.38, 0.95);
+            Dot(air, c1, lx + 1.37, ly + 0.38, 0.38, 0.95);
+            Dot(air, c1, lx - 0.32, ly + 1.1, 0.72, 0.46);
+            Dot(air, c1, lx + 1.05, ly + 1.1, 0.72, 0.46);
+
+            // Right eighth-note (♪)
+            double rx = 9.5;
+            double ry = -0.5 - lift2;
+            Dot(air, c2, rx, ry, 0.38, 1.25);
+            Dot(air, c2, rx + 0.38, ry, 0.55, 0.4);
+            Dot(air, c2, rx - 0.32, ry + 1.0, 0.72, 0.46);
         }
 
         void DrawZzz()
