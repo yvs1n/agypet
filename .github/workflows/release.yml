@@ -72,8 +72,8 @@ jobs:
         run: dotnet run --project cross/tests/AgyPet.Cross.Tests.csproj -c Release
       - name: Publish single-file Linux x64 & arm64 binaries
         run: |
-          dotnet publish cross/AgyPet.Cross.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o out/linux-x64
-          dotnet publish cross/AgyPet.Cross.csproj -c Release -r linux-arm64 --self-contained true -p:PublishSingleFile=true -o out/linux-arm64
+          dotnet publish cross/AgyPet.Cross.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:TrimMode=partial -o out/linux-x64
+          dotnet publish cross/AgyPet.Cross.csproj -c Release -r linux-arm64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:TrimMode=partial -o out/linux-arm64
           mkdir -p dist
           cp out/linux-x64/AgyPet dist/AgyPet-linux-x64
           cp out/linux-arm64/AgyPet dist/AgyPet-linux-arm64
@@ -98,8 +98,8 @@ jobs:
         run: dotnet run --project cross/tests/AgyPet.Cross.Tests.csproj -c Release
       - name: Publish Universal macOS DMG
         run: |
-          dotnet publish cross/AgyPet.Cross.csproj -c Release -r osx-arm64 --self-contained true -p:PublishSingleFile=true -o out/osx-arm64
-          dotnet publish cross/AgyPet.Cross.csproj -c Release -r osx-x64 --self-contained true -p:PublishSingleFile=true -o out/osx-x64
+          dotnet publish cross/AgyPet.Cross.csproj -c Release -r osx-arm64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:TrimMode=partial -o out/osx-arm64
+          dotnet publish cross/AgyPet.Cross.csproj -c Release -r osx-x64 --self-contained true -p:PublishSingleFile=true -p:PublishTrimmed=true -p:TrimMode=partial -o out/osx-x64
           chmod +x tools/package-macos.sh
           ./tools/package-macos.sh "${{ needs.version.outputs.version }}" out/osx-arm64/AgyPet out/osx-x64/AgyPet dist/AgyPet-macOS.dmg
       - uses: actions/upload-artifact@v4

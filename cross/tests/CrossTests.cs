@@ -107,6 +107,14 @@ namespace AgyPet.CrossTests
                 AssertEq(50, info.PercentDone);
                 AssertEq(1, info.StepsInProgress);
                 AssertEq("Testing macOS & Linux", info.FocusDetail);
+
+                var s = new PetSettings();
+                s.SetPixelSize(5.4);
+                string raw = System.Text.Json.JsonSerializer.Serialize(s, PetSettingsJsonContext.Default.PetSettings);
+                var back = System.Text.Json.JsonSerializer.Deserialize(raw, PetSettingsJsonContext.Default.PetSettings);
+                back.Normalize();
+                AssertEq(5.4, back.PixelSize);
+                AssertEq("large", back.Size);
             });
 
             Console.WriteLine("Cross tests complete: " + passed + " passed, " + failed + " failed.");

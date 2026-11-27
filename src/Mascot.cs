@@ -188,6 +188,7 @@ namespace AgyPet
         public bool IsHurt { get { return hurtTicks > 0; } }
         public bool IsPressed { get { return pressTicks > 0; } }
         public bool IsDancing { get { return danceTicks > 0; } }
+        internal Canvas GearLayer { get { return gear; } }
 
         public Mascot(double pixelSize, string skin = ClassicSkin)
         {
@@ -502,14 +503,14 @@ namespace AgyPet
                 else DrawRestingArms();
             }
 
-            double ex = mood == MascotMood.Idle ? (lookX * 0.48 + glance * 0.08) : 0;
-            double ey = mood == MascotMood.Idle ? (lookY * 0.34) : 0;
+            double gx = Math.Max(-1.0, Math.Min(1.0, lookX + glance * 0.22));
+            double gy = Math.Max(-1.0, Math.Min(1.0, lookY));
 
             // 1. Always render the active status's props & arms so the current status stays calm and intact
             switch (mood)
             {
                 case MascotMood.Idle:
-                    if (!hurt) DrawEyes(3.9 + ex, 3.2 + ey, 6.3 + ex, 3.2 + ey, closed);
+                    if (!hurt) DrawEyes(3.9, 3.2, 6.3, 3.2, closed, gx, gy);
                     if (dancing) DrawDanceNotes();
                     else DrawIdleSparkle();
                     break;
@@ -518,51 +519,49 @@ namespace AgyPet
                     DrawZzz();
                     break;
                 case MascotMood.Listening:
-                    if (!hurt) DrawEyes(3.9, 3.1, 6.3, 3.1, false);
+                    if (!hurt) DrawEyes(3.9, 3.1, 6.3, 3.1, false, lookX * 0.65, lookY * 0.55);
                     DrawWaves();
                     break;
                 case MascotMood.Thinking:
-                    if (!hurt) DrawThinkingEyes();
+                    if (!hurt) DrawThinkingEyes(Math.Sin(tick * 0.08) * 0.78, -0.72);
                     DrawThinkingArms();
                     DrawThoughtCloud();
                     break;
                 case MascotMood.Speaking:
-                    if (!hurt) { DrawEyes(3.9, 3.1, 6.3, 3.1, false); DrawMouth(); }
+                    if (!hurt) { DrawEyes(3.9, 3.1, 6.3, 3.1, closed, Math.Sin(tick * 0.14) * 0.5, -0.18 * Math.Abs(Math.Sin(tick * 0.09))); DrawMouth(); }
                     else DrawSpeechDotsOnly();
                     break;
                 case MascotMood.Typing:
-                    if (!hurt) DrawEyes(3.9, 3.3, 6.3, 3.3, closed);
+                    if (!hurt) DrawEyes(3.9, 3.3, 6.3, 3.3, closed, Math.Sin(tick * 0.15) * 0.55, 0.35);
                     DrawTypingScene();
                     break;
                 case MascotMood.Searching:
-                    double sx = Math.Round(Math.Sin(tick * 0.14)) * 0.35;
-                    if (!hurt) DrawEyes(3.9 + sx, 3.2, 6.3 + sx, 3.2, false);
+                    if (!hurt) DrawEyes(3.9, 3.2, 6.3, 3.2, false, Math.Sin(tick * 0.14) * 0.9, -0.35);
                     DrawMagnifier();
                     break;
                 case MascotMood.Reading:
-                    if (!hurt) DrawEyes(3.9, 3.1, 6.3, 3.1, false, shortEyes: true);
+                    double readSweep = -0.85 + ((tick % 16) / 15.0) * 1.7;
+                    if (!hurt) DrawEyes(3.9, 3.1, 6.3, 3.1, false, readSweep, 0.65, shortEyes: true);
                     DrawBook();
                     break;
                 case MascotMood.Working:
-                    if (!hurt) DrawWorkingFace();
+                    if (!hurt) DrawWorkingFace(-0.72 + Math.Sin(tick * 0.22) * 0.28, Math.Sin(tick * 0.11) * 0.45);
                     DrawLaptop(typing);
                     break;
                 case MascotMood.Terminal:
-                    if (!hurt) DrawWorkingFace();
+                    if (!hurt) DrawWorkingFace(-0.72 + Math.Sin(tick * 0.22) * 0.28, Math.Sin(tick * 0.11) * 0.45);
                     DrawTerminal();
                     break;
                 case MascotMood.Browsing:
-                    double bx = Math.Round(Math.Sin(tick * 0.16)) * 0.35;
-                    if (!hurt) DrawEyes(3.9 + bx, 3.1, 6.3 + bx, 3.1, false);
+                    if (!hurt) DrawEyes(3.9, 3.1, 6.3, 3.1, false, 0.25 + Math.Sin(tick * 0.16) * 0.65, -0.3 + Math.Cos(tick * 0.22) * 0.3);
                     DrawBrowserGlobe();
                     break;
                 case MascotMood.Delegating:
-                    if (!hurt) DrawEyes(4.1, 3.1, 6.5, 3.1, false);
+                    if (!hurt) DrawEyes(3.9, 3.1, 6.3, 3.1, false, 0.75 + Math.Sin(tick * 0.2) * 0.25, Math.Sin(tick * 0.15) * 0.25);
                     DrawDelegatingDispatch();
                     break;
                 case MascotMood.Multitasking:
-                    double mx = (tick / 5 % 2 == 0) ? -0.45 : 0.45;
-                    if (!hurt) DrawEyes(3.9 + mx, 3.1, 6.3 + mx, 3.1, false);
+                    if (!hurt) DrawEyes(3.9, 3.1, 6.3, 3.1, false, Math.Sin(tick * 0.32), -0.75 + Math.Cos(tick * 0.32) * 0.25);
                     DrawMultitaskingJuggle();
                     break;
                 case MascotMood.Background:
@@ -570,12 +569,12 @@ namespace AgyPet
                     DrawBackgroundServer();
                     break;
                 case MascotMood.Alert:
-                    if (!hurt) DrawStartledEyes();
+                    if (!hurt) DrawStartledEyes(Math.Sin(tick * 0.65), Math.Cos(tick * 0.45) * 0.65);
                     DrawArmsUp();
                     DrawBang();
                     break;
                 case MascotMood.Question:
-                    if (!hurt) DrawConfusedEyes();
+                    if (!hurt) DrawConfusedEyes(Math.Sin(tick * 0.12) * 0.7, -0.45 + Math.Cos(tick * 0.12) * 0.35);
                     DrawConfusedArms();
                     DrawQuestion();
                     break;
@@ -644,26 +643,30 @@ namespace AgyPet
             Dot(gear, BodyBrushAt(9.0, 4.4), 8.9, 4.4, 0.5, 0.7);
         }
 
-        void DrawEyes(double lx, double ly, double rx, double ry, bool closed, bool shortEyes = false)
+        static double ClampUnit(double v) { return Math.Max(-1.0, Math.Min(1.0, v)); }
+
+        void DrawPupilDot(double ex, double ey, double ew, double eh, double gx, double gy, double pSize, double padX, double padY, Brush pupilBrush)
+        {
+            double tx = Math.Max(0.0, (ew - pSize) * 0.5 - padX);
+            double ty = Math.Max(0.0, (eh - pSize) * 0.5 - padY);
+            double pxOff = (ew - pSize) * 0.5 + ClampUnit(gx) * tx;
+            double pyOff = (eh - pSize) * 0.5 + ClampUnit(gy) * ty;
+            Dot(gear, pupilBrush, ex + pxOff, ey + pyOff, pSize, pSize);
+        }
+
+        void DrawEyes(double lx, double ly, double rx, double ry, bool closed, double gx = 0, double gy = 0, bool shortEyes = false)
         {
             if (closed) { DrawShutEyes(lx, ly + 0.4, rx, ry + 0.4); return; }
-            double h = shortEyes ? 0.5 : 0.9;
-            double glintSize = shortEyes ? 0.28 : 0.4;
-            double pupilSize = shortEyes ? 0.25 : 0.35;
-            double pupilY = shortEyes ? (h - pupilSize) : 0.35;
-            Dot(gear, EyePrimary, lx, ly, 0.85, h);
-            Dot(gear, EyePrimary, rx, ry, 0.85, h);
-            if (!IsDark)
-            {
-                Dot(gear, EyeGlint, lx + 0.42, ly + 0.04, glintSize, glintSize);
-                Dot(gear, EyeGlint, rx + 0.42, ry + 0.04, glintSize, glintSize);
-            }
-            else
-            {
-                // Subtle pupil depth cleanly bounded inside luminous white eyes on Dark Remake
-                Dot(gear, EyeDark, lx + 0.45, ly + pupilY, pupilSize, pupilSize);
-                Dot(gear, EyeDark, rx + 0.45, ry + pupilY, pupilSize, pupilSize);
-            }
+            const double ew = 0.90;
+            double eh = shortEyes ? 0.55 : 0.92;
+            double pSize = shortEyes ? 0.28 : 0.36;
+            double padY = shortEyes ? 0.05 : 0.06;
+            Brush pupilBrush = IsDark ? EyeDark : EyeGlint;
+
+            Dot(gear, EyePrimary, lx, ly, ew, eh);
+            Dot(gear, EyePrimary, rx, ry, ew, eh);
+            DrawPupilDot(lx, ly, ew, eh, gx, gy, pSize, 0.06, padY, pupilBrush);
+            DrawPupilDot(rx, ry, ew, eh, gx, gy, pSize, 0.06, padY, pupilBrush);
         }
 
         void DrawShutEyes(double lx, double ly, double rx, double ry)
@@ -678,36 +681,19 @@ namespace AgyPet
             Dot(gear, EyePrimary, 6.0, 3.4, 0.4, 0.4); Dot(gear, EyePrimary, 6.4, 3.0, 0.5, 0.4); Dot(gear, EyePrimary, 6.9, 3.4, 0.4, 0.4);
         }
 
-        void DrawWorkingFace()
+        void DrawWorkingFace(double gx, double gy)
         {
-            Dot(gear, EyePrimary, 3.6, 3.4, 0.85, 0.75);
-            Dot(gear, EyePrimary, 6.0, 3.4, 0.85, 0.75);
-            if (!IsDark)
-            {
-                Dot(gear, EyeWhite, 3.6, 3.4, 0.4, 0.4);
-                Dot(gear, EyeWhite, 6.0, 3.4, 0.4, 0.4);
-            }
-            else
-            {
-                Dot(gear, EyeDark, 3.6, 3.5, 0.35, 0.35);
-                Dot(gear, EyeDark, 6.0, 3.5, 0.35, 0.35);
-            }
-            Dot(gear, EyePrimary, 3.3, 2.7, 0.75, 0.3);
-            Dot(gear, EyePrimary, 4.0, 2.9, 0.55, 0.3);
-            Dot(gear, EyePrimary, 5.8, 2.9, 0.55, 0.3);
-            Dot(gear, EyePrimary, 6.3, 2.7, 0.75, 0.3);
+            DrawEyes(3.6, 3.4, 6.0, 3.4, false, gx, gy, shortEyes: true);
         }
 
-        void DrawThinkingEyes()
+        void DrawThinkingEyes(double gx, double gy)
         {
-            // Pondering upward gaze with slightly raised brow
-            Dot(gear, EyePrimary, 3.9, 2.75, 0.85, 0.55);
-            Dot(gear, EyePrimary, 6.3, 2.75, 0.85, 0.8);
-            if (!IsDark)
-            {
-                Dot(gear, EyeWhite, 4.35, 2.75, 0.35, 0.35);
-                Dot(gear, EyeWhite, 6.75, 2.75, 0.35, 0.35);
-            }
+            // Pondering upward gaze with slightly raised brow and drifting pupils inside fixed sockets
+            Dot(gear, EyePrimary, 3.9, 2.75, 0.88, 0.60);
+            Dot(gear, EyePrimary, 6.3, 2.75, 0.88, 0.84);
+            Brush pupilBrush = IsDark ? EyeDark : EyeWhite;
+            DrawPupilDot(3.9, 2.75, 0.88, 0.60, gx, gy, 0.30, 0.06, 0.05, pupilBrush);
+            DrawPupilDot(6.3, 2.75, 0.88, 0.84, gx, gy, 0.34, 0.06, 0.06, pupilBrush);
         }
 
         void DrawThinkingArms()
@@ -718,20 +704,20 @@ namespace AgyPet
             Dot(gear, BodyBrushAt(8.5, 4.2), 7.6, 4.2, 1.05, 0.5);
         }
 
-        void DrawStartledEyes()
+        void DrawStartledEyes(double gx, double gy)
         {
             Dot(gear, EyeWhite, 3.6, 2.9, 1.25, 1.25);
-            Dot(gear, EyeDark, 3.95, 3.25, 0.55, 0.55);
             Dot(gear, EyeWhite, 6.1, 2.9, 1.25, 1.25);
-            Dot(gear, EyeDark, 6.45, 3.25, 0.55, 0.55);
+            DrawPupilDot(3.6, 2.9, 1.25, 1.25, gx, gy, 0.55, 0.08, 0.08, EyeDark);
+            DrawPupilDot(6.1, 2.9, 1.25, 1.25, gx, gy, 0.55, 0.08, 0.08, EyeDark);
         }
 
-        void DrawConfusedEyes()
+        void DrawConfusedEyes(double gx, double gy)
         {
-            Dot(gear, EyePrimary, 3.7, 3.2, 0.85, 0.85);
-            if (!IsDark) Dot(gear, EyeWhite, 4.05, 3.2, 0.35, 0.35);
+            Dot(gear, EyePrimary, 3.7, 3.2, 0.88, 0.88);
+            DrawPupilDot(3.7, 3.2, 0.88, 0.88, gx, gy, 0.34, 0.06, 0.06, IsDark ? EyeDark : EyeWhite);
             Dot(gear, EyeWhite, 6.0, 2.8, 1.4, 1.4);
-            Dot(gear, EyeDark, 6.45, 3.25, 0.55, 0.55);
+            DrawPupilDot(6.0, 2.8, 1.4, 1.4, gx, gy, 0.55, 0.10, 0.10, EyeDark);
         }
 
         void DrawConfusedArms()
@@ -894,8 +880,8 @@ namespace AgyPet
 
         void DrawMouth()
         {
-            double open = tick % 4 < 2 ? 0.9 : 0.4;
-            Dot(gear, EyePrimary, 4.7, 4.4, 1.6, open);
+            bool wide = tick % 4 < 2;
+            Dot(gear, EyePrimary, wide ? 5.12 : 5.19, wide ? 4.24 : 4.34, wide ? 0.86 : 0.72, wide ? 0.42 : 0.24);
             DrawSpeechDotsOnly();
         }
 

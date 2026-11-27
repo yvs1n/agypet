@@ -282,6 +282,19 @@ namespace AgyPet.Tests
                 Mascot.NormalizeLookOffset(5000, -5000, out nx, out ny);
                 AssertTrue(nx > 0.95 && nx <= 1.0 && ny < -0.95 && ny >= -1.0, "Gaze should normalize cleanly within [-1, 1]");
 
+                // Cursor gaze in Idle keeps outer eye sockets fixed while shifting pupils smoothly inside them
+                m.Mood = MascotMood.Idle;
+                m.SetLookOffset(-1.0, 0.0);
+                for (int i = 0; i < 12; i++) m.Snap(1);
+                double sockLeftL = System.Windows.Controls.Canvas.GetLeft(m.GearLayer.Children[4]);
+                double pupilLeftL = System.Windows.Controls.Canvas.GetLeft(m.GearLayer.Children[6]);
+                m.SetLookOffset(1.0, 0.0);
+                for (int i = 0; i < 12; i++) m.Snap(1);
+                double sockLeftR = System.Windows.Controls.Canvas.GetLeft(m.GearLayer.Children[4]);
+                double pupilLeftR = System.Windows.Controls.Canvas.GetLeft(m.GearLayer.Children[6]);
+                AssertTrue(Math.Abs(sockLeftL - sockLeftR) < 0.001, "Idle eye socket must stay anchored instead of sliding across face");
+                AssertTrue(pupilLeftR > pupilLeftL + 0.5, "Idle pupil must shift right inside eye socket when cursor moves right");
+
                 AssertEq(3, Mascot.ResolveOrbCount(0));
                 AssertEq(2, Mascot.ResolveOrbCount(2));
                 AssertEq(4, Mascot.ResolveOrbCount(4));

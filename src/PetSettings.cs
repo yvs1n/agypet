@@ -3,6 +3,7 @@ using System.IO;
 #if NET8_0_OR_GREATER
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 #else
 using System.Web.Script.Serialization;
 using Microsoft.Win32;
@@ -162,7 +163,7 @@ namespace AgyPet
                 {
                     string raw = File.ReadAllText(FilePath);
 #if NET8_0_OR_GREATER
-                    var s = JsonSerializer.Deserialize<PetSettings>(raw);
+                    var s = JsonSerializer.Deserialize(raw, PetSettingsJsonContext.Default.PetSettings);
 #else
                     var s = new JavaScriptSerializer().Deserialize<PetSettings>(raw);
 #endif
@@ -181,7 +182,7 @@ namespace AgyPet
                 Directory.CreateDirectory(DataDir);
                 string tmp = FilePath + ".tmp";
 #if NET8_0_OR_GREATER
-                string text = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+                string text = JsonSerializer.Serialize(this, PetSettingsJsonContext.Default.PetSettings);
 #else
                 string text = Json.Pretty(new JavaScriptSerializer().Serialize(this));
 #endif
@@ -314,4 +315,12 @@ namespace AgyPet
             catch { }
         }
     }
+
+#if NET8_0_OR_GREATER
+    [JsonSourceGenerationOptions(WriteIndented = true)]
+    [JsonSerializable(typeof(PetSettings))]
+    internal partial class PetSettingsJsonContext : JsonSerializerContext
+    {
+    }
+#endif
 }

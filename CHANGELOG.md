@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.3 (2026-11-27)
+- **Anchored Eyes & Live Pupil Tracking**: Kept eye sockets firmly anchored in place while pupils smoothly track your cursor in `Idle` / `Listening` and animate dynamically across `Thinking`, `Reading`, `Working`, `Terminal`, `Searching`, `Browsing`, `Multitasking`, `Delegating`, `Speaking`, `Typing`, `Alert`, and `Question` in both `Classic` and `Dark Remake` skins.
+- **Clean Eyebrow-Free Focus & Proportional Speaking Mouth**: Removed floating eyebrows from focused working/terminal states and resized `Speaking` mouth frames (`0.72×0.24` closed / `0.86×0.42` open) to sit cleanly between the eyes above the inner arch cutout.
+- **Smaller Self-Contained Linux & macOS Binaries (~53% Smaller)**: Added compile-time JSON source generation (`PetSettingsJsonContext`) and partial IL trimming (`PublishTrimmed=true`, `TrimMode=partial`) in release builds, shrinking Linux binaries from `~42 MB` to `~19.7 MB` and cutting Universal macOS `.dmg` size roughly in half with zero runtime overhead.
+
 ## 0.4.2 (2026-11-27)
 - **Tight Mascot Hit-Testing & Click-Through**: Moved click, drag, hover, and context-menu hit-testing strictly onto the `11*px × 9*px` mascot body (`stage`) and left surrounding container padding (`petHitArea`) and floating props (`air`) completely click-through (`0x00` alpha / `IsHitTestVisible = false`), so clicks anywhere around the mascot pass cleanly to underlying apps and taskbar buttons.
 - **Typing & Reading Eye Fixes**: Fixed `Typing` to render symmetric blinking eyes (`DrawEyes` / `DrawFocusEyes`) instead of shifted `shortEyes`, and bounded `shortEyes` (`Reading`) white glints and dark pupils inside `[ly .. ly + 0.5]` so they no longer poke outside the eye bounds.

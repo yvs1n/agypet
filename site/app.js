@@ -293,25 +293,30 @@
       }
     }
 
-    const drawEyes = (lx, ly, rx, ry, isClosed, shortH = false) => {
+    const clampUnit = (v) => Math.max(-1, Math.min(1, v));
+    const drawPupilDot = (ex, ey, ew, eh, gx, gy, pSize, padX, padY, pupilFill) => {
+      const tx = Math.max(0, (ew - pSize) * 0.5 - padX);
+      const ty = Math.max(0, (eh - pSize) * 0.5 - padY);
+      const pxOff = (ew - pSize) * 0.5 + clampUnit(gx) * tx;
+      const pyOff = (eh - pSize) * 0.5 + clampUnit(gy) * ty;
+      dot(pupilFill, ex + pxOff, ey + pyOff, pSize, pSize);
+    };
+
+    const drawEyes = (lx, ly, rx, ry, isClosed, gx = 0, gy = 0, shortH = false) => {
       if (isClosed) {
         dot(eyeMain, lx, ly + 0.4, 0.9, 0.35);
         dot(eyeMain, rx, ry + 0.4, 0.9, 0.35);
         return;
       }
-      const eh = shortH ? 0.5 : 0.9;
-      const gSize = shortH ? 0.28 : 0.4;
-      const pSize = shortH ? 0.25 : 0.35;
-      const pY = shortH ? (eh - pSize) : 0.35;
-      dot(eyeMain, lx, ly, 0.85, eh);
-      dot(eyeMain, rx, ry, 0.85, eh);
-      if (!isDark) {
-        dot('#F8FAFC', lx + 0.42, ly + 0.04, gSize, gSize);
-        dot('#F8FAFC', rx + 0.42, ry + 0.04, gSize, gSize);
-      } else {
-        dot('#0B1220', lx + 0.45, ly + pY, pSize, pSize);
-        dot('#0B1220', rx + 0.45, ry + pY, pSize, pSize);
-      }
+      const ew = 0.90;
+      const eh = shortH ? 0.55 : 0.92;
+      const pSize = shortH ? 0.28 : 0.36;
+      const padY = shortH ? 0.05 : 0.06;
+      const pupilFill = isDark ? '#0B1220' : '#F8FAFC';
+      dot(eyeMain, lx, ly, ew, eh);
+      dot(eyeMain, rx, ry, ew, eh);
+      drawPupilDot(lx, ly, ew, eh, gx, gy, pSize, 0.06, padY, pupilFill);
+      drawPupilDot(rx, ry, ew, eh, gx, gy, pSize, 0.06, padY, pupilFill);
     };
 
     const drawHappyEyes = () => {
@@ -321,7 +326,7 @@
 
     switch (mood) {
       case 'Idle':
-        if (!faceBlocked) drawEyes(3.9 + lookX * 0.48, 3.2 + lookY * 0.34, 6.3 + lookX * 0.48, 3.2 + lookY * 0.34, closed);
+        if (!faceBlocked) drawEyes(3.9, 3.2, 6.3, 3.2, closed, lookX, lookY);
         if (dancing) {
           const nt = Math.floor(tick / 3) % 4;
           dot(isDark ? '#F4F4F5' : '#F8C618', -0.2, 0.6 - nt * 0.3, 0.48, 1.2, false);
@@ -343,7 +348,7 @@
         if ((Math.floor(tick / 10) % 4) >= 2) shape(isDark ? '#F4F4F5' : '#38BDF8', 11.4, -2.5, ["###", "..#", ".#.", "###"]);
         break;
       case 'Listening':
-        if (!faceBlocked) drawEyes(3.9, 3.1, 6.3, 3.1, false);
+        if (!faceBlocked) drawEyes(3.9, 3.1, 6.3, 3.1, false, lookX * 0.65, lookY * 0.55);
         for (let i = 0; i <= Math.floor(tick / 3) % 3; i++) {
           const wh = 3.6 - i * 0.85, wt = 4.5 - wh / 2;
           const wc = i === (Math.floor(tick / 3) % 3) ? (isDark ? '#F4F4F5' : '#38BDF8') : (isDark ? '#A1A1AA' : '#1E78FF');
@@ -353,9 +358,12 @@
         break;
       case 'Thinking': {
         if (!faceBlocked) {
-          dot(eyeMain, 3.9, 2.75, 0.85, 0.55);
-          dot(eyeMain, 6.3, 2.75, 0.85, 0.8);
-          if (!isDark) { dot('#F8FAFC', 4.35, 2.75, 0.35, 0.35); dot('#F8FAFC', 6.75, 2.75, 0.35, 0.35); }
+          dot(eyeMain, 3.9, 2.75, 0.88, 0.60);
+          dot(eyeMain, 6.3, 2.75, 0.88, 0.84);
+          const tg = Math.sin(tick * 0.08) * 0.78;
+          const pupilFill = isDark ? '#0B1220' : '#F8FAFC';
+          drawPupilDot(3.9, 2.75, 0.88, 0.60, tg, -0.72, 0.30, 0.06, 0.05, pupilFill);
+          drawPupilDot(6.3, 2.75, 0.88, 0.84, tg, -0.72, 0.34, 0.06, 0.06, pupilFill);
         }
         dot(armLU, 1.5, 4.8, 0.5, 1.0); dot(armLL, 1.1, 5.4, 0.5, 0.5);
         dot(bodyColorAt(skin, 8.5, 4.6), 8.6, 4.6, 0.55, 0.85); dot(bodyColorAt(skin, 8.5, 4.2), 7.6, 4.2, 1.05, 0.5);
@@ -375,14 +383,15 @@
       }
       case 'Speaking':
         if (!faceBlocked) {
-          drawEyes(3.9, 3.1, 6.3, 3.1, false);
-          dot(eyeMain, 4.7, 4.4, 1.6, tick % 4 < 2 ? 0.9 : 0.4);
+          drawEyes(3.9, 3.1, 6.3, 3.1, closed, Math.sin(tick * 0.14) * 0.5, -0.18 * Math.abs(Math.sin(tick * 0.09)));
+          const wideMouth = tick % 4 < 2;
+          dot(eyeMain, wideMouth ? 5.12 : 5.19, wideMouth ? 4.24 : 4.34, wideMouth ? 0.86 : 0.72, wideMouth ? 0.42 : 0.24);
         }
         if ((Math.floor(tick / 3) % 4) >= 1) dot(isDark ? '#F4F4F5' : '#F8FAFC', 10.3, 3.8, 0.9, 0.9, false);
         if ((Math.floor(tick / 3) % 4) >= 2) dot(isDark ? '#A1A1AA' : '#38BDF8', 11.4, 2.9, 0.9, 0.9, false);
         break;
       case 'Typing': {
-        if (!faceBlocked) drawEyes(3.9, 3.3, 6.3, 3.3, closed);
+        if (!faceBlocked) drawEyes(3.9, 3.3, 6.3, 3.3, closed, Math.sin(tick * 0.15) * 0.55, 0.35);
         dot(isDark ? '#27272A' : '#3F4A5C', 1.4, 6.2, 8.2, 1.4);
         const tap = Math.floor(tick / 2) % 4;
         for (let i = 0; i < 4; i++) {
@@ -401,15 +410,15 @@
         break;
       }
       case 'Searching': {
-        const sx = Math.round(Math.sin(tick * 0.14)) * 0.35;
-        if (!faceBlocked) drawEyes(3.9 + sx, 3.2, 6.3 + sx, 3.2, false);
+        if (!faceBlocked) drawEyes(3.9, 3.2, 6.3, 3.2, false, Math.sin(tick * 0.14) * 0.9, -0.35);
         const gx = 3.5 + Math.round(Math.sin(tick * 0.14) * 2.8);
         shape(isDark ? '#F4F4F5' : '#38BDF8', gx, -2.4, [".###.", "#...#", "#...#", ".###."]);
         dot(isDark ? '#A1A1AA' : '#1E78FF', gx + 4, 1.4, 0.9, 0.9, false);
         break;
       }
-      case 'Reading':
-        if (!faceBlocked) drawEyes(3.9, 3.1, 6.3, 3.1, false, true);
+      case 'Reading': {
+        const readSweep = -0.85 + ((tick % 16) / 15) * 1.7;
+        if (!faceBlocked) drawEyes(3.9, 3.1, 6.3, 3.1, false, readSweep, 0.65, true);
         dot(isDark ? '#18181B' : '#0F172A', 0.5, 4.3, 10, 3);
         dot(isDark ? '#A1A1AA' : '#1E78FF', 5.25, 4.3, 0.5, 3);
         dot(isDark ? '#F4F4F5' : '#F8C618', 1.5, 5.0, 3, 0.4);
@@ -417,10 +426,10 @@
         dot(isDark ? '#F4F4F5' : '#F8C618', 1.5, 6.0, 3, 0.4);
         dot(isDark ? '#A1A1AA' : '#4EC446', 6.5, 6.0, 3, 0.4);
         break;
+      }
       case 'Working':
         if (!faceBlocked) {
-          drawEyes(3.6, 3.4, 6.0, 3.4, false, true);
-          dot(eyeMain, 3.3, 2.7, 0.9, 0.3); dot(eyeMain, 6.1, 2.7, 0.9, 0.3);
+          drawEyes(3.6, 3.4, 6.0, 3.4, false, -0.72 + Math.sin(tick * 0.22) * 0.28, Math.sin(tick * 0.11) * 0.45, true);
         }
         dot(isDark ? '#A1A1AA' : '#94A3B8', -4.2, 1.8, 5.0, 6.0, false);
         dot(isDark ? '#18181B' : '#E2E8F0', -3.4, 2.5, 3.4, 4.4, false);
@@ -432,8 +441,7 @@
         break;
       case 'Terminal': {
         if (!faceBlocked) {
-          drawEyes(3.6, 3.4, 6.0, 3.4, false, true);
-          dot(eyeMain, 3.3, 2.7, 0.9, 0.3); dot(eyeMain, 6.1, 2.7, 0.9, 0.3);
+          drawEyes(3.6, 3.4, 6.0, 3.4, false, -0.72 + Math.sin(tick * 0.22) * 0.28, Math.sin(tick * 0.11) * 0.45, true);
         }
         const tx = -4.3;
         dot(isDark ? '#A1A1AA' : '#3F4A5C', tx, 1.7, 5.2, 6.2, false);
@@ -450,8 +458,7 @@
         break;
       }
       case 'Browsing': {
-        const bx = Math.round(Math.sin(tick * 0.16)) * 0.35;
-        if (!faceBlocked) drawEyes(3.9 + bx, 3.1, 6.3 + bx, 3.1, false);
+        if (!faceBlocked) drawEyes(3.9, 3.1, 6.3, 3.1, false, 0.25 + Math.sin(tick * 0.16) * 0.65, -0.3 + Math.cos(tick * 0.22) * 0.3);
         shape(isDark ? '#F4F4F5' : '#38BDF8', 8.6, -1.0, [".###.", "#...#", "#...#", ".###."]);
         dot(isDark ? '#A1A1AA' : '#1E78FF', 9.6, 0.5, 3, 0.45, false);
         const sw = 1.2 + Math.round(Math.sin(tick * 0.25) * 0.9);
@@ -459,8 +466,7 @@
         break;
       }
       case 'Multitasking': {
-        const mx = (Math.floor(tick / 5) % 2 === 0) ? -0.45 : 0.45;
-        if (!faceBlocked) drawEyes(3.9 + mx, 3.1, 6.3 + mx, 3.1, false);
+        if (!faceBlocked) drawEyes(3.9, 3.1, 6.3, 3.1, false, Math.sin(tick * 0.32), -0.75 + Math.cos(tick * 0.32) * 0.25);
         const ph = tick % 6 < 3;
         dot(bodyColorAt(skin, 2.0, ph ? 3.5 : 4.2), 1.0, ph ? 3.5 : 4.2, 0.55, 1.0); dot(bodyColorAt(skin, 2.0, 4.4), 1.5, 4.4, 0.5, 0.6);
         dot(bodyColorAt(skin, 9.0, ph ? 4.2 : 3.5), 9.45, ph ? 4.2 : 3.5, 0.55, 1.0); dot(bodyColorAt(skin, 9.0, 4.4), 8.95, 4.4, 0.5, 0.6);
@@ -487,8 +493,10 @@
       }
       case 'Alert':
         if (!faceBlocked) {
-          dot('#F8FAFC', 3.6, 2.9, 1.25, 1.25); dot('#0B1220', 3.95, 3.25, 0.55, 0.55);
-          dot('#F8FAFC', 6.1, 2.9, 1.25, 1.25); dot('#0B1220', 6.45, 3.25, 0.55, 0.55);
+          const ax = Math.sin(tick * 0.65);
+          const ay = Math.cos(tick * 0.45) * 0.65;
+          dot('#F8FAFC', 3.6, 2.9, 1.25, 1.25); drawPupilDot(3.6, 2.9, 1.25, 1.25, ax, ay, 0.55, 0.08, 0.08, '#0B1220');
+          dot('#F8FAFC', 6.1, 2.9, 1.25, 1.25); drawPupilDot(6.1, 2.9, 1.25, 1.25, ax, ay, 0.55, 0.08, 0.08, '#0B1220');
         }
         dot(armRaisedL, 1.1, 3.7, 0.5, 1.0); dot(armRaisedR, 9.4, 3.7, 0.5, 1.0);
         if (tick % 10 >= 2) {
@@ -498,8 +506,12 @@
         break;
       case 'Question':
         if (!faceBlocked) {
-          drawEyes(3.7, 3.2, 6.2, 3.2, false);
-          dot('#F8FAFC', 6.0, 2.8, 1.35, 1.35); dot('#0B1220', 6.45, 3.25, 0.55, 0.55);
+          const qx = Math.sin(tick * 0.12) * 0.7;
+          const qy = -0.45 + Math.cos(tick * 0.12) * 0.35;
+          dot(eyeMain, 3.7, 3.2, 0.88, 0.88);
+          drawPupilDot(3.7, 3.2, 0.88, 0.88, qx, qy, 0.34, 0.06, 0.06, isDark ? '#0B1220' : '#F8FAFC');
+          dot('#F8FAFC', 6.0, 2.8, 1.4, 1.4);
+          drawPupilDot(6.0, 2.8, 1.4, 1.4, qx, qy, 0.55, 0.10, 0.10, '#0B1220');
         }
         if (tick % 16 >= 2) {
           shape(isDark ? '#F4F4F5' : '#38BDF8', 4.0, -2.3, [".##.", "...#", "..#."]);
@@ -507,7 +519,7 @@
         }
         break;
       case 'Delegating': {
-        if (!faceBlocked) drawEyes(4.1, 3.1, 6.5, 3.1, false);
+        if (!faceBlocked) drawEyes(3.9, 3.1, 6.3, 3.1, false, 0.75 + Math.sin(tick * 0.2) * 0.25, Math.sin(tick * 0.15) * 0.25);
         dot(armLU, 1.5, 4.8, 0.5, 1.0); dot(armLL, 1.1, 5.4, 0.5, 0.5);
         dot(bodyColorAt(skin, 9.0, 4.2), 8.7, 4.2, 1.1, 0.65, false);
         const frame = isDark ? '#27272A' : '#0F172A';
