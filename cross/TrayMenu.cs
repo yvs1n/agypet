@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Threading;
 
@@ -17,9 +18,16 @@ namespace AgyPet
         NativeMenuItem skinClassicItem, skinDarkItem;
         static readonly double[] TraySizeSteps = { 2.5, 3.2, 3.7, 4.2, 4.7, 5.2, 6.0, 7.0 };
         readonly List<NativeMenuItem> sizeStepItems = new List<NativeMenuItem>();
+        readonly List<KeyValuePair<MascotMood, NativeMenuItem>> previewMoodItems = new List<KeyValuePair<MascotMood, NativeMenuItem>>();
         NativeMenuItem pinAboveTaskbarItem, lockPosItem, hoverCardItem, startupItem, autoUpdateItem;
-        NativeMenuItem hideInactiveItem, hideMinimizedItem, liveModeItem, updateItem;
+        NativeMenuItem hideInactiveItem, hideMinimizedItem, liveModeItem, resetItem, updateItem;
         NativeMenu cornerMenu, cliMenu, previewMenu;
+        bool disposed;
+
+        static string PlatformLabel(string label)
+        {
+            return OperatingSystem.IsMacOS() ? label.Replace("Taskbar", "Dock") : label;
+        }
 
         public TrayMenu(PetWindow window, PetSettings settings, Updater updater)
         {
@@ -47,13 +55,13 @@ namespace AgyPet
                     sepAdded = true;
                 }
                 string id = opt.Id;
-                var item = new NativeMenuItem(opt.Label) { ToggleType = NativeMenuItemToggleType.CheckBox };
+                var item = new NativeMenuItem(PlatformLabel(opt.Label)) { ToggleType = NativeMenuItemToggleType.CheckBox };
                 item.Click += (s, e) => { window.SetMinimizedCorner(id); SyncChecks(); };
                 cornerMenu.Add(item);
             }
             menu.Add(new NativeMenuItem("Location When Away / Minimized") { Menu = cornerMenu });
 
-            pinAboveTaskbarItem = Check("Pin Above Taskbar (Stay in Place)", () => { window.SetPinAboveTaskbar(!settings.PinAboveTaskbar); SyncChecks(); });
+            pinAboveTaskbarItem = Check(PlatformLabel("Pin Above Taskbar (Stay in Place)"), () => { window.SetPinAboveTaskbar(!settings.PinAboveTaskbar); SyncChecks(); });
             lockPosItem = Check("Lock Position (Disable Dragging)", () => { window.SetLockPosition(!settings.LockPosition); SyncChecks(); });
             menu.Add(pinAboveTaskbarItem);
             menu.Add(lockPosItem);
@@ -62,7 +70,7 @@ namespace AgyPet
             foreach (var opt in PetSettings.CliLocations)
             {
                 string id = opt.Id;
-                var item = new NativeMenuItem(opt.Label) { ToggleType = NativeMenuItemToggleType.CheckBox };
+                var item = new NativeMenuItem(PlatformLabel(opt.Label)) { ToggleType = NativeMenuItemToggleType.CheckBox };
                 item.Click += (s, e) => { window.SetCliPlacement(id); SyncChecks(); };
                 cliMenu.Add(item);
             }
@@ -76,12 +84,29 @@ namespace AgyPet
             menu.Add(new NativeMenuItem("Auto-Hide") { Menu = autoHideMenu });
 
             var sizeMenu = new NativeMenu();
+            if (OperatingSystem.IsMacOS())
+            {
+                var smallerItem = new NativeMenuItem("Smaller (-)");
+                smallerItem.Click += (s, e) => { window.ApplyPixelSize(settings.PixelSize - 0.2, true); SyncChecks(); };
+                var largerItem = new NativeMenuItem("Larger (+)");
+                largerItem.Click += (s, e) => { window.ApplyPixelSize(settings.PixelSize + 0.2, true); SyncChecks(); };
+                sizeMenu.Add(smallerItem);
+                sizeMenu.Add(largerItem);
+                sizeMenu.Add(new NativeMenuItemSeparator());
+            }
             foreach (double stepPx in TraySizeSteps)
             {
                 double captured = stepPx;
                 var item = Check(PetSettings.FormatSizeLabel(captured), () => { window.ApplyPixelSize(captured, true); SyncChecks(); });
                 sizeStepItems.Add(item);
                 sizeMenu.Add(item);
+            }
+            if (OperatingSystem.IsMacOS())
+            {
+                sizeMenu.Add(new NativeMenuItemSeparator());
+                var resetSizeItem = new NativeMenuItem("Reset Default (100% · 4.2 px)");
+                resetSizeItem.Click += (s, e) => { window.ApplyPixelSize(PetSettings.DefaultPixelSize, true); SyncChecks(); };
+                sizeMenu.Add(resetSizeItem);
             }
             menu.Add(new NativeMenuItem("Size") { Menu = sizeMenu });
 
@@ -94,6 +119,7 @@ namespace AgyPet
                 var captured = m;
                 var item = new NativeMenuItem(captured.ToString()) { ToggleType = NativeMenuItemToggleType.CheckBox };
                 item.Click += (s, e) => { window.SetPreviewMood(captured); SyncChecks(); };
+                previewMoodItems.Add(new KeyValuePair<MascotMood, NativeMenuItem>(captured, item));
                 previewMenu.Add(item);
             }
             menu.Add(new NativeMenuItem("Preview Mood") { Menu = previewMenu });
@@ -113,7 +139,7 @@ namespace AgyPet
                 PetSettings.ApplyStartup(settings.StartWithWindows, Environment.ProcessPath ?? "");
                 SyncChecks();
             });
-            var resetItem = new NativeMenuItem("Reset / Snap Back Above Window");
+            resetItem = new NativeMenuItem("Reset / Snap Back Above Window");
             resetItem.Click += (s, e) => window.ResetPosition();
             autoUpdateItem = Check("Auto-Update from GitHub", () => { settings.AutoUpdate = !settings.AutoUpdate; settings.Save(); SyncChecks(); });
 
@@ -149,11 +175,22 @@ namespace AgyPet
 
             icon = new TrayIcon
             {
-                Icon = PetTheme.CreateMascotWindowIcon(),
+                Icon = OperatingSystem.IsMacOS() ? PetTheme.CreateMacMenuBarIcon() : PetTheme.CreateMascotWindowIcon(),
                 ToolTipText = "AgyPet — Antigravity Companion",
                 Menu = menu,
                 IsVisible = true,
             };
+            if (OperatingSystem.IsMacOS())
+                MacOSProperties.SetIsTemplateIcon(icon, true);
+
+            if (Application.Current != null)
+            {
+                var icons = TrayIcon.GetIcons(Application.Current);
+                if (icons == null)
+                    TrayIcon.SetIcons(Application.Current, new TrayIcons { icon });
+                else if (!icons.Contains(icon))
+                    icons.Add(icon);
+            }
 
             updater.Changed += () => Dispatcher.UIThread.Post(SyncUpdateLabel);
             SyncChecks();
@@ -188,6 +225,15 @@ namespace AgyPet
             startupItem.IsChecked = settings.StartWithWindows;
             autoUpdateItem.IsChecked = settings.AutoUpdate;
             liveModeItem.IsChecked = !window.IsPreviewMode;
+            for (int i = 0; i < previewMoodItems.Count; i++)
+                previewMoodItems[i].Value.IsChecked = window.IsPreviewMode && window.PreviewMood == previewMoodItems[i].Key;
+
+            if (OperatingSystem.IsMacOS() && resetItem != null)
+            {
+                resetItem.Header = settings.PinAboveTaskbar
+                    ? "Reset Pinned Position"
+                    : (!window.IsAnyAntigravityOpen ? "Reset / Snap Back Above Dock" : "Reset / Snap Back Above Window");
+            }
 
             int locIdx = 0;
             foreach (var raw in cornerMenu.Items)
@@ -218,7 +264,19 @@ namespace AgyPet
 
         public void Dispose()
         {
-            try { icon.IsVisible = false; icon.Dispose(); } catch { }
+            if (disposed) return;
+            disposed = true;
+            try
+            {
+                icon.IsVisible = false;
+                if (Application.Current != null)
+                {
+                    var icons = TrayIcon.GetIcons(Application.Current);
+                    if (icons != null) icons.Remove(icon);
+                }
+                icon.Dispose();
+            }
+            catch { }
         }
     }
 }

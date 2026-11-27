@@ -71,6 +71,52 @@ namespace AgyPet
             return new WindowIcon(new MemoryStream(png));
         }
 
+        // Generates a monochrome template PNG (36x36 @2x) of the plain Antigravity arch silhouette
+        // for the macOS menu bar NSStatusItem.
+        public static WindowIcon CreateMacMenuBarIcon()
+        {
+            byte[] png = RenderMacMenuBarPng(36);
+            return new WindowIcon(new MemoryStream(png));
+        }
+
+        public static byte[] RenderMacMenuBarPng(int size)
+        {
+            byte[] rgba = new byte[size * size * 4];
+            var mask = MascotCore.AgyArchMask;
+            int rows = mask.Length;
+            int cols = mask[0].Length;
+            double padX = size * 0.08;
+            double padY = size * 0.12;
+            double cellW = (size - padX * 2.0) / cols;
+            double cellH = (size - padY * 2.0) / rows;
+
+            for (int r = 0; r < rows; r++)
+            {
+                string row = mask[r];
+                for (int c = 0; c < row.Length; c++)
+                {
+                    if (row[c] != '#') continue;
+                    int x0 = Math.Max(0, (int)Math.Floor(padX + c * cellW));
+                    int x1 = Math.Min(size - 1, (int)Math.Ceiling(padX + (c + 1) * cellW) - 1);
+                    int y0 = Math.Max(0, (int)Math.Floor(padY + r * cellH));
+                    int y1 = Math.Min(size - 1, (int)Math.Ceiling(padY + (r + 1) * cellH) - 1);
+                    for (int py = y0; py <= y1; py++)
+                    {
+                        for (int px = x0; px <= x1; px++)
+                        {
+                            int idx = (py * size + px) * 4;
+                            rgba[idx] = 0;
+                            rgba[idx + 1] = 0;
+                            rgba[idx + 2] = 0;
+                            rgba[idx + 3] = 255;
+                        }
+                    }
+                }
+            }
+
+            return EncodeUncompressedPng(size, size, rgba);
+        }
+
         public static byte[] RenderMascotPng(int size, bool darkSkin)
         {
             byte[] rgba = new byte[size * size * 4];

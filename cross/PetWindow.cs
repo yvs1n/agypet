@@ -74,7 +74,21 @@ namespace AgyPet
         const double DragThresholdPx = 5.0;
 
         public bool IsPreviewMode { get { return previewMode; } }
+        public MascotMood PreviewMood { get { return previewMood; } }
+        public bool IsAnyAntigravityOpen { get { return tracker.IsAnyAntigravityOpen; } }
         double ActivePixelSize { get { return PetSettings.ClampPixelSize(activeRenderPixelSize > 0 ? activeRenderPixelSize : settings.PixelSize); } }
+
+        public static bool ShouldAllowRightClickContextMenu(bool isMacOs)
+        {
+            return !isMacOs;
+        }
+
+        public static string ResolveAwayCornerForPlatform(bool isMacOs, bool isAnyAntigravityOpen, string effectiveCorner)
+        {
+            if (isMacOs && !isAnyAntigravityOpen)
+                return "bottom-center";
+            return effectiveCorner;
+        }
 
         public PetWindow(PetSettings settings, ActivityMonitor monitor, Updater updater)
         {
@@ -332,8 +346,10 @@ namespace AgyPet
             ScreenRectDip work, screen;
             GetScreenRectsDip(out work, out screen);
             bool outsideApp = !tracker.IsInFront || tracker.IsMinimized;
+            string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
+            string awayCorner = ResolveAwayCornerForPlatform(OperatingSystem.IsMacOS(), tracker.IsAnyAntigravityOpen, effectiveCorner);
             return ResolveEffectivePixelSize(
-                settings.PixelSize, settings.MinimizedCorner, settings.PinAboveTaskbar,
+                settings.PixelSize, awayCorner, settings.PinAboveTaskbar,
                 settings.HasCustomFreePos, outsideApp, previewMode, work, screen);
         }
 
@@ -582,7 +598,9 @@ namespace AgyPet
                     Mood = previewMood,
                     SessionTitle = "Preview Mode",
                     ActionLabel = ActivityMonitor.MoodDefaultLabel(previewMood),
-                    FocusDetail = "Right-click → Live Mode to resume tracking",
+                    FocusDetail = OperatingSystem.IsMacOS()
+                        ? "Menu bar → Preview Mood → Live Mode to resume tracking"
+                        : "Right-click → Live Mode to resume tracking",
                 }, darkSkin, false));
                 return;
             }
@@ -916,6 +934,7 @@ namespace AgyPet
             double spriteH = 9.0 * ActivePixelSize;
             double petW = spriteW + StagePadX * 2;
             string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
+            string awayCorner = ResolveAwayCornerForPlatform(OperatingSystem.IsMacOS(), tracker.IsAnyAntigravityOpen, effectiveCorner);
 
             if (!settings.PinAboveTaskbar && tracker.IsInFront && !tracker.IsMinimized && !tracker.WindowBoundsDip.IsEmpty)
             {
@@ -950,11 +969,11 @@ namespace AgyPet
             }
             else
             {
-                PlaceInCorner(effectiveCorner, work, screen, spriteW, spriteH, StagePadX, StagePadY, out petLeft, out petTop);
+                PlaceInCorner(awayCorner, work, screen, spriteW, spriteH, StagePadX, StagePadY, out petLeft, out petTop);
             }
 
             bool pinnedAway = !tracker.IsInFront || settings.PinAboveTaskbar;
-            bool allowBar = pinnedAway && (settings.HasCustomFreePos || effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase));
+            bool allowBar = pinnedAway && (settings.HasCustomFreePos || awayCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase));
             double maxBottom = allowBar ? Math.Max(work.Bottom, screen.Bottom) : work.Bottom;
             double minTop = allowBar ? Math.Min(work.Top, screen.Top) : work.Top;
             petLeft = Math.Max(work.Left - StagePadX, Math.Min(work.Right - spriteW - StagePadX, petLeft));
@@ -991,8 +1010,9 @@ namespace AgyPet
             double winLeft = CurrentLeftDip;
             double winTop = CurrentTopDip;
             string effectiveCorner = PetSettings.ResolvePinnedCorner(settings.MinimizedCorner, settings.PinAboveTaskbar);
+            string awayCorner = ResolveAwayCornerForPlatform(OperatingSystem.IsMacOS(), tracker.IsAnyAntigravityOpen, effectiveCorner);
             bool inTaskbar = !settings.HasCustomFreePos && (!tracker.IsInFront || settings.PinAboveTaskbar) &&
-                             effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase);
+                             awayCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase);
             bool nearBottom = (winTop + StagePadY + spriteH) > (work.Bottom - 70.0);
             bool dockTopEdge = winTop < work.Top + 12.0;
 
@@ -1065,6 +1085,11 @@ namespace AgyPet
             var pt = e.GetCurrentPoint(this);
             if (pt.Properties.IsRightButtonPressed)
             {
+                if (!ShouldAllowRightClickContextMenu(OperatingSystem.IsMacOS()))
+                {
+                    e.Handled = true;
+                    return;
+                }
                 CloseHoverWindow();
                 OpenContextMenu(e);
                 e.Handled = true;
