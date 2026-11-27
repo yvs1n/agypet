@@ -1113,14 +1113,18 @@ namespace AgyPet
             Dot(air, core, 5.2, -1.1, 0.45, 0.45);
         }
 
+        void DrawEighthNote(Canvas layer, Brush fill, double x, double y)
+        {
+            Dot(layer, fill, x, y, 0.38, 1.25);
+            Dot(layer, fill, x + 0.38, y, 0.55, 0.4);
+            Dot(layer, fill, x - 0.32, y + 1.0, 0.72, 0.46);
+        }
+
         void DrawDanceNotes()
         {
             int t = tick / 3 % 4;
-            Brush c = IsDark ? MonoBright : AgyGoldBrush;
-            Dot(air, c, -0.2, 0.6 - t * 0.3, 0.48, 1.2);
-            Dot(air, c, -0.65, 1.5 - t * 0.3, 0.65, 0.48);
-            Dot(air, IsDark ? MonoMid : GlassLit, 10.2, 0.2 - ((t + 2) % 4) * 0.3, 0.48, 1.2);
-            Dot(air, IsDark ? MonoMid : GlassLit, 9.75, 1.1 - ((t + 2) % 4) * 0.3, 0.65, 0.48);
+            DrawEighthNote(air, IsDark ? MonoBright : AgyGoldBrush, -0.2, 0.6 - t * 0.3);
+            DrawEighthNote(air, IsDark ? MonoMid : GlassLit, 10.1, 0.2 - ((t + 2) % 4) * 0.3);
         }
 
         void DrawHeadphones(bool compact)
@@ -1166,11 +1170,7 @@ namespace AgyPet
             Dot(air, c1, lx + 1.05, ly + 1.1, 0.72, 0.46);
 
             // Right eighth-note (♪)
-            double rx = 9.5;
-            double ry = -0.5 - lift2;
-            Dot(air, c2, rx, ry, 0.38, 1.25);
-            Dot(air, c2, rx + 0.38, ry, 0.55, 0.4);
-            Dot(air, c2, rx - 0.32, ry + 1.0, 0.72, 0.46);
+            DrawEighthNote(air, c2, 9.5, -0.5 - lift2);
         }
 
         void DrawZzz()

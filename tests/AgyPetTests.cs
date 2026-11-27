@@ -679,6 +679,11 @@ namespace AgyPet.Tests
                     "Feet bottom pivot must stay fixed at 0 vertical shift during squish");
                 AssertTrue(headAfter.Y > 0.3 * 4.2,
                     "Head top must dip downward when petting squish is active");
+
+                // Dance uses the two 3-rect eighth-notes (6 air children total) just like speaker active notes
+                m.Dance();
+                AssertTrue(m.IsDancing, "Dance should activate dancing state in Idle");
+                AssertEq(6, m.AirLayer.Children.Count);
             });
 
             Console.WriteLine("Tests complete: " + passed + " passed, " + failed + " failed.");

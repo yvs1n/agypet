@@ -339,13 +339,16 @@
     switch (mood) {
       case 'Idle':
         if (!faceBlocked) drawEyes(3.9, 3.2, 6.3, 3.2, closed, lookX, lookY);
-        if (dancing) {
-          const nt = Math.floor(tick / 3) % 4;
-          dot(isDark ? '#F4F4F5' : '#F8C618', -0.2, 0.6 - nt * 0.3, 0.48, 1.2, false);
-          dot(isDark ? '#F4F4F5' : '#F8C618', -0.65, 1.5 - nt * 0.3, 0.65, 0.48, false);
-          dot(isDark ? '#A1A1AA' : '#38BDF8', 10.2, 0.2 - ((nt + 2) % 4) * 0.3, 0.48, 1.2, false);
-          dot(isDark ? '#A1A1AA' : '#38BDF8', 9.75, 1.1 - ((nt + 2) % 4) * 0.3, 0.65, 0.48, false);
-        } else if (tick % 24 < 14) {
+      const drawEighthNote = (fill, x, y) => {
+        dot(fill, x, y, 0.38, 1.25, false);
+        dot(fill, x + 0.38, y, 0.55, 0.4, false);
+        dot(fill, x - 0.32, y + 1.0, 0.72, 0.46, false);
+      };
+      if (dancing) {
+        const nt = Math.floor(tick / 3) % 4;
+        drawEighthNote(isDark ? '#F4F4F5' : '#F8C618', -0.2, 0.6 - nt * 0.3);
+        drawEighthNote(isDark ? '#A1A1AA' : '#38BDF8', 10.1, 0.2 - ((nt + 2) % 4) * 0.3);
+      } else if (tick % 24 < 14) {
           dot(isDark ? '#F4F4F5' : '#FFF6D6', 8.9, 1.3, 0.5, 0.5, false);
           if (tick % 24 < 9) {
             const rCol = isDark ? '#A1A1AA' : '#E2E8F0';
@@ -637,10 +640,12 @@
         dot(c1, lx + 1.37, ly + 0.38, 0.38, 0.95, false);
         dot(c1, lx - 0.32, ly + 1.1, 0.72, 0.46, false);
         dot(c1, lx + 1.05, ly + 1.1, 0.72, 0.46, false);
-        const rx = 9.5, ry = -0.5 - lift2;
-        dot(c2, rx, ry, 0.38, 1.25, false);
-        dot(c2, rx + 0.38, ry, 0.55, 0.4, false);
-        dot(c2, rx - 0.32, ry + 1.0, 0.72, 0.46, false);
+        const drawEighthNote = (fill, x, y) => {
+          dot(fill, x, y, 0.38, 1.25, false);
+          dot(fill, x + 0.38, y, 0.55, 0.4, false);
+          dot(fill, x - 0.32, y + 1.0, 0.72, 0.46, false);
+        };
+        drawEighthNote(c2, 9.5, -0.5 - lift2);
       }
     }
 

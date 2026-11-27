@@ -200,6 +200,10 @@ namespace AgyPet.CrossTests
                     "Press should squish vertically and widen slightly horizontally");
                 AssertTrue(Math.Abs(Avalonia.Controls.Canvas.GetTop(mv.SpriteLayer)) < 0.001,
                     "Idle Press must not shift sprite Canvas Top vertically");
+
+                mv.Dance();
+                AssertTrue(mv.IsDancing, "Dance should activate dancing state in Idle");
+                AssertEq(6, mv.AirLayer.Children.Count);
             });
 
             Console.WriteLine("Cross tests complete: " + passed + " passed, " + failed + " failed.");

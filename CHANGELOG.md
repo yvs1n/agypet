@@ -1,5 +1,8 @@
 # Changelog
 
+## 0.4.10 (2026-11-27)
+- **Unified Single Musical Note Across Dancing & Active Audio**: Updated dancing (`DrawDanceNotes`) across Windows ([src/Mascot.cs](src/Mascot.cs)), macOS/Linux ([cross/MascotView.cs](cross/MascotView.cs)), and the website ([site/app.js](site/app.js)) to share the same single eighth-note glyph (`♪` via `DrawEighthNote` / `drawEighthNote`) used when speakers/headphones audio is active.
+
 ## 0.4.9 (2026-11-27)
 - **Bottom-Anchored Petting Squish Across All OSes**: Fixed clicking/petting the mascot on Windows (`src/Mascot.cs`) and macOS/Linux (`cross/MascotView.cs`) so the inner sprite canvas has explicit pixel dimensions (`11 * px` × `9 * px`) and scales strictly around the bottom-center feet pivot `(5.5 * px, 9.0 * px)` instead of collapsing to top-left `(0, 0)` and lifting his legs. Removed vertical `pressDip` / `hurt` offsets across Windows, macOS, Linux, and [site/app.js](site/app.js) (`ScaleX = 1.06, ScaleY = 0.90` on press) so his legs stay 100% planted while petting squishes him smoothly.
 
