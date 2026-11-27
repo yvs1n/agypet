@@ -99,6 +99,35 @@ namespace AgyPet.CrossTests
                 AssertEq(work.Bottom - 37.8 - 24, ty);
             });
 
+            Run("macOS menu bar template icon, CLI detection, right-click disable, and default above-Dock placement", () =>
+            {
+                byte[] macIcon = PetTheme.RenderMacMenuBarPng(36);
+                AssertTrue(macIcon != null && macIcon.Length > 200, "macOS menu bar PNG should be non-empty");
+                AssertEq((byte)137, macIcon[0]);
+                AssertEq((byte)80, macIcon[1]);
+                AssertEq((byte)78, macIcon[2]);
+                AssertEq((byte)71, macIcon[3]);
+
+                AssertTrue(PlatformWindowTracker.IsCliProcessName("agy"), "agy CLI process");
+                AssertTrue(PlatformWindowTracker.IsCliProcessName("agy-cli"), "agy-cli process");
+                AssertTrue(PlatformWindowTracker.IsCliProcessName("antigravity-cli"), "antigravity-cli process");
+                AssertTrue(!PlatformWindowTracker.IsCliProcessName("Antigravity"), "Antigravity GUI is not CLI process");
+
+                AssertTrue(!PetWindow.ShouldAllowRightClickContextMenu(true), "macOS disables right-click context menu");
+                AssertTrue(PetWindow.ShouldAllowRightClickContextMenu(false), "Non-macOS keeps right-click context menu");
+
+                AssertEq("bottom-center", PetWindow.ResolveAwayCornerForPlatform(true, false, "top-right"));
+                AssertEq("top-right", PetWindow.ResolveAwayCornerForPlatform(true, true, "top-right"));
+                AssertEq("top-right", PetWindow.ResolveAwayCornerForPlatform(false, false, "top-right"));
+
+                var screen = new ScreenRectDip(0, 0, 1440, 900);
+                var work = new ScreenRectDip(0, 25, 1440, 827);
+                double lx, ty;
+                PetWindow.PlaceInCorner("bottom-center", work, screen, 46.2, 37.8, 36, 24, out lx, out ty);
+                AssertEq(work.Left + (work.Width - (46.2 + 72)) * 0.5, lx);
+                AssertEq(work.Bottom - 37.8 - 24, ty);
+            });
+
             Run("Transcript parser extracts steps, focus, and moods in .NET 8 build cleanly", () =>
             {
                 string[] lines =

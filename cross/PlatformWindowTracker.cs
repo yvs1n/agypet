@@ -35,6 +35,7 @@ namespace AgyPet
         public bool IsCliMinimized { get; private set; }
         public bool IsInFront { get; private set; }
         public bool IsCliInFront { get; private set; }
+        public bool IsAnyAntigravityOpen { get { return IsAppOpen || HasActiveCli; } }
         public bool TrackCliWindows { get; set; }
         public ScreenRectDip WindowBoundsDip { get; private set; }
         public string ActiveChatTitle { get; private set; }
@@ -43,8 +44,19 @@ namespace AgyPet
         readonly HashSet<int> appPids = new HashSet<int>();
         readonly HashSet<int> cliHostPids = new HashSet<int>();
         readonly HashSet<int> terminalPids = new HashSet<int>();
+        bool hasCliProcess;
         DateTime pidsRefreshed = DateTime.MinValue;
         readonly int selfPid = Environment.ProcessId;
+
+        public static bool IsCliProcessName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return false;
+            string n = name.Trim();
+            if (n.EndsWith(".exe", StringComparison.OrdinalIgnoreCase)) n = n.Substring(0, n.Length - 4);
+            return n.Equals("agy", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("agy-cli", StringComparison.OrdinalIgnoreCase)
+                || n.Equals("antigravity-cli", StringComparison.OrdinalIgnoreCase);
+        }
 
         public static bool IsAntigravityName(string name)
         {
@@ -126,8 +138,7 @@ namespace AgyPet
         public void Poll(double dpiScale)
         {
             RefreshProcesses();
-            bool hasCliProc = cliHostPids.Count > 0;
-            HasActiveCli = hasCliProc;
+            HasActiveCli = hasCliProcess || cliHostPids.Count > 0;
 
             if (OperatingSystem.IsMacOS())
             {
@@ -176,6 +187,7 @@ namespace AgyPet
             appPids.Clear();
             cliHostPids.Clear();
             terminalPids.Clear();
+            hasCliProcess = false;
 
             var ppidMap = new Dictionary<int, int>();
             var procByPid = new Dictionary<int, string>();
@@ -190,12 +202,12 @@ namespace AgyPet
                         if (p.Id == selfPid) continue;
                         string pname = p.ProcessName ?? "";
                         procByPid[p.Id] = pname;
-                        if (IsAntigravityName(pname))
+                        if (IsCliProcessName(pname))
+                            agyPids.Add(p.Id);
+                        else if (IsAntigravityName(pname))
                             appPids.Add(p.Id);
                         if (IsTerminalName(pname))
                             terminalPids.Add(p.Id);
-                        if (pname.Equals("agy", StringComparison.OrdinalIgnoreCase))
-                            agyPids.Add(p.Id);
 
                         if (OperatingSystem.IsLinux())
                         {
@@ -208,6 +220,8 @@ namespace AgyPet
                     catch { }
                     finally { try { p.Dispose(); } catch { } }
                 }
+
+                hasCliProcess = agyPids.Count > 0;
 
                 if (OperatingSystem.IsMacOS() && agyPids.Count > 0)
                     PopulateMacParents(ppidMap);
