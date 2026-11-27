@@ -17,6 +17,8 @@ namespace AgyPet
         ToolStripMenuItem cliLocationMenu;
         ToolStripMenuItem hideInactiveItem;
         ToolStripMenuItem hideMinimizedItem;
+        TrackBar traySizeTrack;
+        Label traySizeLabel;
 
         public TrayMenu(PetWindow window, PetSettings settings, Updater updater)
         {
@@ -81,6 +83,13 @@ namespace AgyPet
                 pinAboveTaskbarItem.Checked = settings.PinAboveTaskbar;
             if (lockPositionItem != null)
                 lockPositionItem.Checked = settings.LockPosition;
+            if (traySizeTrack != null)
+            {
+                int val = Math.Max(traySizeTrack.Minimum, Math.Min(traySizeTrack.Maximum, (int)Math.Round(settings.PixelSize * 10.0)));
+                if (traySizeTrack.Value != val) traySizeTrack.Value = val;
+            }
+            if (traySizeLabel != null)
+                traySizeLabel.Text = "Size: " + PetSettings.FormatSizeLabel(settings.PixelSize);
         }
 
         ContextMenuStrip BuildMenu()
@@ -128,6 +137,44 @@ namespace AgyPet
             hideMinimizedItem = new ToolStripMenuItem("Hide When Minimized", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.SetHideWhenMinimized(!settings.HideWhenMinimized))));
             autoHideMenu.DropDownItems.AddRange(new ToolStripItem[] { hideInactiveItem, hideMinimizedItem });
             menu.Items.Add(autoHideMenu);
+
+            var sizeMenu = new ToolStripMenuItem("Size");
+            var sizePanel = new Panel { Width = 185, Height = 56, Padding = new Padding(8, 6, 8, 4) };
+            traySizeLabel = new Label
+            {
+                Text = "Size: " + PetSettings.FormatSizeLabel(settings.PixelSize),
+                AutoSize = false,
+                Dock = DockStyle.Top,
+                Height = 18,
+            };
+            traySizeTrack = new TrackBar
+            {
+                Minimum = (int)Math.Round(PetSettings.MinPixelSize * 10.0),
+                Maximum = (int)Math.Round(PetSettings.MaxPixelSize * 10.0),
+                Value = Math.Max(24, Math.Min(72, (int)Math.Round(settings.PixelSize * 10.0))),
+                TickFrequency = 6,
+                SmallChange = 1,
+                LargeChange = 4,
+                Dock = DockStyle.Top,
+                AutoSize = false,
+                Height = 28,
+            };
+            traySizeTrack.Scroll += (s, e) =>
+            {
+                double next = traySizeTrack.Value / 10.0;
+                traySizeLabel.Text = "Size: " + PetSettings.FormatSizeLabel(next);
+                window.Dispatcher.BeginInvoke(new Action(() => window.ApplyPixelSize(next, false)));
+            };
+            traySizeTrack.MouseUp += (s, e) =>
+            {
+                double next = traySizeTrack.Value / 10.0;
+                window.Dispatcher.BeginInvoke(new Action(() => window.ApplyPixelSize(next, true)));
+            };
+            sizePanel.Controls.Add(traySizeTrack);
+            sizePanel.Controls.Add(traySizeLabel);
+            sizeMenu.DropDownItems.Add(new ToolStripControlHost(sizePanel));
+            sizeMenu.DropDownItems.Add("Reset Default (100% · 4.2 px)", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => window.ApplyPixelSize(PetSettings.DefaultPixelSize, true))));
+            menu.Items.Add(sizeMenu);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("Reset Position", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(window.ResetPosition)));
             updateItem = new ToolStripMenuItem("Check for Updates", null, (s, e) => window.Dispatcher.BeginInvoke(new Action(() => { if (updater != null) updater.CheckNow(); })));

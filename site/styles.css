@@ -599,6 +599,33 @@ html.js .nav-bar {
   border-color: transparent;
 }
 
+.size-slider-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-secondary);
+}
+
+.size-slider {
+  width: 96px;
+  accent-color: var(--accent-blue);
+  cursor: pointer;
+}
+
+.size-readout {
+  min-width: 40px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-primary);
+  font-weight: 600;
+}
+
 .sim-viewport {
   position: relative;
   min-height: 452px;

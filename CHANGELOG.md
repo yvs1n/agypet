@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.2 (2026-11-27)
+- **Tight Mascot Hit-Testing & Click-Through**: Moved click, drag, hover, and context-menu hit-testing strictly onto the `11*px × 9*px` mascot body (`stage`) and left surrounding container padding (`petHitArea`) and floating props (`air`) completely click-through (`0x00` alpha / `IsHitTestVisible = false`), so clicks anywhere around the mascot pass cleanly to underlying apps and taskbar buttons.
+- **Typing & Reading Eye Fixes**: Fixed `Typing` to render symmetric blinking eyes (`DrawEyes` / `DrawFocusEyes`) instead of shifted `shortEyes`, and bounded `shortEyes` (`Reading`) white glints and dark pupils inside `[ly .. ly + 0.5]` so they no longer poke outside the eye bounds.
+- **Precise Continuous Size Slider (`2.4`–`7.2 px`, `0.1 px` step)**: Replaced fixed `Small` / `Medium` / `Large` presets with persisted continuous `PixelSize` (`DefaultPixelSize = 4.2`, `ResolveEffectivePixelSize` taskbar scaling) and live sliders across Windows right-click & tray menus (`Slider` / `TrackBar`), macOS/Linux right-click `Slider` + precision tray steps, and the interactive website playground (`#size-slider`), plus `Reset Default (100% · 4.2 px)`.
+
 ## 0.4.1 (2026-11-27)
 - **Instant Transcript Reaction Sync**: Fixed `ParseTranscriptLines` skipping past `GENERIC` tool-result records so `edit_file` (`Working`), `read_file` (`Reading`), and `run_command` (`Terminal`) stay accurate instead of falling back to `Thinking`, and tightened `MinBusyDwellMs` (`280ms`) and monitor wakeup debounce (`20ms`) for crisp animation switching.
 - **Per-Chat Switching & Multitasking Fixes**: Scoped UIA chat header detection to the active composer pane (`ResolveChatPaneRoot`), prioritized exact/prefix title matching before partial substring hits, woke `ActivityMonitor` immediately on focus change, and enabled `Multitasking` when `2+` sessions run while pinned above the taskbar or viewing overview/Settings screens.

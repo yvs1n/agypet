@@ -54,7 +54,7 @@
         "name": "AgyPet",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Windows 10, Windows 11, macOS 11+, Linux",
-        "softwareVersion": "0.4.1",
+        "softwareVersion": "0.4.2",
         "license": "https://opensource.org/licenses/MIT",
         "description": "A single-file install-and-play pixel companion overlay for Google Antigravity App, Antigravity IDE, and Antigravity CLI across Windows, macOS, and Linux.",
         "featureList": [
@@ -237,9 +237,11 @@
             </div>
 
             <div class="sim-group" role="group" aria-label="Mascot size and motion">
-              <button type="button" class="chip-btn size-btn" data-size="3.2" aria-pressed="false">Small</button>
-              <button type="button" class="chip-btn size-btn" data-size="4.2" aria-pressed="true">Medium</button>
-              <button type="button" class="chip-btn size-btn" data-size="5.2" aria-pressed="false">Large</button>
+              <label class="size-slider-wrap" for="size-slider">
+                <span class="size-slider-label">Size</span>
+                <input type="range" class="size-slider" id="size-slider" min="2.4" max="7.2" step="0.1" value="4.2" aria-label="Mascot size" />
+                <span class="size-readout" id="size-readout">100%</span>
+              </label>
               <button type="button" class="icon-btn icon-btn-sm" id="motion-toggle" title="Pause motion">
                 <span class="sr-only" id="motion-label">Pause motion</span>
                 <span class="icon-swap" id="icon-pause" aria-hidden="true">
@@ -270,7 +272,7 @@
 
             <!-- Live Floating Mascot Actor -->
             <button type="button" class="stage-pet" id="stage-pet" aria-label="Press AgyPet mascot (currently Typing)">
-              <canvas id="hero-mascot" width="104" height="82" aria-hidden="true"></canvas>
+              <canvas id="hero-mascot" width="136" height="108" aria-hidden="true"></canvas>
             </button>
             <span class="sr-only" id="stage-live" aria-live="polite"></span>
 

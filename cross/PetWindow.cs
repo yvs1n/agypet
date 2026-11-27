@@ -56,7 +56,7 @@ namespace AgyPet
         bool userMovedWhileInFront;
 
         bool previewMode;
-        string activeRenderSize = "medium";
+        double activeRenderPixelSize = PetSettings.DefaultPixelSize;
         MascotMood previewMood = MascotMood.Idle;
         MascotMood lastAppliedMood = MascotMood.Idle;
         string lastFocusedSessionId = "";
@@ -72,7 +72,7 @@ namespace AgyPet
         const double DragThresholdPx = 5.0;
 
         public bool IsPreviewMode { get { return previewMode; } }
-        double ActivePixelSize { get { return PetSettings.PixelSizeFor(string.IsNullOrEmpty(activeRenderSize) ? settings.Size : activeRenderSize); } }
+        double ActivePixelSize { get { return PetSettings.ClampPixelSize(activeRenderPixelSize > 0 ? activeRenderPixelSize : settings.PixelSize); } }
 
         public PetWindow(PetSettings settings, ActivityMonitor monitor, Updater updater)
         {
@@ -91,10 +91,12 @@ namespace AgyPet
             SizeToContent = SizeToContent.WidthAndHeight;
             Icon = PetTheme.CreateMascotWindowIcon();
 
+            stage.Background = PetTheme.FrozenArgb(0x01, 0, 0, 0);
+            stage.Cursor = new Cursor(StandardCursorType.Hand);
+
             petHitArea = new Border
             {
-                Background = PetTheme.FrozenArgb(0x01, 0, 0, 0),
-                Cursor = new Cursor(StandardCursorType.Hand),
+                Background = Brushes.Transparent,
                 Padding = new Thickness(StagePadX, StagePadY, StagePadX, StagePadBottom),
                 Child = stage,
             };
@@ -155,11 +157,11 @@ namespace AgyPet
 
             RebuildMascot();
 
-            petHitArea.PointerPressed += OnPetPointerPressed;
-            petHitArea.PointerMoved += OnPetPointerMoved;
-            petHitArea.PointerReleased += OnPetPointerReleased;
-            petHitArea.PointerEntered += (s, e) => ShowCard();
-            petHitArea.PointerExited += (s, e) => ScheduleHideCard();
+            stage.PointerPressed += OnPetPointerPressed;
+            stage.PointerMoved += OnPetPointerMoved;
+            stage.PointerReleased += OnPetPointerReleased;
+            stage.PointerEntered += (s, e) => ShowCard();
+            stage.PointerExited += (s, e) => ScheduleHideCard();
 
             hoverLeaveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(240) };
             hoverLeaveTimer.Tick += (s, e) => { hoverLeaveTimer.Stop(); HideCard(); };
@@ -282,27 +284,56 @@ namespace AgyPet
             return "small";
         }
 
-        string ResolveCurrentEffectiveSize()
+        public static double ResolveEffectivePixelSize(
+            double userPx,
+            string corner,
+            bool pinAboveTaskbar,
+            bool hasCustomFreePos,
+            bool outsideApp,
+            bool previewMode,
+            ScreenRectDip workArea,
+            ScreenRectDip screenBounds)
+        {
+            double clamped = PetSettings.ClampPixelSize(userPx);
+            if (previewMode || !outsideApp || hasCustomFreePos)
+                return clamped;
+
+            string effectiveCorner = PetSettings.ResolvePinnedCorner(corner, pinAboveTaskbar);
+            if (!effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
+                return clamped;
+
+            double bottomGap = screenBounds.Bottom - workArea.Bottom;
+            double topGap = workArea.Top - screenBounds.Top;
+            double barHeight = bottomGap >= 16.0 ? bottomGap : (topGap >= 16.0 ? topGap : 0.0);
+            if (barHeight < 16.0)
+                return clamped;
+
+            const double MinBufferDip = 6.0;
+            double maxFitPx = Math.Floor(((barHeight - MinBufferDip) / 9.0) * 10.0) / 10.0;
+            return Math.Max(PetSettings.MinPixelSize, Math.Min(clamped, maxFitPx));
+        }
+
+        double ResolveCurrentEffectivePixelSize()
         {
             ScreenRectDip work, screen;
             GetScreenRectsDip(out work, out screen);
             bool outsideApp = !tracker.IsInFront || tracker.IsMinimized;
-            return ResolveEffectiveSize(
-                settings.Size, settings.MinimizedCorner, settings.PinAboveTaskbar,
+            return ResolveEffectivePixelSize(
+                settings.PixelSize, settings.MinimizedCorner, settings.PinAboveTaskbar,
                 settings.HasCustomFreePos, outsideApp, previewMode, work, screen);
         }
 
         void EnsureEffectiveSize()
         {
-            string nextSize = ResolveCurrentEffectiveSize();
-            if (!string.Equals(nextSize, activeRenderSize, StringComparison.Ordinal))
-                RebuildMascot(nextSize);
+            double nextPx = ResolveCurrentEffectivePixelSize();
+            if (Math.Abs(nextPx - activeRenderPixelSize) > 0.02)
+                RebuildMascot(nextPx);
         }
 
-        public void RebuildMascot(string targetSize = null)
+        public void RebuildMascot(double? targetPx = null)
         {
-            string resolved = string.IsNullOrEmpty(targetSize) ? ResolveCurrentEffectiveSize() : targetSize;
-            activeRenderSize = resolved;
+            double resolved = targetPx.HasValue ? PetSettings.ClampPixelSize(targetPx.Value) : ResolveCurrentEffectivePixelSize();
+            activeRenderPixelSize = resolved;
             stage.Children.Clear();
             mascot = new MascotView(ActivePixelSize, settings.Skin);
             ApplyResolvedMascotState();
@@ -319,12 +350,17 @@ namespace AgyPet
             SyncActivity();
         }
 
+        public void ApplyPixelSize(double px, bool save = true)
+        {
+            settings.SetPixelSize(px);
+            if (save) settings.Save();
+            RebuildMascot(ResolveCurrentEffectivePixelSize());
+            SnapToTarget();
+        }
+
         public void ApplySize(string size)
         {
-            settings.Size = (size == "small" || size == "large") ? size : "medium";
-            settings.Save();
-            RebuildMascot(ResolveCurrentEffectiveSize());
-            SnapToTarget();
+            ApplyPixelSize(PetSettings.PixelSizeFor(size), true);
         }
 
         public void SetPreviewMood(MascotMood? mood)
@@ -1001,7 +1037,7 @@ namespace AgyPet
         void HideCard()
         {
             if (!isHoverOpen) return;
-            if (!petHitArea.IsPointerOver && !hoverCard.IsPointerOver)
+            if (!stage.IsPointerOver && !hoverCard.IsPointerOver)
             {
                 hoverCard.Opacity = 0;
                 CloseHoverWindow();
@@ -1037,7 +1073,7 @@ namespace AgyPet
             dragStartCursorPx = screenPt;
             dragStartLeftDip = CurrentLeftDip;
             dragStartTopDip = CurrentTopDip;
-            e.Pointer.Capture(petHitArea);
+            e.Pointer.Capture(stage);
             e.Handled = true;
         }
 
@@ -1147,11 +1183,11 @@ namespace AgyPet
                 CheckRow("Hide When Minimized", settings.HideWhenMinimized, () => SetHideWhenMinimized(!settings.HideWhenMinimized)),
             }));
 
-            rows.Children.Add(SubmenuRow("Size", new[]
+            rows.Children.Add(SubmenuRow("Size", new Control[]
             {
-                CheckRow("Small", settings.Size == "small", () => ApplySize("small")),
-                CheckRow("Medium", settings.Size == "medium", () => ApplySize("medium")),
-                CheckRow("Large", settings.Size == "large", () => ApplySize("large")),
+                BuildSizeSliderPanel(),
+                MenuSeparator(),
+                ActionRow("Reset Default (100% · 4.2 px)", () => ApplyPixelSize(PetSettings.DefaultPixelSize, true)),
             }));
 
             var prevRows = new List<Control>();
@@ -1264,6 +1300,61 @@ namespace AgyPet
                 Background = PetTheme.BorderSubtle,
                 Margin = new Thickness(8, 4, 8, 4),
             };
+        }
+
+        Control BuildSizeSliderPanel()
+        {
+            var valueText = new TextBlock
+            {
+                Text = PetSettings.FormatSizeLabel(settings.PixelSize),
+                Foreground = PetTheme.AccentBlueHi,
+                FontSize = 11.5,
+                FontWeight = FontWeight.SemiBold,
+                FontFamily = PetTheme.UiFont,
+                HorizontalAlignment = HorizontalAlignment.Right,
+            };
+            var labelText = new TextBlock
+            {
+                Text = "Size",
+                Foreground = PetTheme.InkSecondary,
+                FontSize = 11.5,
+                FontWeight = FontWeight.SemiBold,
+                FontFamily = PetTheme.UiFont,
+            };
+            var hdr = new DockPanel { Margin = new Thickness(0, 0, 0, 6) };
+            DockPanel.SetDock(valueText, Dock.Right);
+            hdr.Children.Add(valueText);
+            hdr.Children.Add(labelText);
+
+            var slider = new Slider
+            {
+                Minimum = PetSettings.MinPixelSize,
+                Maximum = PetSettings.MaxPixelSize,
+                Value = settings.PixelSize,
+                TickFrequency = 0.1,
+                IsSnapToTickEnabled = true,
+                Width = 186,
+                Cursor = new Cursor(StandardCursorType.Hand),
+            };
+            slider.PropertyChanged += (s, e) =>
+            {
+                if (e.Property == RangeBase.ValueProperty)
+                {
+                    double next = PetSettings.ClampPixelSize(slider.Value);
+                    valueText.Text = PetSettings.FormatSizeLabel(next);
+                    ApplyPixelSize(next, save: false);
+                }
+            };
+            slider.PointerReleased += (s, e) => settings.Save();
+
+            var panel = new StackPanel
+            {
+                Width = 190,
+                Margin = new Thickness(8, 6, 8, 6),
+            };
+            panel.Children.Add(hdr);
+            panel.Children.Add(slider);
+            return panel;
         }
 
         Control CheckRow(string label, bool isChecked, Action onClick)

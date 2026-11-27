@@ -70,8 +70,13 @@ namespace AgyPet
             new LocationOption("off", "Off (Corner / Taskbar Only)"),
         };
 
-        // "small" | "medium" | "large"
+        public const double MinPixelSize = 2.4;
+        public const double MaxPixelSize = 7.2;
+        public const double DefaultPixelSize = 4.2;
+
+        // Legacy bucket ("small" | "medium" | "large") synced cleanly alongside precise PixelSize
         public string Size { get; set; }
+        public double PixelSize { get; set; }
 
         // Custom offset relative to Antigravity window right/top when dragged in pin-chat mode
         public bool HasCustomChatOffset { get; set; }
@@ -98,6 +103,7 @@ namespace AgyPet
             MinimizedCorner = "top-right";
             CliPlacement = "bottom-right";
             Size = "medium";
+            PixelSize = DefaultPixelSize;
             HasCustomChatOffset = false;
             ChatOffsetFromRight = 92;
             ChatOffsetFromTop = 64;
@@ -117,12 +123,35 @@ namespace AgyPet
         {
             if (size == "small") return 3.2;
             if (size == "large") return 5.2;
-            return 4.2;
+            return DefaultPixelSize;
         }
 
-        public double PixelSize
+        public static double ClampPixelSize(double px)
         {
-            get { return PixelSizeFor(Size); }
+            if (double.IsNaN(px) || double.IsInfinity(px) || px <= 0) return DefaultPixelSize;
+            double rounded = Math.Round(px, 1);
+            return Math.Max(MinPixelSize, Math.Min(MaxPixelSize, rounded));
+        }
+
+        public static string BucketForPixelSize(double px)
+        {
+            double c = ClampPixelSize(px);
+            if (c < 3.6) return "small";
+            if (c > 4.8) return "large";
+            return "medium";
+        }
+
+        public static string FormatSizeLabel(double px)
+        {
+            double c = ClampPixelSize(px);
+            int pct = (int)Math.Round(c / DefaultPixelSize * 100.0);
+            return string.Format("{0}% ({1:0.0} px)", pct, c);
+        }
+
+        public void SetPixelSize(double px)
+        {
+            PixelSize = ClampPixelSize(px);
+            Size = BucketForPixelSize(PixelSize);
         }
 
         public static PetSettings Load()
@@ -207,6 +236,11 @@ namespace AgyPet
             MinimizedCorner = NormalizeCorner(MinimizedCorner);
             CliPlacement = NormalizeCliPlacement(CliPlacement);
             if (Size != "small" && Size != "medium" && Size != "large") Size = "medium";
+            if (double.IsNaN(PixelSize) || PixelSize <= 0)
+                PixelSize = PixelSizeFor(Size);
+            else
+                PixelSize = ClampPixelSize(PixelSize);
+            Size = BucketForPixelSize(PixelSize);
             if (double.IsNaN(ChatOffsetFromRight) || ChatOffsetFromRight < 8 || ChatOffsetFromRight > 1200) ChatOffsetFromRight = 92;
             if (double.IsNaN(ChatOffsetFromTop) || ChatOffsetFromTop < 8 || ChatOffsetFromTop > 1200) ChatOffsetFromTop = 64;
         }

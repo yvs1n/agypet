@@ -82,6 +82,7 @@ namespace AgyPet
             ClipToBounds = false;
             sprite.RenderTransformOrigin = new RelativePoint(0.5, 0.85, RelativeUnit.Relative);
             sprite.RenderTransform = recoilTransform;
+            air.IsHitTestVisible = false;
             Children.Add(sprite);
             Children.Add(air);
 
@@ -380,7 +381,7 @@ namespace AgyPet
                     DrawSpeechBubbles();
                     break;
                 case MascotMood.Typing:
-                    if (!hurt) DrawFocusEyes(3.7, 3.3, 6.1, 3.3);
+                    if (!hurt) DrawEyes(3.9, 3.3, 6.3, 3.3, closed);
                     DrawTypingScene();
                     break;
                 case MascotMood.Searching:
@@ -508,8 +509,16 @@ namespace AgyPet
         {
             Dot(gear, EyePrimary, lx, ly, 0.9, 0.5);
             Dot(gear, EyePrimary, rx, ry, 0.9, 0.5);
-            Dot(gear, EyeGlint, lx + 0.45, ly, 0.35, 0.3);
-            Dot(gear, EyeGlint, rx + 0.45, ry, 0.35, 0.3);
+            if (!IsDark)
+            {
+                Dot(gear, EyeGlint, lx + 0.45, ly + 0.04, 0.28, 0.25);
+                Dot(gear, EyeGlint, rx + 0.45, ry + 0.04, 0.28, 0.25);
+            }
+            else
+            {
+                Dot(gear, EyeDark, lx + 0.45, ly + 0.22, 0.28, 0.24);
+                Dot(gear, EyeDark, rx + 0.45, ry + 0.22, 0.28, 0.24);
+            }
         }
 
         void DrawFocusedWorkingFace()

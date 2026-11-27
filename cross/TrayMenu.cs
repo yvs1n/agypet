@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Threading;
 
@@ -14,7 +15,8 @@ namespace AgyPet
         readonly Updater updater;
 
         NativeMenuItem skinClassicItem, skinDarkItem;
-        NativeMenuItem sizeSmallItem, sizeMediumItem, sizeLargeItem;
+        static readonly double[] TraySizeSteps = { 2.5, 3.2, 3.7, 4.2, 4.7, 5.2, 6.0, 7.0 };
+        readonly List<NativeMenuItem> sizeStepItems = new List<NativeMenuItem>();
         NativeMenuItem pinAboveTaskbarItem, lockPosItem, hoverCardItem, startupItem, autoUpdateItem;
         NativeMenuItem hideInactiveItem, hideMinimizedItem, liveModeItem, updateItem;
         NativeMenu cornerMenu, cliMenu, previewMenu;
@@ -74,12 +76,13 @@ namespace AgyPet
             menu.Add(new NativeMenuItem("Auto-Hide") { Menu = autoHideMenu });
 
             var sizeMenu = new NativeMenu();
-            sizeSmallItem = Check("Small", () => { window.ApplySize("small"); SyncChecks(); });
-            sizeMediumItem = Check("Medium", () => { window.ApplySize("medium"); SyncChecks(); });
-            sizeLargeItem = Check("Large", () => { window.ApplySize("large"); SyncChecks(); });
-            sizeMenu.Add(sizeSmallItem);
-            sizeMenu.Add(sizeMediumItem);
-            sizeMenu.Add(sizeLargeItem);
+            foreach (double stepPx in TraySizeSteps)
+            {
+                double captured = stepPx;
+                var item = Check(PetSettings.FormatSizeLabel(captured), () => { window.ApplyPixelSize(captured, true); SyncChecks(); });
+                sizeStepItems.Add(item);
+                sizeMenu.Add(item);
+            }
             menu.Add(new NativeMenuItem("Size") { Menu = sizeMenu });
 
             previewMenu = new NativeMenu();
@@ -168,9 +171,15 @@ namespace AgyPet
         {
             skinClassicItem.IsChecked = settings.Skin == MascotCore.ClassicSkin;
             skinDarkItem.IsChecked = settings.Skin == MascotCore.DarkSkin;
-            sizeSmallItem.IsChecked = settings.Size == "small";
-            sizeMediumItem.IsChecked = settings.Size == "medium";
-            sizeLargeItem.IsChecked = settings.Size == "large";
+            int nearestIdx = 0;
+            double bestDiff = double.MaxValue;
+            for (int i = 0; i < TraySizeSteps.Length; i++)
+            {
+                double diff = Math.Abs(TraySizeSteps[i] - settings.PixelSize);
+                if (diff < bestDiff) { bestDiff = diff; nearestIdx = i; }
+            }
+            for (int i = 0; i < sizeStepItems.Count; i++)
+                sizeStepItems[i].IsChecked = i == nearestIdx;
             pinAboveTaskbarItem.IsChecked = settings.PinAboveTaskbar;
             lockPosItem.IsChecked = settings.LockPosition;
             hideInactiveItem.IsChecked = settings.HideWhenInactive;

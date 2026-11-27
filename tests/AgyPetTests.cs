@@ -458,6 +458,19 @@ namespace AgyPet.Tests
                 AssertEq("large", PetWindow.ResolveEffectiveSize("small", "taskbar-right", false, false, true, false, tallBarWork, screen));
                 AssertEq("small", PetWindow.ResolveEffectiveSize("small", "taskbar-right", false, false, false, false, tallBarWork, screen));
 
+                // Continuous slider sizing clamps [2.4..7.2], formats cleanly, and respects taskbar buffer
+                AssertEq(2.4, PetSettings.ClampPixelSize(1.0));
+                AssertEq(7.2, PetSettings.ClampPixelSize(12.0));
+                AssertEq(4.7, PetSettings.ClampPixelSize(4.74));
+                var customSettings = new PetSettings();
+                customSettings.SetPixelSize(6.3);
+                AssertEq(6.3, customSettings.PixelSize);
+                AssertEq("large", customSettings.Size);
+                AssertEq("150% (6.3 px)", PetSettings.FormatSizeLabel(6.3));
+                AssertEq(6.3, PetWindow.ResolveEffectivePixelSize(6.3, "taskbar-right", false, false, false, false, win11Work, screen));
+                AssertTrue(PetWindow.ResolveEffectivePixelSize(6.3, "taskbar-right", false, false, true, false, win11Work, screen) <= 4.61,
+                    "Oversized slider value should smoothly scale to keep 6 DIP buffer inside 48 DIP taskbar");
+
                 // Standard 48 DIP Win11 taskbar: avoids edge-to-edge large, uses medium with comfortable buffer outside app
                 AssertEq("medium", PetWindow.ResolveEffectiveSize("small", "taskbar-right", false, false, true, false, win11Work, screen));
                 AssertEq("medium", PetWindow.ResolveEffectiveSize("large", "taskbar-center", false, false, true, false, win11Work, screen));
@@ -514,6 +527,29 @@ namespace AgyPet.Tests
                 // Near screen edges clamps cleanly inside workArea without overflowing
                 var cardEdge = PetWindow.ComputePopupScreenPos(-24.0, tbRightPt.Y, 32, 24, spriteW, spriteH, 280.0, 108.0, win11Work, true, false);
                 AssertTrue(cardEdge.X >= win11Work.Left + 4.0 - 0.01, "Centered hover card should clamp cleanly inside left work area");
+
+                // WPF size slider ControlTemplate must seal and apply cleanly without FrameworkElementFactory Track errors
+                Exception staErr = null;
+                var t = new System.Threading.Thread(() =>
+                {
+                    try
+                    {
+                        var slider = new System.Windows.Controls.Slider
+                        {
+                            Minimum = PetSettings.MinPixelSize,
+                            Maximum = PetSettings.MaxPixelSize,
+                            Value = PetSettings.DefaultPixelSize,
+                            Template = PetWindow.CreateWebsiteSliderTemplate(),
+                        };
+                        if (!slider.ApplyTemplate())
+                            throw new Exception("Slider.ApplyTemplate returned false");
+                    }
+                    catch (Exception ex) { staErr = ex; }
+                });
+                t.SetApartmentState(System.Threading.ApartmentState.STA);
+                t.Start();
+                t.Join();
+                if (staErr != null) throw staErr;
             });
 
             Console.WriteLine("Tests complete: " + passed + " passed, " + failed + " failed.");

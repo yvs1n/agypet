@@ -74,7 +74,7 @@ namespace AgyPet
         readonly ContextMenu contextMenu = new ContextMenu();
 
         bool previewMode;
-        string activeRenderSize = "medium";
+        double activeRenderPixelSize = PetSettings.DefaultPixelSize;
         MascotMood previewMood = MascotMood.Idle;
         MascotMood lastAppliedMood = MascotMood.Idle;
         string lastFocusedSessionId = "";
@@ -84,7 +84,7 @@ namespace AgyPet
 
         const int MinBusyDwellMs = 280;
 
-        const double StagePadX = 52; // keeps total width above Win32 SM_CXMINTRACK (~136 DIP) on Small/Medium/Large
+        const double StagePadX = 56; // keeps total width above Win32 SM_CXMINTRACK (~136 DIP) down to MinPixelSize 2.4; click-through outside stage
         const double StagePadY = 24;
         const double StagePadBottom = 4;
         const double CardWidth = 268;
@@ -105,10 +105,12 @@ namespace AgyPet
             ResizeMode = ResizeMode.NoResize;
             SizeToContent = SizeToContent.WidthAndHeight;
 
+            stage.Background = new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0));
+            stage.Cursor = Cursors.Hand;
+
             petHitArea = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)),
-                Cursor = Cursors.Hand,
+                Background = Brushes.Transparent,
                 Padding = new Thickness(StagePadX, StagePadY, StagePadX, StagePadBottom),
                 Child = stage,
             };
@@ -170,7 +172,7 @@ namespace AgyPet
             hoverWindow.SizeChanged += (s, e) => { if (isHoverOpen) UpdateHoverPopupPosition(); };
 
             RebuildMascot();
-            AutomationProperties.SetName(petHitArea, "AgyPet companion");
+            AutomationProperties.SetName(stage, "AgyPet companion");
             AutomationProperties.SetName(hoverCard, "Active Antigravity sessions");
             AutomationProperties.SetName(contextMenu, "AgyPet options menu");
 
@@ -199,13 +201,13 @@ namespace AgyPet
             };
             ApplyWebsiteMenuTheme(contextMenu);
             PopulateContextMenu();
-            petHitArea.ContextMenu = contextMenu;
+            stage.ContextMenu = contextMenu;
 
-            petHitArea.MouseLeftButtonDown += OnPetMouseDown;
-            petHitArea.MouseMove += OnPetMouseMove;
-            petHitArea.MouseLeftButtonUp += OnPetMouseUp;
-            petHitArea.MouseEnter += (s, e) => ShowCard();
-            petHitArea.MouseLeave += (s, e) => ScheduleHideCard();
+            stage.MouseLeftButtonDown += OnPetMouseDown;
+            stage.MouseMove += OnPetMouseMove;
+            stage.MouseLeftButtonUp += OnPetMouseUp;
+            stage.MouseEnter += (s, e) => ShowCard();
+            stage.MouseLeave += (s, e) => ScheduleHideCard();
             hoverCard.MouseEnter += (s, e) => ShowCard();
             hoverCard.MouseLeave += (s, e) => ScheduleHideCard();
             hoverCard.PreviewMouseWheel += OnCardMouseWheel;
@@ -271,7 +273,36 @@ namespace AgyPet
 
         double ActivePixelSize
         {
-            get { return PetSettings.PixelSizeFor(string.IsNullOrEmpty(activeRenderSize) ? settings.Size : activeRenderSize); }
+            get { return PetSettings.ClampPixelSize(activeRenderPixelSize > 0 ? activeRenderPixelSize : settings.PixelSize); }
+        }
+
+        public static double ResolveEffectivePixelSize(
+            double userPx,
+            string corner,
+            bool pinAboveTaskbar,
+            bool hasCustomFreePos,
+            bool outsideApp,
+            bool previewMode,
+            Rect workArea,
+            Rect screenBounds)
+        {
+            double clamped = PetSettings.ClampPixelSize(userPx);
+            if (previewMode || !outsideApp || hasCustomFreePos)
+                return clamped;
+
+            string effectiveCorner = PetSettings.ResolvePinnedCorner(corner, pinAboveTaskbar);
+            if (!effectiveCorner.StartsWith("taskbar-", StringComparison.OrdinalIgnoreCase))
+                return clamped;
+
+            double bottomGap = screenBounds.Bottom - workArea.Bottom;
+            double topGap = workArea.Top - screenBounds.Top;
+            double taskbarHeight = bottomGap >= 16.0 ? bottomGap : (topGap >= 16.0 ? topGap : 0.0);
+            if (taskbarHeight < 16.0)
+                return clamped;
+
+            const double TaskbarMinBufferDip = 6.0;
+            double maxFitPx = Math.Floor(((taskbarHeight - TaskbarMinBufferDip) / 9.0) * 10.0) / 10.0;
+            return Math.Max(PetSettings.MinPixelSize, Math.Min(clamped, maxFitPx));
         }
 
         public static string ResolveEffectiveSize(
@@ -336,13 +367,13 @@ namespace AgyPet
             return false;
         }
 
-        string ResolveCurrentEffectiveSize()
+        double ResolveCurrentEffectivePixelSize()
         {
             Rect work = SystemParameters.WorkArea;
             Rect screen = new Rect(0, 0, SystemParameters.PrimaryScreenWidth, SystemParameters.PrimaryScreenHeight);
             bool outsideApp = !tracker.IsInFront || tracker.IsMinimized;
-            return ResolveEffectiveSize(
-                settings.Size,
+            return ResolveEffectivePixelSize(
+                settings.PixelSize,
                 settings.MinimizedCorner,
                 settings.PinAboveTaskbar,
                 settings.HasCustomFreePos,
@@ -354,15 +385,15 @@ namespace AgyPet
 
         void EnsureEffectiveSize()
         {
-            string nextSize = ResolveCurrentEffectiveSize();
-            if (!string.Equals(nextSize, activeRenderSize, StringComparison.Ordinal))
-                RebuildMascot(nextSize);
+            double nextPx = ResolveCurrentEffectivePixelSize();
+            if (Math.Abs(nextPx - activeRenderPixelSize) > 0.02)
+                RebuildMascot(nextPx);
         }
 
-        public void RebuildMascot(string targetSize = null)
+        public void RebuildMascot(double? targetPx = null)
         {
-            string resolved = string.IsNullOrEmpty(targetSize) ? ResolveCurrentEffectiveSize() : targetSize;
-            activeRenderSize = resolved;
+            double resolved = targetPx.HasValue ? PetSettings.ClampPixelSize(targetPx.Value) : ResolveCurrentEffectivePixelSize();
+            activeRenderPixelSize = resolved;
             stage.Children.Clear();
             mascot = new Mascot(ActivePixelSize, settings.Skin);
             ApplyResolvedMascotState();
@@ -399,12 +430,17 @@ namespace AgyPet
             SyncActivity();
         }
 
+        public void ApplyPixelSize(double px, bool save = true)
+        {
+            settings.SetPixelSize(px);
+            if (save) settings.Save();
+            RebuildMascot(ResolveCurrentEffectivePixelSize());
+            SnapToTarget();
+        }
+
         public void ApplySize(string size)
         {
-            settings.Size = (size == "small" || size == "large") ? size : "medium";
-            settings.Save();
-            RebuildMascot(ResolveCurrentEffectiveSize());
-            SnapToTarget();
+            ApplyPixelSize(PetSettings.PixelSizeFor(size), true);
         }
 
         public void SetPreviewMood(MascotMood? mood)
@@ -658,7 +694,7 @@ namespace AgyPet
                 string label = activeSnap != null && !string.IsNullOrEmpty(activeSnap.ActionLabel)
                     ? activeSnap.ActionLabel
                     : ActivityMonitor.MoodDefaultLabel(mascot.Mood);
-                AutomationProperties.SetName(petHitArea, "AgyPet: " + mascot.Mood + " — " + label);
+                AutomationProperties.SetName(stage, "AgyPet: " + mascot.Mood + " — " + label);
             }
 
             if (isHoverOpen || !previewMode)
@@ -1443,7 +1479,7 @@ namespace AgyPet
             var fade = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(130)) { EasingFunction = easeIn };
             fade.Completed += (s, e) =>
             {
-                if (!petHitArea.IsMouseOver && !hoverCard.IsMouseOver)
+                if (!stage.IsMouseOver && !hoverCard.IsMouseOver)
                     CloseHoverWindow();
             };
             hoverCard.BeginAnimation(OpacityProperty, fade);
@@ -1473,7 +1509,7 @@ namespace AgyPet
             dragStartLeft = Left;
             dragStartTop = Top;
 
-            petHitArea.CaptureMouse();
+            stage.CaptureMouse();
             e.Handled = true;
         }
 
@@ -1505,7 +1541,7 @@ namespace AgyPet
         {
             if (!mouseDown) return;
             mouseDown = false;
-            petHitArea.ReleaseMouseCapture();
+            stage.ReleaseMouseCapture();
 
             if (!dragging)
             {
@@ -1578,9 +1614,9 @@ namespace AgyPet
             contextMenu.Items.Add(autoHideMenu);
 
             var sizeMenu = new MenuItem { Header = "Size" };
-            sizeMenu.Items.Add(CheckItem("Small", settings.Size == "small", () => ApplySize("small")));
-            sizeMenu.Items.Add(CheckItem("Medium", settings.Size == "medium", () => ApplySize("medium")));
-            sizeMenu.Items.Add(CheckItem("Large", settings.Size == "large", () => ApplySize("large")));
+            sizeMenu.Items.Add(BuildSizeSliderItem(sizeMenu));
+            sizeMenu.Items.Add(new Separator());
+            sizeMenu.Items.Add(ActionItem("Reset Default (100% · 4.2 px)", () => ApplyPixelSize(PetSettings.DefaultPixelSize, true)));
             contextMenu.Items.Add(sizeMenu);
 
             var previewSub = new MenuItem { Header = "Preview Mood" };
@@ -1792,6 +1828,122 @@ namespace AgyPet
 
             menu.Resources[typeof(MenuItem)] = miStyle;
             menu.Resources[typeof(Separator)] = sepStyle;
+        }
+
+        MenuItem BuildSizeSliderItem(MenuItem parentMenu)
+        {
+            var valueText = new TextBlock
+            {
+                Text = PetSettings.FormatSizeLabel(settings.PixelSize),
+                Foreground = SiteAccentBlueHi,
+                FontSize = 11.5,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = UiFont,
+                HorizontalAlignment = HorizontalAlignment.Right,
+            };
+
+            var labelText = new TextBlock
+            {
+                Text = "Size",
+                Foreground = SiteInkSecondary,
+                FontSize = 11.5,
+                FontWeight = FontWeights.SemiBold,
+                FontFamily = UiFont,
+            };
+
+            var hdr = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
+            DockPanel.SetDock(valueText, Dock.Right);
+            hdr.Children.Add(valueText);
+            hdr.Children.Add(labelText);
+
+            var slider = new Slider
+            {
+                Minimum = PetSettings.MinPixelSize,
+                Maximum = PetSettings.MaxPixelSize,
+                Value = settings.PixelSize,
+                TickFrequency = 0.1,
+                SmallChange = 0.1,
+                LargeChange = 0.4,
+                IsSnapToTickEnabled = true,
+                IsMoveToPointEnabled = true,
+                Width = 186,
+                FocusVisualStyle = null,
+                Template = CreateWebsiteSliderTemplate(),
+            };
+
+            slider.ValueChanged += (s, e) =>
+            {
+                double next = PetSettings.ClampPixelSize(e.NewValue);
+                valueText.Text = PetSettings.FormatSizeLabel(next);
+                ApplyPixelSize(next, save: false);
+            };
+            slider.AddHandler(Thumb.DragCompletedEvent, new DragCompletedEventHandler((s, e) => settings.Save()));
+            slider.PreviewMouseLeftButtonUp += (s, e) => settings.Save();
+            slider.PreviewKeyUp += (s, e) => settings.Save();
+
+            var panel = new StackPanel
+            {
+                Margin = new Thickness(8, 6, 8, 6),
+                Width = 186,
+            };
+            panel.Children.Add(hdr);
+            panel.Children.Add(slider);
+
+            var tpl = new ControlTemplate(typeof(MenuItem));
+            var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+            presenter.SetValue(ContentPresenter.ContentSourceProperty, "Header");
+            tpl.VisualTree = presenter;
+
+            var hostItem = new MenuItem
+            {
+                Header = panel,
+                StaysOpenOnClick = true,
+                Template = tpl,
+                Focusable = false,
+            };
+            return hostItem;
+        }
+
+        internal static ControlTemplate CreateWebsiteSliderTemplate()
+        {
+            const string xaml = @"
+<ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation'
+                 xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml'
+                 TargetType='{x:Type Slider}'>
+  <Grid Height='20' SnapsToDevicePixels='True'>
+    <Border Height='4' CornerRadius='2' VerticalAlignment='Center' Background='#14F4F6FA'/>
+    <Track x:Name='PART_Track' VerticalAlignment='Center'>
+      <Track.DecreaseRepeatButton>
+        <RepeatButton Command='{x:Static Slider.DecreaseLarge}' Focusable='False'>
+          <RepeatButton.Template>
+            <ControlTemplate TargetType='{x:Type RepeatButton}'>
+              <Border Height='4' CornerRadius='2' Background='#427AF2'/>
+            </ControlTemplate>
+          </RepeatButton.Template>
+        </RepeatButton>
+      </Track.DecreaseRepeatButton>
+      <Track.IncreaseRepeatButton>
+        <RepeatButton Command='{x:Static Slider.IncreaseLarge}' Focusable='False'>
+          <RepeatButton.Template>
+            <ControlTemplate TargetType='{x:Type RepeatButton}'>
+              <Border Height='14' Background='Transparent'/>
+            </ControlTemplate>
+          </RepeatButton.Template>
+        </RepeatButton>
+      </Track.IncreaseRepeatButton>
+      <Track.Thumb>
+        <Thumb Focusable='False' Cursor='Hand'>
+          <Thumb.Template>
+            <ControlTemplate TargetType='{x:Type Thumb}'>
+              <Ellipse Width='14' Height='14' Fill='#F1F3F7' Stroke='#427AF2' StrokeThickness='2'/>
+            </ControlTemplate>
+          </Thumb.Template>
+        </Thumb>
+      </Track.Thumb>
+    </Track>
+  </Grid>
+</ControlTemplate>";
+            return (ControlTemplate)System.Windows.Markup.XamlReader.Parse(xaml);
         }
 
         static MenuItem CheckItem(string text, bool isChecked, Action onClick)

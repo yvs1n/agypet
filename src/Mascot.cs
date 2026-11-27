@@ -196,6 +196,7 @@ namespace AgyPet
             ClipToBounds = false;
             sprite.RenderTransformOrigin = new Point(0.5, 0.85);
             sprite.RenderTransform = recoilTransform;
+            air.IsHitTestVisible = false;
             Children.Add(sprite);
             Children.Add(air);
 
@@ -530,7 +531,7 @@ namespace AgyPet
                     else DrawSpeechDotsOnly();
                     break;
                 case MascotMood.Typing:
-                    if (!hurt) DrawEyes(3.7, 3.3, 6.1, 3.3, false, shortEyes: true);
+                    if (!hurt) DrawEyes(3.9, 3.3, 6.3, 3.3, closed);
                     DrawTypingScene();
                     break;
                 case MascotMood.Searching:
@@ -647,18 +648,21 @@ namespace AgyPet
         {
             if (closed) { DrawShutEyes(lx, ly + 0.4, rx, ry + 0.4); return; }
             double h = shortEyes ? 0.5 : 0.9;
+            double glintSize = shortEyes ? 0.28 : 0.4;
+            double pupilSize = shortEyes ? 0.25 : 0.35;
+            double pupilY = shortEyes ? (h - pupilSize) : 0.35;
             Dot(gear, EyePrimary, lx, ly, 0.85, h);
             Dot(gear, EyePrimary, rx, ry, 0.85, h);
             if (!IsDark)
             {
-                Dot(gear, EyeGlint, lx + 0.4, ly, 0.4, 0.4);
-                Dot(gear, EyeGlint, rx + 0.4, ry, 0.4, 0.4);
+                Dot(gear, EyeGlint, lx + 0.42, ly + 0.04, glintSize, glintSize);
+                Dot(gear, EyeGlint, rx + 0.42, ry + 0.04, glintSize, glintSize);
             }
             else
             {
-                // Subtle pupil depth inside luminous white eyes on Dark Remake
-                Dot(gear, EyeDark, lx + 0.45, ly + 0.35, 0.35, 0.35);
-                Dot(gear, EyeDark, rx + 0.45, ry + 0.35, 0.35, 0.35);
+                // Subtle pupil depth cleanly bounded inside luminous white eyes on Dark Remake
+                Dot(gear, EyeDark, lx + 0.45, ly + pupilY, pupilSize, pupilSize);
+                Dot(gear, EyeDark, rx + 0.45, ry + pupilY, pupilSize, pupilSize);
             }
         }
 

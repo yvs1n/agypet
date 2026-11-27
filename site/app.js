@@ -300,14 +300,17 @@
         return;
       }
       const eh = shortH ? 0.5 : 0.9;
+      const gSize = shortH ? 0.28 : 0.4;
+      const pSize = shortH ? 0.25 : 0.35;
+      const pY = shortH ? (eh - pSize) : 0.35;
       dot(eyeMain, lx, ly, 0.85, eh);
       dot(eyeMain, rx, ry, 0.85, eh);
       if (!isDark) {
-        dot('#F8FAFC', lx + 0.4, ly, 0.4, 0.4);
-        dot('#F8FAFC', rx + 0.4, ry, 0.4, 0.4);
+        dot('#F8FAFC', lx + 0.42, ly + 0.04, gSize, gSize);
+        dot('#F8FAFC', rx + 0.42, ry + 0.04, gSize, gSize);
       } else {
-        dot('#0B1220', lx + 0.45, ly + 0.35, 0.35, 0.35);
-        dot('#0B1220', rx + 0.45, ry + 0.35, 0.35, 0.35);
+        dot('#0B1220', lx + 0.45, ly + pY, pSize, pSize);
+        dot('#0B1220', rx + 0.45, ry + pY, pSize, pSize);
       }
     };
 
@@ -379,7 +382,7 @@
         if ((Math.floor(tick / 3) % 4) >= 2) dot(isDark ? '#A1A1AA' : '#38BDF8', 11.4, 2.9, 0.9, 0.9, false);
         break;
       case 'Typing': {
-        if (!faceBlocked) drawEyes(3.7, 3.3, 6.1, 3.3, false, true);
+        if (!faceBlocked) drawEyes(3.9, 3.3, 6.3, 3.3, closed);
         dot(isDark ? '#27272A' : '#3F4A5C', 1.4, 6.2, 8.2, 1.4);
         const tap = Math.floor(tick / 2) % 4;
         for (let i = 0; i < 4; i++) {
@@ -1009,15 +1012,18 @@
   btnAwayOne.addEventListener('click', () => setAwayMode('one'));
   document.getElementById('btn-restore-app').addEventListener('click', () => setAwayMode('none'));
 
-  // Size switcher
-  document.querySelectorAll('.size-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      heroPx = parseFloat(btn.dataset.size);
-      document.querySelectorAll('.size-btn').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+  // Precise continuous size slider
+  const sizeSlider = document.getElementById('size-slider');
+  const sizeReadout = document.getElementById('size-readout');
+  if (sizeSlider) {
+    const syncSlider = () => {
+      heroPx = Math.max(2.4, Math.min(7.2, parseFloat(sizeSlider.value) || 4.2));
+      if (sizeReadout) sizeReadout.textContent = `${Math.round((heroPx / 4.2) * 100)}%`;
       computeStageTarget();
       renderAllOnce();
-    });
-  });
+    };
+    sizeSlider.addEventListener('input', syncSlider);
+  }
 
   // Attachments & real user typing trigger
   const attachRow = document.getElementById('attachment-row');
