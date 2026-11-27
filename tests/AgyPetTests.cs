@@ -56,7 +56,22 @@ namespace AgyPet.Tests
                 AssertEq(4, info.StepsTotal);
                 AssertEq(1, info.StepsInProgress);
                 AssertEq(50, info.PercentDone);
-                AssertEq(50, info.PercentLeft);
+                var info2 = ActivityMonitor.ParseTranscriptLines(new[]
+                {
+                    "{\"type\":\"PLANNER_RESPONSE\",\"tool_calls\":[{\"name\":\"edit_file\",\"args\":{\"Path\":\"src/Mascot.cs\"}}]}",
+                    "{\"type\":\"GENERIC\",\"status\":\"DONE\",\"content\":\"Made 1 replacement in src/Mascot.cs\"}",
+                    "{\"type\":\"SYSTEM_MESSAGE\",\"status\":\"DONE\",\"content\":\"Reminder\"}"
+                });
+                AssertEq(MascotMood.Working, info2.Mood);
+                AssertEq("Editing Mascot.cs", info2.ActionLabel);
+
+                var info3 = ActivityMonitor.ParseTranscriptLines(new[]
+                {
+                    "{\"type\":\"PLANNER_RESPONSE\",\"tool_calls\":[{\"name\":\"read_file\",\"args\":{\"Path\":\"src/PetWindow.cs\"}}]}",
+                    "{\"type\":\"GENERIC\",\"status\":\"DONE\",\"content\":\"Showing lines 1-100\"}"
+                });
+                AssertEq(MascotMood.Reading, info3.Mood);
+                AssertEq("Reading PetWindow.cs", info3.ActionLabel);
             });
 
             Run("Task.md fallback computes exact done and left percentages", () =>
@@ -148,8 +163,21 @@ namespace AgyPet.Tests
                 AssertEq("s0", ActivityMonitor.MatchSessionIdForTest(titles, sources, new[] { "Anti-Gravity Mascot Add-on Imp…", "PetWindow.cs" }, "", true));
                 AssertEq("s1", ActivityMonitor.MatchSessionIdForTest(titles, sources, new[] { "Brag Video" }, "", true));
                 AssertEq("s2", ActivityMonitor.MatchSessionIdForTest(titles, sources, new[] { "Unknown Terminal" }, "Antigravity CLI", false));
+                // Exact match on a later candidate must beat an earlier generic substring hit
+                AssertEq("s1", ActivityMonitor.MatchSessionIdForTest(titles, sources, new[] { "Mascot", "Brag Video" }, "", true));
                 AssertTrue(ActivityMonitor.IsExplicitNewChat(new[] { "New conversation" }), "Explicit New conversation header should stay Idle");
                 AssertTrue(!ActivityMonitor.IsExplicitNewChat(new[] { "Brag Video" }), "Named chat should not match New Chat");
+
+                var actives = new[]
+                {
+                    new ActivitySnapshot { SessionId = "s0", Mood = MascotMood.Thinking, IsBusy = true },
+                    new ActivitySnapshot { SessionId = "s1", Mood = MascotMood.Terminal, IsBusy = true },
+                };
+                AssertEq(MascotMood.Idle, PetWindow.ResolveMood(false, MascotMood.Idle, true, false, true, false, false, false, false, new ActivitySnapshot { SessionId = "s2", Mood = MascotMood.Idle }, actives, actives[0]));
+                AssertEq(MascotMood.Terminal, PetWindow.ResolveMood(false, MascotMood.Idle, true, false, true, false, false, false, false, actives[1], actives, actives[0]));
+                AssertEq(MascotMood.Multitasking, PetWindow.ResolveMood(false, MascotMood.Idle, true, true, true, false, false, false, false, actives[1], actives, actives[0]));
+                AssertEq(MascotMood.Multitasking, PetWindow.ResolveMood(false, MascotMood.Idle, true, false, false, false, false, false, false, actives[0], actives, actives[0]));
+                AssertEq(MascotMood.Multitasking, PetWindow.ResolveMood(false, MascotMood.Idle, false, false, true, false, false, false, false, actives[0], actives, actives[0]));
             });
 
             Run("Chatbox placement adapts visual right & feet cleanly across Small, Medium, and Large", () =>
@@ -208,35 +236,38 @@ namespace AgyPet.Tests
                 }
             });
 
-            Run("Click dances on Idle, winces on 3+ rapid clicks in Idle or Working, ignores 1-2 clicks while Working", () =>
+            Run("Single press squishes normally, 3+ rapid clicks dance in Idle or wince in Working, then reset cleanly", () =>
             {
                 var m = new Mascot(4.0, Mascot.ClassicSkin) { Mood = MascotMood.Idle };
                 m.Poke();
-                AssertTrue(m.IsHurt, "Mascot should enter hurt state immediately when poked in Idle");
+                AssertTrue(m.IsHurt, "Mascot should enter hurt state immediately when poked");
                 AssertEq(MascotMood.Idle, m.Mood);
                 m.CancelHurt();
                 AssertTrue(!m.IsHurt, "CancelHurt should clear hurt state on drag");
 
                 var t0 = new DateTime(2026, 11, 27, 1, 0, 0, DateTimeKind.Utc);
                 m.RegisterClickAt(t0);
-                AssertTrue(m.IsDancing && !m.IsHurt, "First click in Idle should hop playfully without wincing");
+                AssertTrue(m.IsPressed && !m.IsDancing && !m.IsHurt, "1st click should play normal press squish");
                 m.RegisterClickAt(t0.AddMilliseconds(250));
-                AssertTrue(m.IsDancing && !m.IsHurt, "Second click in Idle continues leg-hop dance");
+                AssertTrue(m.IsPressed && !m.IsDancing && !m.IsHurt, "2nd rapid click still plays normal press squish");
                 m.RegisterClickAt(t0.AddMilliseconds(500));
-                AssertTrue(m.IsHurt && !m.IsDancing, "3rd rapid click triggers the original wince cleanly");
-                m.RegisterClickAt(t0.AddSeconds(4));
-                AssertTrue(m.IsDancing && !m.IsHurt, "Cooldown resets streak so later single click hops again");
+                AssertTrue(m.IsDancing && !m.IsHurt && !m.IsPressed, "3rd continuous rapid click in Idle triggers leg-hop dance");
+                // Very next single click immediately after multi-press must play normal Press, NOT re-trigger multi-press
+                m.RegisterClickAt(t0.AddMilliseconds(800));
+                AssertTrue(m.IsPressed && !m.IsHurt, "Single click right after multi-press resets to normal single-press squish");
 
-                // While Working: 1-2 clicks stay calm (no dance), 3+ rapid clicks trigger the wince!
+                // While Working: 1-2 clicks play subtle press squish, 3+ rapid clicks trigger annoyed wince, then reset cleanly
                 m.Mood = MascotMood.Working;
                 m.Snap(1);
                 AssertTrue(!m.IsDancing, "Transitioning to Working clears active leg-hop dance");
-                m.RegisterClickAt(t0.AddSeconds(6));
-                AssertTrue(!m.IsDancing && !m.IsHurt, "Single click while Working must not dance or wince");
-                m.RegisterClickAt(t0.AddSeconds(6.2));
-                AssertTrue(!m.IsDancing && !m.IsHurt, "Two clicks while Working stay calm");
-                m.RegisterClickAt(t0.AddSeconds(6.4));
-                AssertTrue(m.IsHurt && !m.IsDancing, "3rd rapid click while Working should wince just like Idle");
+                m.RegisterClickAt(t0.AddSeconds(3));
+                AssertTrue(m.IsPressed && !m.IsDancing && !m.IsHurt, "Single click while Working plays subtle press squish");
+                m.RegisterClickAt(t0.AddSeconds(3.2));
+                AssertTrue(m.IsPressed && !m.IsDancing && !m.IsHurt, "Second click while Working stays calm press squish");
+                m.RegisterClickAt(t0.AddSeconds(3.4));
+                AssertTrue(m.IsHurt && !m.IsDancing, "3rd rapid click while Working winces");
+                m.RegisterClickAt(t0.AddSeconds(3.7));
+                AssertTrue(m.IsPressed && !m.IsHurt, "Single click right after Working multi-press plays normal press, not stuck wince");
                 m.CancelHurt();
                 m.Dance();
                 AssertTrue(!m.IsDancing, "Dance remains ignored outside Idle");
@@ -255,6 +286,58 @@ namespace AgyPet.Tests
                 AssertEq(2, Mascot.ResolveOrbCount(2));
                 AssertEq(4, Mascot.ResolveOrbCount(4));
                 AssertEq(8, Mascot.ResolveOrbCount(12));
+            });
+
+            Run("Dark skin shares identical multi-session, hover dot, normal-press, and multi-press logic with Classic", () =>
+            {
+                var baseTime = new DateTime(2026, 11, 27, 2, 0, 0, DateTimeKind.Utc);
+                foreach (string skin in new[] { Mascot.ClassicSkin, Mascot.DarkSkin })
+                {
+                    var pet = new Mascot(4.2, skin)
+                    {
+                        Mood = MascotMood.Idle,
+                        ActiveSessionCount = 5,
+                    };
+                    pet.Snap(1);
+
+                    // Idle: 1-2 single presses -> normal press; 3 continuous rapid presses -> dance; next click -> normal press
+                    pet.RegisterClickAt(baseTime);
+                    AssertTrue(pet.IsPressed && !pet.IsDancing && !pet.IsHurt, skin + ": 1st click in Idle should press");
+                    pet.RegisterClickAt(baseTime.AddMilliseconds(250));
+                    AssertTrue(pet.IsPressed && !pet.IsDancing && !pet.IsHurt, skin + ": 2nd click in Idle should press");
+                    pet.RegisterClickAt(baseTime.AddMilliseconds(500));
+                    AssertTrue(pet.IsDancing && !pet.IsHurt, skin + ": 3rd rapid click in Idle should dance");
+                    pet.RegisterClickAt(baseTime.AddMilliseconds(750));
+                    AssertTrue(pet.IsPressed && !pet.IsHurt, skin + ": click after dance trigger resets cleanly to normal press");
+
+                    // Multitasking: 1-2 clicks -> normal press; 3 continuous rapid clicks -> annoyed wince; next click -> normal press
+                    pet.CancelHurt();
+                    pet.Mood = MascotMood.Multitasking;
+                    pet.Snap(2);
+                    pet.RegisterClickAt(baseTime.AddSeconds(4));
+                    AssertTrue(pet.IsPressed && !pet.IsDancing && !pet.IsHurt, skin + ": single click while Multitasking should normal-press");
+                    pet.RegisterClickAt(baseTime.AddSeconds(4.2));
+                    AssertTrue(pet.IsPressed && !pet.IsDancing && !pet.IsHurt, skin + ": two clicks while Multitasking should normal-press");
+                    pet.RegisterClickAt(baseTime.AddSeconds(4.4));
+                    AssertTrue(pet.IsHurt && !pet.IsDancing, skin + ": 3rd rapid click while Multitasking should wince");
+                    pet.RegisterClickAt(baseTime.AddSeconds(4.6));
+                    AssertTrue(pet.IsPressed && !pet.IsHurt, skin + ": single click after wince resets cleanly to normal press");
+
+                    // Switching skin mid-session preserves mood and session orb count
+                    string other = skin == Mascot.DarkSkin ? Mascot.ClassicSkin : Mascot.DarkSkin;
+                    pet.SetSkin(other);
+                    AssertEq(other, pet.SkinName);
+                    AssertEq(MascotMood.Multitasking, pet.Mood);
+                    AssertEq(5, pet.ActiveSessionCount);
+                }
+
+                var darkPet = new Mascot(4.2, Mascot.DarkSkin);
+                var darkArm = darkPet.BodyColorAt(1.5, 4.8);
+                AssertEq(Mascot.DarkArchPixelColor((1.5 - 0.5) / 9.5, 4.8 / 8.5, false, false, true, false), darkArm);
+
+                var darkBusyDot = PetWindow.DotBrushForMood(MascotMood.Multitasking, true);
+                var darkIdleDot = PetWindow.DotBrushForMood(MascotMood.Idle, true);
+                AssertTrue(darkBusyDot != darkIdleDot, "Dark hover card must visually separate active sessions from idle");
             });
 
             Run("Nudge wakes a sleeping mascot and resets the idle sleep clock", () =>

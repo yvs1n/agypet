@@ -49,6 +49,7 @@ namespace AgyPet
 
         bool mouseDown;
         bool dragging;
+        bool wokeFromSleepOnPress;
         PixelPoint dragStartCursorPx;
         double dragStartLeftDip, dragStartTopDip;
         bool wasOnChatScreen;
@@ -63,7 +64,7 @@ namespace AgyPet
         double targetLeftDip = double.NaN, targetTopDip = double.NaN;
         DateTime lastAnimTime = DateTime.UtcNow;
 
-        const int MinBusyDwellMs = 1200;
+        const int MinBusyDwellMs = 280;
         const double StagePadX = 36;
         const double StagePadY = 24;
         const double StagePadBottom = 4;
@@ -457,16 +458,20 @@ namespace AgyPet
         MascotMood ResolveCurrentMood()
         {
             if (previewMode) return previewMood;
-            if (tracker.IsInFront)
+            var actives = monitor.ActiveSessions;
+            int activeCount = actives != null ? actives.Count : 0;
+            bool hasSurface = !tracker.WindowBoundsDip.IsEmpty;
+
+            if (!tracker.IsInFront || settings.PinAboveTaskbar || !hasSurface)
             {
-                var focused = monitor.FocusedSession;
-                if (focused != null && focused.IsBusy) return focused.Mood;
-                if (focused != null) return focused.Mood;
+                if (activeCount >= 2) return MascotMood.Multitasking;
+                if (activeCount == 1) return actives[0].Mood;
                 return monitor.Latest.Mood;
             }
-            var actives = monitor.ActiveSessions;
-            if (actives != null && actives.Count >= 2) return MascotMood.Multitasking;
-            if (actives != null && actives.Count == 1) return actives[0].Mood;
+
+            var focused = monitor.FocusedSession;
+            if (focused != null && focused.IsBusy) return focused.Mood;
+            if (focused != null) return focused.Mood;
             return monitor.Latest.Mood;
         }
 
@@ -1017,10 +1022,13 @@ namespace AgyPet
             }
             if (!pt.Properties.IsLeftButtonPressed) return;
 
+            wokeFromSleepOnPress = false;
             if (!previewMode && mascot != null && mascot.Mood == MascotMood.Sleeping)
             {
+                wokeFromSleepOnPress = true;
                 monitor.WakeUp();
                 SyncActivity();
+                mascot.Poke();
             }
 
             mouseDown = true;
@@ -1064,9 +1072,15 @@ namespace AgyPet
 
             if (!dragging)
             {
+                if (wokeFromSleepOnPress)
+                {
+                    wokeFromSleepOnPress = false;
+                    return;
+                }
                 if (mascot != null) mascot.RegisterClick();
                 return;
             }
+            wokeFromSleepOnPress = false;
 
             dragging = false;
             targetLeftDip = CurrentLeftDip;

@@ -28,6 +28,15 @@ namespace AgyPet.CrossTests
                 AssertEq(expected.G, arm.G);
                 AssertEq(expected.B, arm.B);
 
+                var darkArm = MascotCore.BodyRgbAt(true, 1.5, 4.8);
+                var expectedDark = MascotCore.DarkArchPixel((1.5 - 0.5) / 9.5, 4.8 / 8.5, false, false, true, false);
+                AssertEq(expectedDark.R, darkArm.R);
+                AssertEq(expectedDark.G, darkArm.G);
+                AssertEq(expectedDark.B, darkArm.B);
+
+                AssertTrue(!Equals(PetTheme.DotBrushForMood(MascotMood.Multitasking, true), PetTheme.DotBrushForMood(MascotMood.Idle, true)),
+                    "Cross hover card dark dots must separate Multitasking from Idle");
+
                 AssertEq(3, MascotCore.ResolveOrbCount(0));
                 AssertEq(2, MascotCore.ResolveOrbCount(2));
                 AssertEq(6, MascotCore.ResolveOrbCount(6));
@@ -37,7 +46,9 @@ namespace AgyPet.CrossTests
             Run("Procedural PNG icon encodes valid signature & RGBA dimensions without System.Drawing", () =>
             {
                 byte[] png = PetTheme.RenderMascotPng(32, false);
+                byte[] pngDark = PetTheme.RenderMascotPng(32, true);
                 AssertTrue(png != null && png.Length > 200, "PNG output should be non-empty");
+                AssertTrue(pngDark != null && pngDark.Length > 200, "Dark PNG output should be non-empty");
                 AssertEq((byte)137, png[0]);
                 AssertEq((byte)80, png[1]);
                 AssertEq((byte)78, png[2]);

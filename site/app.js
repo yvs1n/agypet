@@ -209,6 +209,8 @@
     const isIdle = mood === 'Idle';
     const hurt = !compact && (typeof state === 'object' ? (state.hurt > 0) : state > 0);
     const hurtT = !compact ? (typeof state === 'object' ? (state.hurt || 0) : (state || 0)) : 0;
+    const pressed = !compact && !hurt && typeof state === 'object' && (state.press > 0);
+    const pressT = pressed ? (state.press || 0) : 0;
     const dancing = isIdle && typeof state === 'object' && (state.dance > 0) && !hurt;
 
     const shiftLeftProp = (mood === 'Working' || mood === 'Terminal') ? 1.4 * px : 0;
@@ -220,7 +222,8 @@
     const doneHop = mood === 'Done' ? -Math.round(Math.abs(Math.sin(tick * 0.45)) * 1.1) * px : 0;
     const baseBob = dancing ? danceBob : doneHop;
     const wiggles = mood === 'Alert' || mood === 'Question' || mood === 'Error';
-    const bobY = hurt && hurtT >= 4 ? baseBob + px * 0.45 : baseBob;
+    const pressDip = (pressed && pressT >= 2) ? px * 0.3 : 0;
+    const bobY = (hurt && hurtT >= 4 ? baseBob + px * 0.45 : baseBob) + pressDip;
     const danceShift = dancing ? (hopStep === 0 ? -0.18 * px : (hopStep === 2 ? 0.18 * px : 0)) : 0;
     const wigX = hurt && hurtT >= 4 ? ((hurtT % 2 === 0 ? -0.28 : 0.28) * px)
       : (mood === 'Error' && tick % 6 < 2) ? ((tick % 2 === 0 ? -0.4 : 0.4) * px)
@@ -259,6 +262,11 @@
       const cx = (ox + 5.5 * px) * dpr, cy = (oy + 7.6 * px) * dpr;
       ctx.translate(cx, cy);
       ctx.scale(1.05, 0.94);
+      ctx.translate(-cx, -cy);
+    } else if (pressed && pressT >= 2) {
+      const cx = (ox + 5.5 * px) * dpr, cy = (oy + 7.6 * px) * dpr;
+      ctx.translate(cx, cy);
+      ctx.scale(1.06, 0.92);
       ctx.translate(-cx, -cy);
     }
 
@@ -589,12 +597,13 @@
     },
     cli: {
       heading: 'Windows Terminal · agy',
-      status: 'Detects agy CLI terminals & perches cleanly by the prompt',
-      userMsg: 'agy --model gemini-3-pro "run test suite"',
-      agentMsg: 'Attached natively to Windows Terminal, PowerShell, pwsh, CMD, Alacritty & more (Bottom/Top edge placements).',
+      status: 'Detects agy CLI terminals & perches cleanly on any edge',
+      userMsg: '',
+      agentMsg: '',
       mood: 'Terminal',
       voice: false,
       settings: false,
+      cli: true,
     },
     settings: {
       heading: 'Settings',
@@ -623,6 +632,7 @@
   let motionPaused = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let globalTick = 0;
   let hurtTicks = 0;
+  let pressTicks = 0;
   let danceTicks = 0;
   let clickStreak = 0;
   let lastClickMs = 0;
@@ -641,15 +651,27 @@
   const hoverScroll = document.getElementById('hover-scroll');
   const hoverCount = document.getElementById('hover-count');
   const hoverScrollHint = document.getElementById('hover-scroll-hint');
+  const agyTopbar = document.getElementById('agy-topbar');
   const chatHeading = document.getElementById('chat-heading');
   const chatStatus = document.getElementById('chat-status');
   const msgUser = document.getElementById('msg-user');
   const msgAgent = document.getElementById('msg-agent');
+  const agyThread = document.getElementById('agy-thread');
   const voiceBar = document.getElementById('voice-bar');
   const settingsPane = document.getElementById('settings-pane');
+  const cliShell = document.getElementById('cli-shell');
+  const cliScreen = document.getElementById('cli-screen');
+  const cliLog = document.getElementById('cli-log');
+  const cliForm = document.getElementById('cli-form');
+  const cliInput = document.getElementById('cli-input');
+  const cliPrompt = cliForm;
+  const cliFootStatus = document.querySelector('.cli-welcome-info');
   const cycleMoodBtn = document.getElementById('cycle-mood');
   const dictationBtn = document.getElementById('dictation-btn');
   const stageLive = document.getElementById('stage-live');
+
+  let cliEdge = 'bottom-right';
+  let cliRunTimer = 0;
 
   // Build 18-reaction carousel + mouse drag-to-scroll & prev/next controls
   const stripEl = document.getElementById('mood-strip');
@@ -770,22 +792,27 @@
   function selectChat(id) {
     activeChat = id;
     dictationOn = false;
+    clearTimeout(cliRunTimer);
     dictationBtn.setAttribute('aria-pressed', 'false');
     const c = CHATS[id];
+    const isCli = Boolean(c.cli);
     document.querySelectorAll('.chat-tab').forEach((tab) => {
       tab.setAttribute('aria-selected', String(tab.dataset.chat === id));
     });
     chatHeading.textContent = c.heading;
-    chatStatus.textContent = c.status;
-    msgUser.hidden = c.settings;
-    msgAgent.hidden = c.settings;
-    if (!c.settings) {
+    chatStatus.textContent = isCli ? `CLI perch: ${cliEdge}` : c.status;
+    agyTopbar.hidden = isCli;
+    agyThread.hidden = isCli;
+    cliShell.classList.toggle('is-active', isCli);
+    msgUser.hidden = c.settings || isCli;
+    msgAgent.hidden = c.settings || isCli;
+    if (!c.settings && !isCli) {
       msgUser.textContent = c.userMsg;
       msgAgent.textContent = c.agentMsg;
     }
     voiceBar.classList.toggle('is-active', c.voice);
     settingsPane.classList.toggle('is-active', c.settings);
-    composerCard.hidden = c.settings;
+    composerCard.hidden = c.settings || isCli;
     setHeroMood(c.mood);
     computeStageTarget();
   }
@@ -847,7 +874,32 @@
     const canvasOffsetX = (heroMeta.w - spriteW) * 0.5 + shiftLeftProp;
     const canvasOffsetY = (heroMeta.h - spriteH) * 0.5 + 1.3 * heroPx;
 
-    if (isPerchedOnChatBox()) {
+    if (awayMode === 'none' && activeChat === 'cli' && cliShell.classList.contains('is-active')) {
+      const shellRect = cliShell.getBoundingClientRect();
+      const promptRect = cliPrompt.getBoundingClientRect();
+      const relLeft = shellRect.left - vp.left;
+      const relRight = shellRect.right - vp.left;
+      const relTop = shellRect.top - vp.top;
+      const relPromptTop = promptRect.top - vp.top;
+
+      if (cliEdge === 'top-left') {
+        targetX = (relLeft + 22) - canvasOffsetX - 8;
+        targetY = (relTop + 2) - spriteH - canvasOffsetY - 8;
+      } else if (cliEdge === 'top-right') {
+        targetX = (relRight - 22) - spriteW - canvasOffsetX - 8;
+        targetY = (relTop + 2) - spriteH - canvasOffsetY - 8;
+      } else if (cliEdge === 'bottom-left') {
+        targetX = (relLeft + 22) - canvasOffsetX - 8;
+        targetY = (relPromptTop + 1) - spriteH - canvasOffsetY - 8;
+      } else if (cliEdge === 'bottom-center') {
+        targetX = (relLeft + shellRect.width * 0.5) - (spriteW * 0.5) - canvasOffsetX - 8;
+        targetY = (relPromptTop + 1) - spriteH - canvasOffsetY - 8;
+      } else {
+        targetX = (relRight - 22) - spriteW - canvasOffsetX - 8;
+        targetY = (relPromptTop + 1) - spriteH - canvasOffsetY - 8;
+      }
+      targetX = Math.max(4, Math.min(vp.width - heroMeta.w - 4, targetX));
+    } else if (isPerchedOnChatBox()) {
       const box = composerCard.getBoundingClientRect();
       const relRight = box.right - vp.left;
       const relTop = box.top - vp.top;
@@ -864,22 +916,36 @@
     }
   }
 
-  // Single-click hops from leg to leg when Idle; rapid clicks (3+ within 2.2s) wince in Idle or working states; Sleeping wakes up!
+  // Normal single press -> crisp tactile squish; 3 continuous rapid presses -> Dance in Idle or Annoyed (><) while busy;
+  // Waking from Sleeping -> brief Annoyed wake poke into Idle. Multi-press resets streak immediately so next click is normal.
   stagePet.addEventListener('click', () => {
     if (heroMood === 'Sleeping') {
       setHeroMood('Idle');
-      chatStatus.textContent = 'Woke up from sleep (At rest)';
+      clickStreak = 0;
+      pressTicks = 0;
+      danceTicks = 0;
+      hurtTicks = 6;
+      chatStatus.textContent = 'Woke up (annoyed poke)';
+      renderAllOnce();
+      return;
     }
     const nowMs = performance.now();
-    if (nowMs - lastClickMs > 2200) clickStreak = 0;
+    if (nowMs - lastClickMs > 1100) clickStreak = 0;
     clickStreak++;
     lastClickMs = nowMs;
     if (clickStreak >= 3) {
-      danceTicks = 0;
-      hurtTicks = 6;
-    } else if (heroMood === 'Idle') {
+      clickStreak = 0;
+      pressTicks = 0;
+      if (heroMood === 'Idle') {
+        hurtTicks = 0;
+        danceTicks = 24;
+      } else {
+        danceTicks = 0;
+        hurtTicks = 6;
+      }
+    } else {
       hurtTicks = 0;
-      danceTicks = 24;
+      pressTicks = 4;
     }
     renderAllOnce();
   });
@@ -984,6 +1050,123 @@
     }
   });
 
+  // Antigravity CLI (agy) interactive terminal simulator + 5-edge perch switcher
+  function appendCliLine(cls, html) {
+    const row = document.createElement('div');
+    row.className = `cli-entry ${cls}`;
+    row.innerHTML = html;
+    cliLog.appendChild(row);
+    while (cliLog.children.length > 8) cliLog.removeChild(cliLog.firstElementChild);
+    cliLog.scrollTop = cliLog.scrollHeight;
+  }
+
+  function escHtml(s) {
+    return s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  }
+
+  function runCliCommand(rawCmd) {
+    const cmd = rawCmd.trim();
+    if (!cmd) return;
+    clearTimeout(userTypingTimer);
+    clearTimeout(cliRunTimer);
+    if (awayMode !== 'none') setAwayMode('none');
+    if (activeChat !== 'cli') selectChat('cli');
+
+    appendCliLine('cli-user', `<span class="cli-sigil">&gt;</span> <span>${escHtml(cmd)}</span>`);
+    const lower = cmd.toLowerCase();
+
+    if (lower === 'clear' || lower === 'cls') {
+      cliLog.innerHTML = '';
+      setHeroMood('Idle');
+      cliFootStatus.textContent = 'v1.5.18 · gemini-3-pro [accept-edits]';
+      return;
+    }
+
+    if (lower === '/help' || lower === 'help' || lower === 'agy --help') {
+      setHeroMood('Reading');
+      appendCliLine('cli-tool', `<span class="cli-ok">&#10003;</span> <span class="cli-tool-name">agy commands</span> <span class="cli-dim">/model · /approval · tests · clear</span>`);
+      appendCliLine('cli-out', '  --model  --mode (accept-edits|auto|plan)  --continue');
+      setTimeout(() => { if (activeChat === 'cli') setHeroMood('Terminal'); }, 800);
+      return;
+    }
+
+    if (lower === '/model' || lower === 'agy models') {
+      setHeroMood('Reading');
+      cliFootStatus.textContent = '~/AgyPet (inspecting models)';
+      cliRunTimer = setTimeout(() => {
+        if (activeChat !== 'cli') return;
+        appendCliLine('cli-tool', `<span class="cli-ok">&#10003;</span> <span class="cli-tool-name">/model</span> <span class="cli-dim">gemini-3-pro [high]</span>`);
+        cliFootStatus.textContent = '~/AgyPet (accept-edits)';
+        setHeroMood('Terminal');
+      }, 900);
+      return;
+    }
+
+    if (lower === '/approval' || lower === 'approval') {
+      setHeroMood('Alert');
+      appendCliLine('cli-warn', `<span class="cli-warn">!</span> <span>allow run_command "dotnet test"? [y/N]</span>`);
+      cliFootStatus.textContent = '~/AgyPet (awaiting approval [y/N])';
+      return;
+    }
+
+    if (lower === 'y' || lower === 'yes') {
+      setHeroMood('Terminal');
+      cliFootStatus.textContent = '~/AgyPet (running tool)';
+      appendCliLine('cli-tool', `<span class="cli-dot">&#9679;</span> <span class="cli-tool-name">run_command</span> <span class="cli-dim">dotnet test</span>`);
+      cliRunTimer = setTimeout(() => {
+        if (activeChat !== 'cli') return;
+        appendCliLine('cli-done', `<span class="cli-ok">&#10003;</span> <span>Approved (6/6 cross passed)</span>`);
+        cliFootStatus.textContent = '~/AgyPet (accept-edits)';
+        setHeroMood('Done');
+        cliRunTimer = setTimeout(() => { if (activeChat === 'cli') setHeroMood('Terminal'); }, 1800);
+      }, 1100);
+      return;
+    }
+
+    setHeroMood('Terminal');
+    cliFootStatus.textContent = '~/AgyPet (running agy)';
+    appendCliLine('cli-tool', `<span class="cli-dot">&#9679;</span> <span class="cli-tool-name">run_command</span> <span class="cli-dim">${escHtml(cmd)}</span>`);
+    cliRunTimer = setTimeout(() => {
+      if (activeChat !== 'cli') return;
+      appendCliLine('cli-done', `<span class="cli-ok">&#10003;</span> <span>19 Windows &amp; 6 Cross passed</span>`);
+      cliFootStatus.textContent = '~/AgyPet (accept-edits)';
+      setHeroMood('Done');
+      cliRunTimer = setTimeout(() => { if (activeChat === 'cli') setHeroMood('Terminal'); }, 1800);
+    }, 1200);
+  }
+
+  cliInput.addEventListener('input', () => {
+    if (activeChat === 'cli' && awayMode === 'none') {
+      setHeroMood('Typing');
+      clearTimeout(userTypingTimer);
+      userTypingTimer = setTimeout(() => {
+        if (activeChat === 'cli' && awayMode === 'none') setHeroMood('Terminal');
+      }, 1500);
+    }
+  });
+
+  cliForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    const val = cliInput.value;
+    cliInput.value = '';
+    runCliCommand(val);
+  });
+
+  document.querySelectorAll('.cli-mini-btn').forEach((btn) => {
+    btn.addEventListener('click', () => runCliCommand(btn.dataset.cliCmd));
+  });
+
+  document.querySelectorAll('.cli-edge-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      cliEdge = btn.dataset.edge;
+      document.querySelectorAll('.cli-edge-btn').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      if (activeChat === 'cli') {
+        chatStatus.textContent = `CLI perch: ${cliEdge}`;
+        computeStageTarget();
+      }
+    });
+  });
+
   cycleMoodBtn.addEventListener('click', () => {
     const idx = (MOODS.findIndex((m) => m.id === heroMood) + 1) % MOODS.length;
     setHeroMood(MOODS[idx].id);
@@ -993,6 +1176,7 @@
     currentSkin = skin;
     try { localStorage.setItem('agypet-skin', skin); } catch {}
     document.querySelectorAll('.skin-btn').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.skin === skin)));
+    if (hoverCard) hoverCard.dataset.skin = skin;
     renderAllOnce();
   }
   try {
@@ -1029,7 +1213,7 @@
 
   function renderAllOnce() {
     drawMascot(navMeta.ctx, navMeta.w, navMeta.h, 2.1, currentSkin, 'Idle', globalTick, 0, navMeta.dpr, 3, simLookX, simLookY);
-    drawMascot(heroMeta.ctx, heroMeta.w, heroMeta.h, heroPx, currentSkin, heroMood, globalTick, { hurt: hurtTicks, dance: danceTicks }, heroMeta.dpr, 3, simLookX, simLookY);
+    drawMascot(heroMeta.ctx, heroMeta.w, heroMeta.h, heroPx, currentSkin, heroMood, globalTick, { hurt: hurtTicks, press: pressTicks, dance: danceTicks }, heroMeta.dpr, 3, simLookX, simLookY);
     moodTiles.forEach((t, i) => drawMascot(t.ctx, t.w, t.h, 3.6, currentSkin, t.mood, globalTick + i * 3, 0, t.dpr, 3, t.mood === 'Idle' ? simLookX : 0, t.mood === 'Idle' ? simLookY : 0));
     skinSamples.forEach((s, i) => drawMascot(s.ctx, s.w, s.h, 4.2, s.skin, s.mood, globalTick + i * 5, 0, s.dpr));
   }
@@ -1049,6 +1233,7 @@
       lastTickAt = now;
       globalTick++;
       if (hurtTicks > 0) hurtTicks--;
+      if (pressTicks > 0) pressTicks--;
       if (danceTicks > 0) danceTicks--;
       renderAllOnce();
     }

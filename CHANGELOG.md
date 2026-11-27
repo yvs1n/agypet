@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1 (2026-11-27)
+- **Instant Transcript Reaction Sync**: Fixed `ParseTranscriptLines` skipping past `GENERIC` tool-result records so `edit_file` (`Working`), `read_file` (`Reading`), and `run_command` (`Terminal`) stay accurate instead of falling back to `Thinking`, and tightened `MinBusyDwellMs` (`280ms`) and monitor wakeup debounce (`20ms`) for crisp animation switching.
+- **Per-Chat Switching & Multitasking Fixes**: Scoped UIA chat header detection to the active composer pane (`ResolveChatPaneRoot`), prioritized exact/prefix title matching before partial substring hits, woke `ActivityMonitor` immediately on focus change, and enabled `Multitasking` when `2+` sessions run while pinned above the taskbar or viewing overview/Settings screens.
+- **Sleep, Typing Wake & Click Polish**: Typing or voice activity now wakes the mascot cleanly to `Idle` (returning to `Sleeping` after 6 minutes of inactivity); waking clicks trigger a brief annoyed `> <` poke, single clicks play a subtle tactile squish (`Press()`), and 3+ rapid clicks play the leg-hop dance (when `Idle`) or wince (when busy) before resetting cleanly to single-press behavior.
+- **Dark Skin Multi-Session Parity**: Synced Dark Remake trailing orbit pixels (`MascotView.cs`), monochrome website hover progress fills, and dedicated Windows + `.NET 8` parity tests.
+- **Website CLI Simulation**: Replaced static mock bubbles in **agy CLI Terminal** with a standalone interactive terminal window (`PS C:\...\AgyPet> agy`), command execution (`/help`, `/model`, `/approval`, `clear`, `Tests`), and 5-edge CLI mascot perching.
+
 ## 0.4.0 (2026-11-27)
 - **macOS & Linux Support (One-File Install & Play)**:
   - Added cross-platform desktop companion (`cross/`) using `.NET 8` + Avalonia sharing 100% of `MascotCore`, `ActivityMonitor`, `PetSettings`, `Updater`, and `Json` across all OSes.

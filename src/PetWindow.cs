@@ -59,6 +59,7 @@ namespace AgyPet
 
         bool mouseDown;
         bool dragging;
+        bool wokeFromSleepOnPress;
         POINT dragStartCursor;
         double dragStartLeft, dragStartTop;
         bool wasOnChatScreen;
@@ -67,6 +68,7 @@ namespace AgyPet
         bool externalMenuOpen;
         DateTime menuCooldownUntil = DateTime.MinValue;
         DateTime menuOpenedAtUtc = DateTime.MinValue;
+        DateTime lastTypingWakeUtc = DateTime.MinValue;
         int prevMenuMouseMask;
         HwndSource selfHwndSource;
         readonly ContextMenu contextMenu = new ContextMenu();
@@ -80,7 +82,7 @@ namespace AgyPet
         double targetLeft = double.NaN, targetTop = double.NaN;
         DateTime lastAnimTime = DateTime.UtcNow;
 
-        const int MinBusyDwellMs = 1200;
+        const int MinBusyDwellMs = 280;
 
         const double StagePadX = 52; // keeps total width above Win32 SM_CXMINTRACK (~136 DIP) on Small/Medium/Large
         const double StagePadY = 24;
@@ -546,38 +548,67 @@ namespace AgyPet
             SnapToTarget();
         }
 
-        MascotMood ResolveCurrentMood()
+        internal static MascotMood ResolveMood(
+            bool previewMode,
+            MascotMood previewMood,
+            bool isInFront,
+            bool pinAboveTaskbar,
+            bool hasFocusedSurface,
+            bool inVoiceMode,
+            bool voiceAgentSpeaking,
+            bool inDictation,
+            bool isUserTyping,
+            ActivitySnapshot focused,
+            IList<ActivitySnapshot> actives,
+            ActivitySnapshot latest)
         {
             if (previewMode) return previewMood;
 
-            // Inside Antigravity: react specifically to the active chat, voice mode, dictation, and user typing!
-            if (tracker.IsInFront)
+            // Outside Antigravity, minimized, pinned to taskbar, or on an overview screen without a chatbox:
+            // show Multitasking whenever 2+ sessions are running concurrently!
+            int activeCount = actives != null ? actives.Count : 0;
+            if (!isInFront || pinAboveTaskbar || !hasFocusedSurface)
             {
-                if (tracker.InVoiceMode)
-                    return tracker.VoiceAgentSpeaking ? MascotMood.Speaking : MascotMood.Listening;
-                if (tracker.InDictation)
-                    return MascotMood.Listening;
-
-                var focused = monitor.FocusedSession;
-                if (focused != null && focused.IsBusy)
-                    return focused.Mood;
-                if (tracker.IsUserTyping)
+                if (activeCount >= 2)
+                    return MascotMood.Multitasking;
+                if (activeCount == 1)
+                    return actives[0].Mood;
+                if (isInFront && isUserTyping)
                     return MascotMood.Typing;
-                if (focused != null)
-                    return focused.Mood;
-                return monitor.Latest.Mood;
+                return latest != null ? latest.Mood : MascotMood.Idle;
             }
 
-            // Outside Antigravity / Minimized:
-            //  - 2+ active sessions -> Multitasking juggle!
-            //  - 1 active session  -> React directly to that 1 session!
-            //  - 0 active sessions -> Background (if live server running), Done, Idle, or Sleeping!
-            var actives = monitor.ActiveSessions;
-            if (actives != null && actives.Count >= 2)
-                return MascotMood.Multitasking;
-            if (actives != null && actives.Count == 1)
-                return actives[0].Mood;
-            return monitor.Latest.Mood;
+            // Inside an active Antigravity chat or agy CLI terminal: react specifically to that focused session!
+            if (inVoiceMode)
+                return voiceAgentSpeaking ? MascotMood.Speaking : MascotMood.Listening;
+            if (inDictation)
+                return MascotMood.Listening;
+
+            if (focused != null && focused.IsBusy)
+                return focused.Mood;
+            if (isUserTyping)
+                return MascotMood.Typing;
+            if (focused != null)
+                return focused.Mood;
+            return latest != null ? latest.Mood : MascotMood.Idle;
+        }
+
+        MascotMood ResolveCurrentMood()
+        {
+            bool hasSurface = tracker.IsCliInFront ? !tracker.WindowBoundsPx.IsEmpty : !tracker.ChatBoxBoundsPx.IsEmpty;
+            return ResolveMood(
+                previewMode,
+                previewMood,
+                tracker.IsInFront,
+                settings.PinAboveTaskbar,
+                hasSurface,
+                tracker.InVoiceMode,
+                tracker.VoiceAgentSpeaking,
+                tracker.InDictation,
+                tracker.IsUserTyping,
+                monitor.FocusedSession,
+                monitor.ActiveSessions,
+                monitor.Latest);
         }
 
         static bool IsBusyWorkMood(MascotMood mood)
@@ -845,7 +876,7 @@ namespace AgyPet
             return stack;
         }
 
-        static Brush DotBrushForMood(MascotMood mood, bool darkSkin)
+        internal static Brush DotBrushForMood(MascotMood mood, bool darkSkin)
         {
             if (darkSkin)
             {
@@ -872,6 +903,12 @@ namespace AgyPet
             if (dragging || IsAnyMenuActive) return;
             tracker.TrackCliWindows = settings.CliPlacement != "off";
             tracker.Poll();
+            if (!previewMode && tracker.IsInFront && (tracker.IsUserTyping || tracker.InVoiceMode || tracker.InDictation) &&
+                (DateTime.UtcNow - lastTypingWakeUtc).TotalSeconds >= 2.0)
+            {
+                lastTypingWakeUtc = DateTime.UtcNow;
+                monitor.WakeUp();
+            }
             monitor.PreferredChatCandidates = tracker.ActiveChatCandidates;
             monitor.PreferredChatTitle = tracker.ActiveChatTitle;
             monitor.PreferredSource = tracker.IsCliInFront ? "Antigravity CLI" : "";
@@ -1421,10 +1458,13 @@ namespace AgyPet
         {
             if (e.ChangedButton != MouseButton.Left) return;
 
+            wokeFromSleepOnPress = false;
             if (!previewMode && mascot != null && mascot.Mood == MascotMood.Sleeping)
             {
+                wokeFromSleepOnPress = true;
                 monitor.WakeUp();
                 SyncActivity();
+                mascot.Poke();
             }
 
             mouseDown = true;
@@ -1469,9 +1509,15 @@ namespace AgyPet
 
             if (!dragging)
             {
+                if (wokeFromSleepOnPress)
+                {
+                    wokeFromSleepOnPress = false;
+                    return;
+                }
                 if (mascot != null) mascot.RegisterClick();
                 return;
             }
+            wokeFromSleepOnPress = false;
 
             dragging = false;
             targetLeft = Left;

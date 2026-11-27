@@ -54,7 +54,7 @@
         "name": "AgyPet",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Windows 10, Windows 11, macOS 11+, Linux",
-        "softwareVersion": "0.4.0",
+        "softwareVersion": "0.4.1",
         "license": "https://opensource.org/licenses/MIT",
         "description": "A single-file install-and-play pixel companion overlay for Google Antigravity App, Antigravity IDE, and Antigravity CLI across Windows, macOS, and Linux.",
         "featureList": [
@@ -306,7 +306,7 @@
               </aside>
 
               <div class="agy-main" id="mock-tabpanel" role="tabpanel" aria-labelledby="chat-heading">
-                <div class="agy-topbar">
+                <div class="agy-topbar" id="agy-topbar">
                   <span class="agy-chat-heading" id="chat-heading">AgyPet Overlay</span>
                   <span class="agy-status-text" id="chat-status">Agent typing a reply (click mascot above box)</span>
                 </div>
@@ -324,6 +324,54 @@
                     <div class="setting-row"><span>Tool execution policy</span><span>Request review</span></div>
                     <div class="setting-row"><span>Terminal sandbox</span><span>Enabled</span></div>
                     <div class="setting-row"><span>Mascot behavior</span><span>Parked calmly in corner when no chatbox is visible</span></div>
+                  </div>
+                </div>
+
+                <!-- Standalone OS Terminal Window running Antigravity CLI (agy) -->
+                <div class="cli-shell" id="cli-shell">
+                  <div class="cli-bar">
+                    <div class="cli-tabs">
+                      <span class="cli-badge">&gt;_ agy · pwsh</span>
+                      <span class="cli-tab-plus" aria-hidden="true">+</span>
+                    </div>
+                    <div class="cli-win-ctrls" aria-hidden="true">
+                      <span>─</span><span>□</span><span>×</span>
+                    </div>
+                  </div>
+
+                  <div class="cli-screen" id="cli-screen">
+                    <div class="cli-welcome">
+                      <span class="cli-welcome-brand">PS C:\Projects\AgyPet&gt; agy</span>
+                      <span class="cli-welcome-info">v1.5.18 · gemini-3-pro [accept-edits]</span>
+                    </div>
+                    <div class="cli-log" id="cli-log" aria-live="polite">
+                      <div class="cli-entry cli-user"><span class="cli-sigil">&gt;</span> <span>run tests</span></div>
+                      <div class="cli-entry cli-tool"><span class="cli-ok">&#10003;</span> <span class="cli-tool-name">read_file</span> <span class="cli-dim">WindowTracker.cs</span></div>
+                      <div class="cli-entry cli-tool"><span class="cli-dot">&#9679;</span> <span class="cli-tool-name">run_command</span> <span class="cli-dim">.\build.ps1 -Test</span></div>
+                      <div class="cli-entry cli-done"><span class="cli-ok">&#10003;</span> <span>19 passed · 6 cross</span></div>
+                    </div>
+
+                    <form class="cli-prompt" id="cli-form">
+                      <span class="cli-sigil" aria-hidden="true">&gt;</span>
+                      <input type="text" class="cli-input" id="cli-input" placeholder="/help, /model, clear, or prompt…" autocomplete="off" aria-label="Antigravity CLI prompt" />
+                      <span class="cli-enter-hint">Enter</span>
+                    </form>
+
+                    <div class="cli-foot">
+                      <div class="cli-presets">
+                        <button type="button" class="cli-mini-btn" data-cli-cmd=".\build.ps1 -Test">Tests</button>
+                        <button type="button" class="cli-mini-btn" data-cli-cmd="/model">/model</button>
+                        <button type="button" class="cli-mini-btn" data-cli-cmd="/approval">Alert</button>
+                        <button type="button" class="cli-mini-btn" data-cli-cmd="/help">Help</button>
+                      </div>
+                      <div class="cli-edge-switch" role="group" aria-label="CLI terminal mascot placement">
+                        <button type="button" class="cli-edge-btn" data-edge="bottom-right" aria-pressed="true">Bot Right</button>
+                        <button type="button" class="cli-edge-btn" data-edge="bottom-center" aria-pressed="false">Center</button>
+                        <button type="button" class="cli-edge-btn" data-edge="bottom-left" aria-pressed="false">Bot Left</button>
+                        <button type="button" class="cli-edge-btn" data-edge="top-right" aria-pressed="false">Top Right</button>
+                        <button type="button" class="cli-edge-btn" data-edge="top-left" aria-pressed="false">Top Left</button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -438,7 +486,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
               <h3 class="feature-title">Native agy CLI terminal perching</h3>
             </div>
-            <p class="feature-body">Detects agy CLI in Windows Terminal, PowerShell, pwsh, CMD, Alacritty, WezTerm, Warp, Hyper, Tabby, and Mintty with Bottom or Top terminal placements.</p>
+            <p class="feature-body">Detects agy CLI across Windows Terminal, iTerm2, Ghostty, PowerShell, Alacritty, and Kitty with Bottom or Top placement.</p>
           </article>
 
           <article class="feature-card reveal-on-scroll">
@@ -446,7 +494,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
               <h3 class="feature-title">Inner prompt perch, Pin &amp; Auto-Hide</h3>
             </div>
-            <p class="feature-body">Rests inside Antigravity’s inner prompt border (excluding outer project bars while keeping attachments). Supports Pin Above Taskbar, Lock Position, Auto-Hide, and Wake-on-Nudge.</p>
+            <p class="feature-body">Perches cleanly inside the prompt border above attachments. Includes taskbar docking, Pin Above Taskbar, Auto-Hide, and Wake-on-Nudge.</p>
           </article>
 
           <article class="feature-card reveal-on-scroll">
@@ -454,7 +502,7 @@
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
               <h3 class="feature-title">One-file install across Windows, macOS &amp; Linux</h3>
             </div>
-            <p class="feature-body">Ships as a single download per OS: portable <code>AgyPet.exe</code> on Windows, Universal Apple Silicon + Intel <code>AgyPet-macOS.dmg</code>, and zero-dependency Linux x64/arm64 binaries.</p>
+            <p class="feature-body">One download per OS: <code>AgyPet.exe</code>, Universal <code>AgyPet-macOS.dmg</code>, and standalone Linux binaries.</p>
           </article>
         </div>
       </div>
@@ -466,7 +514,7 @@
         <div class="feedback-grid">
           <div>
             <h2 class="section-title">Suggest a reaction or share feedback</h2>
-            <p class="section-desc">Spotted a bug, or have an idea for a new Antigravity state or skin? Send it straight from here or from the AgyPet tray menu.</p>
+            <p class="section-desc">Spotted a bug or want a new Antigravity reaction? Send feedback here or from the tray menu.</p>
           </div>
 
           <form class="feedback-card reveal-on-scroll" id="feedback-form" novalidate>

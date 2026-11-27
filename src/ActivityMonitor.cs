@@ -84,22 +84,62 @@ namespace AgyPet
         public string PreferredChatTitle
         {
             get { return preferredChatTitle; }
-            set { preferredChatTitle = value ?? ""; }
+            set
+            {
+                string next = value ?? "";
+                if (!string.Equals(preferredChatTitle, next, StringComparison.Ordinal))
+                {
+                    preferredChatTitle = next;
+                    wakeEvent.Set();
+                }
+            }
         }
         public string[] PreferredChatCandidates
         {
             get { return preferredChatCandidates; }
-            set { preferredChatCandidates = value ?? new string[0]; }
+            set
+            {
+                string[] next = value ?? new string[0];
+                if (!ArraysEqual(preferredChatCandidates, next))
+                {
+                    preferredChatCandidates = next;
+                    wakeEvent.Set();
+                }
+            }
         }
         public string PreferredSource
         {
             get { return preferredSource; }
-            set { preferredSource = value ?? ""; }
+            set
+            {
+                string next = value ?? "";
+                if (!string.Equals(preferredSource, next, StringComparison.Ordinal))
+                {
+                    preferredSource = next;
+                    wakeEvent.Set();
+                }
+            }
         }
         public bool PreferAppOnly
         {
             get { return preferAppOnly; }
-            set { preferAppOnly = value; }
+            set
+            {
+                if (preferAppOnly != value)
+                {
+                    preferAppOnly = value;
+                    wakeEvent.Set();
+                }
+            }
+        }
+
+        static bool ArraysEqual(string[] a, string[] b)
+        {
+            if (ReferenceEquals(a, b)) return true;
+            if (a == null || b == null || a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++)
+                if (!string.Equals(a[i], b[i], StringComparison.Ordinal)) return false;
+            return true;
         }
         public event Action Updated;
 
@@ -207,9 +247,9 @@ namespace AgyPet
                     if (handler != null) handler();
                 }
                 catch { }
-                // Wait up to 750ms, or wake immediately when Antigravity writes a transcript/DB update
-                if (wakeEvent.WaitOne(750))
-                    Thread.Sleep(60);
+                // Wait up to 400ms, or wake immediately when Antigravity writes a transcript/DB update
+                if (wakeEvent.WaitOne(400))
+                    Thread.Sleep(20);
             }
         }
 
@@ -457,12 +497,13 @@ namespace AgyPet
         static SessionRow FindSessionByCandidates(List<SessionRow> rows, string[] candidates)
         {
             if (candidates == null || candidates.Length == 0 || rows.Count == 0) return null;
+
+            // Pass 1: exact or truncated-prefix match across ALL candidates before any partial match
             foreach (string raw in candidates)
             {
                 string want = NormalizeMatchTitle(raw);
                 if (want.Length < 2) continue;
 
-                // 1. Exact match (or exact match before UIA truncation ellipsis)
                 foreach (var r in rows)
                 {
                     string rt = (r.Title ?? "").Trim().ToLowerInvariant();
@@ -470,17 +511,20 @@ namespace AgyPet
                     if (rt == want || (want.Length >= 6 && rt.StartsWith(want, StringComparison.Ordinal)))
                         return r;
                 }
+            }
 
-                // 2. Partial match when distinct (>= 3 chars)
-                if (want.Length >= 3)
+            // Pass 2: distinct partial substring match (>= 4 chars) only when no candidate matched exactly
+            foreach (string raw in candidates)
+            {
+                string want = NormalizeMatchTitle(raw);
+                if (want.Length < 4) continue;
+
+                foreach (var r in rows)
                 {
-                    foreach (var r in rows)
-                    {
-                        string rt = (r.Title ?? "").Trim().ToLowerInvariant();
-                        if (string.IsNullOrEmpty(rt)) continue;
-                        if (rt.Contains(want) || want.Contains(rt))
-                            return r;
-                    }
+                    string rt = (r.Title ?? "").Trim().ToLowerInvariant();
+                    if (string.IsNullOrEmpty(rt)) continue;
+                    if (rt.Contains(want) || want.Contains(rt))
+                        return r;
                 }
             }
             return null;
@@ -741,12 +785,14 @@ namespace AgyPet
                         foundMood = true;
                     }
                 }
-                else if (!foundMood && (type == "USER_INPUT" || type == "GENERIC"))
+                else if (!foundMood && type == "USER_INPUT")
                 {
                     info.Mood = MascotMood.Thinking;
                     info.ActionLabel = "Thinking...";
                     foundMood = true;
                 }
+                // Note: type == "GENERIC" entries are tool-result echoes following PLANNER_RESPONSE;
+                // skip them so we resolve the actual tool mood (Working, Reading, Terminal, etc.).
 
                 if (foundMood && foundSteps && foundFocus) break;
             }

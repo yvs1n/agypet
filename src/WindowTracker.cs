@@ -404,10 +404,10 @@ namespace AgyPet
                         Rect found = FindComposerCardRect(h, inputCond);
                         lock (chatLock) { probedChatBox = found; }
 
-                        if (loopTick++ % 3 == 0)
+                        if (loopTick++ % 2 == 0)
                         {
                             ProbeVoiceAndDictation(h, voiceCond, dictationCond);
-                            string[] chatCands = ProbeChatTitleCandidates(h, found);
+                            string[] chatCands = ProbeChatTitleCandidates(h, found, cachedInputEl);
                             lock (chatLock) { probedChatCandidates = chatCands; }
                         }
                     }
@@ -575,40 +575,87 @@ namespace AgyPet
             probedAgentSpeaking = agentSpeaking;
         }
 
+        // Finds the active chat pane container enclosing the focused composer input so header scanning
+        // inspects the active chat column cleanly without stopping at unrelated explorer/editor nodes.
+        static AutomationElement ResolveChatPaneRoot(AutomationElement inputEl, Rect chatBox, Rect winRect)
+        {
+            if (inputEl == null || chatBox.IsEmpty) return null;
+            var walker = TreeWalker.RawViewWalker;
+            AutomationElement cur = inputEl;
+            AutomationElement best = null;
+
+            for (int depth = 0; depth < 14 && cur != null; depth++)
+            {
+                AutomationElement parent;
+                try { parent = walker.GetParent(cur); }
+                catch { break; }
+                if (parent == null) break;
+
+                Rect pr;
+                try { pr = parent.Current.BoundingRectangle; }
+                catch { break; }
+
+                if (pr.IsEmpty)
+                {
+                    cur = parent;
+                    continue;
+                }
+                if (pr.Width > Math.Max(chatBox.Width + 220.0, winRect.Width * 0.85))
+                    break;
+
+                if (pr.Top <= chatBox.Top - 100.0 && pr.Height >= Math.Max(220.0, chatBox.Height + 110.0))
+                    best = parent;
+
+                cur = parent;
+            }
+            return best;
+        }
+
         // Reads selected conversation items and top-of-pane header labels inside the active Antigravity window
         // so switching chats updates reactions per chat even when the outer window title stays generic.
-        static string[] ProbeChatTitleCandidates(IntPtr hwnd, Rect chatBox)
+        static string[] ProbeChatTitleCandidates(IntPtr hwnd, Rect chatBox, AutomationElement inputEl)
         {
             var found = new List<string>();
             try
             {
                 RECT wr;
                 if (!GetWindowRect(hwnd, out wr)) return new string[0];
+                var winRect = new Rect(wr.Left, wr.Top, wr.Right - wr.Left, wr.Bottom - wr.Top);
                 var win = AutomationElement.FromHandle(hwnd);
                 if (win == null) return new string[0];
 
                 if (!chatBox.IsEmpty)
                 {
+                    AutomationElement paneRoot = ResolveChatPaneRoot(inputEl, chatBox, winRect) ?? win;
+                    Rect paneRect = winRect;
+                    try
+                    {
+                        Rect pr = paneRoot.Current.BoundingRectangle;
+                        if (!pr.IsEmpty) paneRect = pr;
+                    }
+                    catch { }
+
                     var hdrCond = new OrCondition(
                         new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Text),
-                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TabItem));
-                    var hdrEls = win.FindAll(TreeScope.Descendants, hdrCond);
-                    double minLeft = chatBox.Left - 80.0;
-                    double maxRight = chatBox.Right + 80.0;
-                    double minTop = wr.Top + 26.0;
-                    double maxBottom = Math.Min(chatBox.Top - 36.0, wr.Top + 145.0);
-                    int scanned = 0;
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.TabItem),
+                        new PropertyCondition(AutomationElement.ControlTypeProperty, ControlType.Button));
+                    var hdrEls = paneRoot.FindAll(TreeScope.Descendants, hdrCond);
+                    double minLeft = Math.Max(winRect.Left, chatBox.Left - 80.0);
+                    double maxRight = Math.Min(winRect.Right, chatBox.Right + 80.0);
+                    double paneTop = Math.Max(winRect.Top + 24.0, paneRect.Top);
+                    double maxBottom = Math.Min(chatBox.Top - 16.0, paneTop + 160.0);
+                    int visitedVisible = 0;
 
                     foreach (AutomationElement el in hdrEls)
                     {
-                        if (scanned++ > 180) break;
                         try
                         {
                             var cur = el.Current;
                             if (cur.IsOffscreen || string.IsNullOrWhiteSpace(cur.Name)) continue;
+                            if (visitedVisible++ > 220) break;
                             Rect r = cur.BoundingRectangle;
                             if (r.IsEmpty || r.Height > 44 || r.Width < 24) continue;
-                            if (r.Top < minTop || r.Bottom > maxBottom) continue;
+                            if (r.Top < paneTop || r.Bottom > maxBottom) continue;
                             if (r.Left < minLeft || r.Right > maxRight) continue;
                             string clean = cur.Name.Trim();
                             if (!IsIgnoredChatLabel(clean))
@@ -620,12 +667,13 @@ namespace AgyPet
 
                 var selCond = new PropertyCondition(AutomationElement.IsSelectionItemPatternAvailableProperty, true);
                 var selEls = win.FindAll(TreeScope.Descendants, selCond);
-                int selChecked = 0;
+                int selVisited = 0;
                 foreach (AutomationElement el in selEls)
                 {
-                    if (selChecked++ > 80) break;
                     try
                     {
+                        if (el.Current.IsOffscreen) continue;
+                        if (selVisited++ > 300) break;
                         object isSelObj = el.GetCurrentPropertyValue(SelectionItemPattern.IsSelectedProperty);
                         if (isSelObj is bool && (bool)isSelObj)
                         {

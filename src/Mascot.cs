@@ -170,6 +170,7 @@ namespace AgyPet
         readonly ScaleTransform recoilTransform = new ScaleTransform(1.0, 1.0);
         int tick, blinkAt, blinkLeft, glanceAt, glance;
         int hurtTicks;
+        int pressTicks;
         int danceTicks;
         int clickStreak;
         DateTime lastClickUtc = DateTime.MinValue;
@@ -185,6 +186,7 @@ namespace AgyPet
         }
         public string SkinName { get; private set; }
         public bool IsHurt { get { return hurtTicks > 0; } }
+        public bool IsPressed { get { return pressTicks > 0; } }
         public bool IsDancing { get { return danceTicks > 0; } }
 
         public Mascot(double pixelSize, string skin = ClassicSkin)
@@ -236,23 +238,36 @@ namespace AgyPet
             Step();
         }
 
-        // Subtle tactile press wince on rapid clicks (awake states: Idle or Working): keeps current scene intact with "> <" eyes.
+        // Subtle tactile press wince (waking from sleep or rapid continuous multi-press while working): "> <" eyes + squish.
         public void Poke()
         {
             if (Mood == MascotMood.Sleeping) return;
+            pressTicks = 0;
             danceTicks = 0;
             hurtTicks = 6;
+            Step(false);
+        }
+
+        // Crisp normal single-press tactile squish without changing eyes/expression or staying stuck in multi-press.
+        public void Press()
+        {
+            if (Mood == MascotMood.Sleeping) return;
+            hurtTicks = 0;
+            pressTicks = 4;
             Step(false);
         }
 
         public void CancelHurt()
         {
             hurtTicks = 0;
+            pressTicks = 0;
             recoilTransform.ScaleX = 1.0;
             recoilTransform.ScaleY = 1.0;
         }
 
-        // Single/double click hops playfully when Idle; rapid clicks (3+ within 2.2s) trigger the original wince even while working!
+        // Single press -> crisp tactile Press() squish;
+        // Continuous rapid multi-press (3+ within ~1.1s per gap) -> Dance in Idle, Annoyed Poke() while working,
+        // and resets streak immediately so the next single click afterward performs a normal Press().
         public void RegisterClick()
         {
             RegisterClickAt(DateTime.UtcNow);
@@ -263,12 +278,13 @@ namespace AgyPet
             if (Mood == MascotMood.Sleeping)
             {
                 clickStreak = 0;
+                pressTicks = 0;
                 hurtTicks = 0;
                 danceTicks = 0;
                 return;
             }
 
-            if (lastClickUtc == DateTime.MinValue || (nowUtc - lastClickUtc).TotalSeconds > 2.2 || lastClickMood != Mood)
+            if (lastClickUtc == DateTime.MinValue || (nowUtc - lastClickUtc).TotalSeconds > 1.1 || lastClickMood != Mood)
                 clickStreak = 0;
 
             clickStreak++;
@@ -277,13 +293,15 @@ namespace AgyPet
 
             if (clickStreak >= 3)
             {
-                Poke();
+                clickStreak = 0;
+                if (Mood == MascotMood.Idle)
+                    Dance();
+                else
+                    Poke();
             }
-            else if (Mood == MascotMood.Idle)
+            else
             {
-                hurtTicks = 0;
-                danceTicks = 24;
-                Step(false);
+                Press();
             }
         }
 
@@ -291,6 +309,7 @@ namespace AgyPet
         public void Dance()
         {
             if (Mood != MascotMood.Idle || hurtTicks > 0) return;
+            pressTicks = 0;
             danceTicks = 24;
             Step(false);
         }
@@ -406,11 +425,14 @@ namespace AgyPet
                 danceTicks = 0;
             if (mood == MascotMood.Sleeping)
             {
+                pressTicks = 0;
                 hurtTicks = 0;
                 clickStreak = 0;
             }
             bool hurt = mood != MascotMood.Sleeping && hurtTicks > 0;
             if (advanceTick && hurtTicks > 0) hurtTicks--;
+            bool pressed = mood != MascotMood.Sleeping && pressTicks > 0 && !hurt;
+            if (advanceTick && pressTicks > 0) pressTicks--;
             bool dancing = mood == MascotMood.Idle && danceTicks > 0 && !hurt;
             if (advanceTick && danceTicks > 0) danceTicks--;
 
@@ -420,7 +442,8 @@ namespace AgyPet
             double baseBob = dancing ? danceBob : doneHop;
             bool wiggles = mood == MascotMood.Alert || mood == MascotMood.Question || mood == MascotMood.Error;
 
-            double y = hurt && hurtTicks >= 4 ? baseBob + px * 0.45 : baseBob;
+            double pressDip = pressed && pressTicks >= 2 ? px * 0.3 : 0;
+            double y = hurt && hurtTicks >= 4 ? baseBob + px * 0.45 : baseBob + pressDip;
             SetTop(sprite, y);
 
             bool typing = mood == MascotMood.Working && tick % 90 < 72;
@@ -431,11 +454,16 @@ namespace AgyPet
                 : (wiggles && tick % 12 < 4 ? (tick % 2 == 0 ? -px * 0.4 : px * 0.4) : danceShift);
             SetLeft(sprite, x);
 
-            // Subtle tactile micro-squish on press (no exaggerated bounce or sparks)
+            // Subtle tactile micro-squish on press / wince
             if (hurt && hurtTicks >= 4)
             {
                 recoilTransform.ScaleX = 1.05;
                 recoilTransform.ScaleY = 0.94;
+            }
+            else if (pressed && pressTicks >= 2)
+            {
+                recoilTransform.ScaleX = 1.06;
+                recoilTransform.ScaleY = 0.92;
             }
             else if (recoilTransform.ScaleX != 1.0 || recoilTransform.ScaleY != 1.0)
             {
