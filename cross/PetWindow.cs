@@ -73,6 +73,7 @@ namespace AgyPet
         const double CardWidth = 268;
         const double DragThresholdPx = 5.0;
 
+        public event Action StateChanged;
         public bool IsPreviewMode { get { return previewMode; } }
         public MascotMood PreviewMood { get { return previewMood; } }
         public bool IsAnyAntigravityOpen { get { return tracker.IsAnyAntigravityOpen; } }
@@ -80,14 +81,22 @@ namespace AgyPet
 
         public static bool ShouldAllowRightClickContextMenu(bool isMacOs)
         {
-            return !isMacOs;
+            return true;
         }
 
         public static string ResolveAwayCornerForPlatform(bool isMacOs, bool isAnyAntigravityOpen, string effectiveCorner)
         {
-            if (isMacOs && !isAnyAntigravityOpen)
-                return "bottom-center";
             return effectiveCorner;
+        }
+
+        static string PlatformLabel(string label)
+        {
+            return OperatingSystem.IsMacOS() ? label.Replace("Taskbar", "Dock") : label;
+        }
+
+        void NotifyStateChanged()
+        {
+            if (StateChanged != null) StateChanged();
         }
 
         public PetWindow(PetSettings settings, ActivityMonitor monitor, Updater updater)
@@ -378,6 +387,7 @@ namespace AgyPet
             settings.Save();
             if (mascot != null) mascot.SetSkin(settings.Skin);
             SyncActivity();
+            NotifyStateChanged();
         }
 
         public void ApplyPixelSize(double px, bool save = true)
@@ -386,6 +396,7 @@ namespace AgyPet
             if (save) settings.Save();
             RebuildMascot(ResolveCurrentEffectivePixelSize());
             SnapToTarget();
+            NotifyStateChanged();
         }
 
         public void ApplySize(string size)
@@ -408,6 +419,7 @@ namespace AgyPet
                 SyncActivity();
             }
             SyncVisibility();
+            NotifyStateChanged();
         }
 
         public void SetMinimizedCorner(string corner)
@@ -416,6 +428,7 @@ namespace AgyPet
             settings.MinimizedCorner = PetSettings.NormalizeCorner(corner);
             settings.Save();
             if (!tracker.IsInFront || settings.PinAboveTaskbar) SnapToTarget();
+            NotifyStateChanged();
         }
 
         public void SetPinAboveTaskbar(bool pin)
@@ -430,12 +443,14 @@ namespace AgyPet
             settings.Save();
             userMovedWhileInFront = false;
             SnapToTarget();
+            NotifyStateChanged();
         }
 
         public void SetLockPosition(bool locked)
         {
             settings.LockPosition = locked;
             settings.Save();
+            NotifyStateChanged();
         }
 
         public void SetCliPlacement(string placement)
@@ -448,6 +463,7 @@ namespace AgyPet
                 userMovedWhileInFront = false;
                 SnapToTarget();
             }
+            NotifyStateChanged();
         }
 
         public void SetHideWhenInactive(bool hide)
@@ -455,6 +471,7 @@ namespace AgyPet
             settings.HideWhenInactive = hide;
             settings.Save();
             SyncVisibility();
+            NotifyStateChanged();
         }
 
         public void SetHideWhenMinimized(bool hide)
@@ -462,6 +479,7 @@ namespace AgyPet
             settings.HideWhenMinimized = hide;
             settings.Save();
             SyncVisibility();
+            NotifyStateChanged();
         }
 
         public void ResetPosition()
@@ -599,7 +617,7 @@ namespace AgyPet
                     SessionTitle = "Preview Mode",
                     ActionLabel = ActivityMonitor.MoodDefaultLabel(previewMood),
                     FocusDetail = OperatingSystem.IsMacOS()
-                        ? "Menu bar → Preview Mood → Live Mode to resume tracking"
+                        ? "Right-click or Menu bar → Preview Mood → Live Mode to resume tracking"
                         : "Right-click → Live Mode to resume tracking",
                 }, darkSkin, false));
                 return;
@@ -1083,7 +1101,9 @@ namespace AgyPet
         void OnPetPointerPressed(object sender, PointerPressedEventArgs e)
         {
             var pt = e.GetCurrentPoint(this);
-            if (pt.Properties.IsRightButtonPressed)
+            bool isRightClick = pt.Properties.IsRightButtonPressed ||
+                (OperatingSystem.IsMacOS() && pt.Properties.IsLeftButtonPressed && e.KeyModifiers.HasFlag(KeyModifiers.Control));
+            if (isRightClick)
             {
                 if (!ShouldAllowRightClickContextMenu(OperatingSystem.IsMacOS()))
                 {
@@ -1235,11 +1255,11 @@ namespace AgyPet
                         addedSep = true;
                     }
                     string id = opt.Id;
-                    awayRows.Add(CheckRow(opt.Label, !settings.HasCustomFreePos && settings.MinimizedCorner == id, () => SetMinimizedCorner(id)));
+                    awayRows.Add(CheckRow(PlatformLabel(opt.Label), !settings.HasCustomFreePos && settings.MinimizedCorner == id, () => SetMinimizedCorner(id)));
                 }
                 return awayRows;
             }));
-            rows.Children.Add(CheckRow("Pin Above Taskbar (Stay in Place)", settings.PinAboveTaskbar, () => SetPinAboveTaskbar(!settings.PinAboveTaskbar)));
+            rows.Children.Add(CheckRow(PlatformLabel("Pin Above Taskbar (Stay in Place)"), settings.PinAboveTaskbar, () => SetPinAboveTaskbar(!settings.PinAboveTaskbar)));
             rows.Children.Add(CheckRow("Lock Position (Disable Dragging)", settings.LockPosition, () => SetLockPosition(!settings.LockPosition)));
 
             rows.Children.Add(SubmenuRow("CLI Terminal Placement", () =>
@@ -1248,7 +1268,7 @@ namespace AgyPet
                 foreach (var opt in PetSettings.CliLocations)
                 {
                     string id = opt.Id;
-                    cliRows.Add(CheckRow(opt.Label, settings.CliPlacement == id, () => SetCliPlacement(id)));
+                    cliRows.Add(CheckRow(PlatformLabel(opt.Label), settings.CliPlacement == id, () => SetCliPlacement(id)));
                 }
                 return cliRows;
             }));
@@ -1285,15 +1305,19 @@ namespace AgyPet
                 settings.ShowHoverCard = !settings.ShowHoverCard;
                 settings.Save();
                 if (!settings.ShowHoverCard) CloseHoverWindow();
+                NotifyStateChanged();
             }));
             rows.Children.Add(CheckRow("Launch on Login", settings.StartWithWindows, () =>
             {
                 settings.StartWithWindows = !settings.StartWithWindows;
                 settings.Save();
                 PetSettings.ApplyStartup(settings.StartWithWindows, Environment.ProcessPath ?? "");
+                NotifyStateChanged();
             }));
-            rows.Children.Add(ActionRow(settings.PinAboveTaskbar ? "Reset Pinned Position" : "Snap Back Above Window", ResetPosition));
-            rows.Children.Add(CheckRow("Auto-Update from GitHub", settings.AutoUpdate, () => { settings.AutoUpdate = !settings.AutoUpdate; settings.Save(); }));
+            rows.Children.Add(ActionRow(settings.PinAboveTaskbar
+                ? "Reset Pinned Position"
+                : (OperatingSystem.IsMacOS() && !tracker.IsAnyAntigravityOpen ? "Snap Back Above Dock" : "Snap Back Above Window"), ResetPosition));
+            rows.Children.Add(CheckRow("Auto-Update from GitHub", settings.AutoUpdate, () => { settings.AutoUpdate = !settings.AutoUpdate; settings.Save(); NotifyStateChanged(); }));
             if (updater != null)
             {
                 string updLabel = updater.UpdateReady

@@ -193,6 +193,7 @@ namespace AgyPet
             }
 
             updater.Changed += () => Dispatcher.UIThread.Post(SyncUpdateLabel);
+            window.StateChanged += () => Dispatcher.UIThread.Post(SyncChecks);
             SyncChecks();
             SyncUpdateLabel();
         }

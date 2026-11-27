@@ -97,11 +97,25 @@ namespace AgyPet
         public bool StartWithWindows { get; set; }
         public bool AutoUpdate { get; set; }
 
+        public static string DefaultMinimizedCornerFor(bool isMacOs)
+        {
+            return isMacOs ? "bottom-center" : "top-right";
+        }
+
+        public static string DefaultMinimizedCorner()
+        {
+#if NET8_0_OR_GREATER
+            return DefaultMinimizedCornerFor(OperatingSystem.IsMacOS());
+#else
+            return "top-right";
+#endif
+        }
+
         public PetSettings()
         {
             Skin = MascotCore.ClassicSkin;
             PlacementMode = "pin-chat";
-            MinimizedCorner = "top-right";
+            MinimizedCorner = DefaultMinimizedCorner();
             CliPlacement = "bottom-right";
             Size = "medium";
             PixelSize = DefaultPixelSize;
@@ -216,7 +230,7 @@ namespace AgyPet
                     if (string.Equals(corner, opt.Id, StringComparison.OrdinalIgnoreCase))
                         return opt.Id;
             }
-            return "top-right";
+            return DefaultMinimizedCorner();
         }
 
         public static string NormalizeCliPlacement(string placement)

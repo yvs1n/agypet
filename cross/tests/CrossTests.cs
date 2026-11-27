@@ -99,7 +99,7 @@ namespace AgyPet.CrossTests
                 AssertEq(work.Bottom - 37.8 - 24, ty);
             });
 
-            Run("macOS menu bar template icon, CLI detection, right-click disable, and default above-Dock placement", () =>
+            Run("macOS menu bar template icon, CLI detection, right-click support, and default above-Dock placement", () =>
             {
                 byte[] macIcon = PetTheme.RenderMacMenuBarPng(36);
                 AssertTrue(macIcon != null && macIcon.Length > 200, "macOS menu bar PNG should be non-empty");
@@ -113,11 +113,13 @@ namespace AgyPet.CrossTests
                 AssertTrue(PlatformWindowTracker.IsCliProcessName("antigravity-cli"), "antigravity-cli process");
                 AssertTrue(!PlatformWindowTracker.IsCliProcessName("Antigravity"), "Antigravity GUI is not CLI process");
 
-                AssertTrue(!PetWindow.ShouldAllowRightClickContextMenu(true), "macOS disables right-click context menu");
+                AssertTrue(PetWindow.ShouldAllowRightClickContextMenu(true), "macOS keeps right-click context menu alongside menu bar icon");
                 AssertTrue(PetWindow.ShouldAllowRightClickContextMenu(false), "Non-macOS keeps right-click context menu");
 
-                AssertEq("bottom-center", PetWindow.ResolveAwayCornerForPlatform(true, false, "top-right"));
-                AssertEq("top-right", PetWindow.ResolveAwayCornerForPlatform(true, true, "top-right"));
+                AssertEq("bottom-center", PetSettings.DefaultMinimizedCornerFor(true));
+                AssertEq("top-right", PetSettings.DefaultMinimizedCornerFor(false));
+                AssertEq("top-right", PetWindow.ResolveAwayCornerForPlatform(true, false, "top-right"));
+                AssertEq("bottom-left", PetWindow.ResolveAwayCornerForPlatform(true, false, "bottom-left"));
                 AssertEq("top-right", PetWindow.ResolveAwayCornerForPlatform(false, false, "top-right"));
 
                 var screen = new ScreenRectDip(0, 0, 1440, 900);

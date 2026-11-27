@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.5 (2026-11-27)
+- **macOS Menu Bar + Right-Click Parity**: Merged true Universal `lipo` packaging (`tools/package-macos.sh`), monochrome menu bar template icon (`RenderMacMenuBarPng` + `MacOSProperties.SetIsTemplateIcon`), `agy`/`agy-cli`/`antigravity-cli` process detection, and `"Dock"` terminology while keeping both the top menu bar icon and mascot right-click (including `Ctrl+Click`) synchronized live (`StateChanged`).
+- **Default Above-Dock Without Hard-Override**: Set `"bottom-center"` as the first-run/fallback macOS default in `PetSettings` (`DefaultMinimizedCornerFor`) instead of overriding explicit user choices in `Location When Away / Minimized` when Antigravity is closed.
+
 ## 0.4.4 (2026-11-27)
 - **macOS & Linux Right-Click Submenu Crash & Overlay Fix**: Stopped `OpenSubmenu` from re-parenting a previously attached `StackPanel` when hovering back and forth across submenus or clicking a submenu row (building fresh submenu controls per open and detaching closed menu contents cleanly), coordinated menu deactivation timers across `menuWindow` and `submenuWindow`, ignored AgyPet's own windows in `PollMacOs` / `PollLinux`, and preserved macOS `NSWindow` overlay ordering (`setHidesOnDeactivate: false` + `orderFrontRegardless`) when menus deactivate or close.
 - **Taskbar Preview Sizing Fix**: Kept `Preview Mood` at the same taskbar-fitted pixel size when Antigravity is minimized and docked in the taskbar instead of swelling back up to the larger in-app slider size.
