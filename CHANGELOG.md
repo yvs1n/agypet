@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.8 (2026-11-27)
+- **Orb-Free Scrolling-Code Working Animation**: Restored the classic multi-line scrolling syntax-highlighted `DrawLaptop` animation with blinking cursor and tapping fingers across Windows (`src/Mascot.cs`), macOS/Linux (`cross/MascotView.cs`), and the website (`site/app.js`), without the two floating orbs above the laptop.
+- **Full 18-Animation Desktop Parity & Top-of-Page Logo Navigation**: Synced `Sleeping`, `Speaking`, `Searching`, `Reading`, `Terminal`, `Working`, `Multitasking`, and `Done` on [site/app.js](site/app.js) pixel-for-pixel with the desktop mascot, and updated clicking the navbar logo to scroll cleanly to the very top of the page (`y = 0`).
+
 ## 0.4.7 (2026-11-27)
 - **Website-Matched Working Animation**: Updated `DrawLaptop` across Windows (`src/Mascot.cs`) and macOS/Linux (`cross/MascotView.cs`) to match the clean laptop & typing arm on the landing page (`site/app.js`), removing the two floating orbs above the laptop.
 - **Release Workflow Race Fix (`.github/workflows/release.yml`)**: Trigger releases strictly on `v*.*.*` tags (and `workflow_dispatch`) with concurrency serialization instead of firing duplicate parallel builds for both `main` and the version tag (`HTTP 422: Release.tag_name already exists`).

@@ -357,8 +357,8 @@
         break;
       case 'Sleeping':
         if (!faceBlocked) { dot(eyeMain, 4.0, 4.3, 0.9, 0.35); dot(eyeMain, 6.2, 4.3, 0.9, 0.35); }
-        if ((Math.floor(tick / 10) % 4) >= 1) shape(isDark ? '#71717A' : '#64748B', 8.6, -1.1, ["###", "..#", ".#.", "###"]);
-        if ((Math.floor(tick / 10) % 4) >= 2) shape(isDark ? '#F4F4F5' : '#38BDF8', 11.4, -2.5, ["###", "..#", ".#.", "###"]);
+        if ((Math.floor(tick / 10) % 4) >= 1) shape(isDark ? '#52525B' : '#64748B', 8.6, -1.1, ["###", "..#", ".#.", "###"]);
+        if ((Math.floor(tick / 10) % 4) >= 2) shape(isDark ? '#F4F4F5' : '#38BDF8', 11.4, -2.5, ["####", "..#.", ".#..", "####"]);
         break;
       case 'Listening':
         if (!faceBlocked) drawEyes(3.9, 3.1, 6.3, 3.1, false, lookX * 0.65, lookY * 0.55);
@@ -402,6 +402,7 @@
         }
         if ((Math.floor(tick / 3) % 4) >= 1) dot(isDark ? '#F4F4F5' : '#F8FAFC', 10.3, 3.8, 0.9, 0.9, false);
         if ((Math.floor(tick / 3) % 4) >= 2) dot(isDark ? '#A1A1AA' : '#38BDF8', 11.4, 2.9, 0.9, 0.9, false);
+        if ((Math.floor(tick / 3) % 4) >= 3) dot(isDark ? '#52525B' : '#38BDF8', 12.5, 2.0, 0.9, 0.9, false);
         break;
       case 'Typing': {
         if (!faceBlocked) drawEyes(3.9, 3.3, 6.3, 3.3, closed, Math.sin(tick * 0.15) * 0.55, 0.35);
@@ -427,6 +428,8 @@
         const gx = 3.5 + Math.round(Math.sin(tick * 0.14) * 2.8);
         shape(isDark ? '#F4F4F5' : '#38BDF8', gx, -2.4, [".###.", "#...#", "#...#", ".###."]);
         dot(isDark ? '#A1A1AA' : '#1E78FF', gx + 4, 1.4, 0.9, 0.9, false);
+        dot(isDark ? '#A1A1AA' : '#1E78FF', gx + 5, 2.3, 0.9, 0.9, false);
+        if (tick % 8 < 4) dot(isDark ? '#A1A1AA' : '#F8FAFC', gx + 2, -0.9, 0.9, 0.9, false);
         break;
       }
       case 'Reading': {
@@ -438,36 +441,54 @@
         dot(isDark ? '#A1A1AA' : '#4EC446', 6.5, 5.0, 3, 0.4);
         dot(isDark ? '#F4F4F5' : '#F8C618', 1.5, 6.0, 3, 0.4);
         dot(isDark ? '#A1A1AA' : '#4EC446', 6.5, 6.0, 3, 0.4);
+        if (tick % 50 < 5) dot('#F4F4F5', 2.5 + (tick % 50), 3.9, 1, 3.4);
         break;
       }
-      case 'Working':
+      case 'Working': {
         if (!faceBlocked) {
           drawEyes(3.6, 3.4, 6.0, 3.4, false, -0.72 + Math.sin(tick * 0.22) * 0.28, Math.sin(tick * 0.11) * 0.45, true);
         }
-        dot(isDark ? '#A1A1AA' : '#94A3B8', -4.2, 1.8, 5.0, 6.0, false);
-        dot(isDark ? '#18181B' : '#E2E8F0', -3.4, 2.5, 3.4, 4.4, false);
-        dot(isDark ? '#27272A' : '#3F4A5C', -4.2, 7.8, 6.2, 0.9, false);
-        dot(isDark ? '#F4F4F5' : '#1E78FF', -3.1, 3.0, 2.4, 0.45, false);
-        dot(isDark ? '#A1A1AA' : '#EF443A', -2.7, 4.0, 2.0, 0.45, false);
-        dot(isDark ? '#F4F4F5' : '#4EC446', -3.1, 5.0, 1.2 + (tick % 3) * 0.55, 0.45, false);
-        dot(bodyColorAt(skin, 2.0, 5.0), 0.6, 5.0, 1.6, 0.85, false);
+        const ox = -4.2;
+        const wTyping = (tick % 90) < 72;
+        dot(isDark ? '#A1A1AA' : '#94A3B8', ox, 1.8, 5.2, 6.2, false);
+        dot(isDark ? '#18181B' : '#E2E8F0', ox + 0.85, 2.5, 3.5, 4.5, false);
+        dot(isDark ? '#27272A' : '#3F4A5C', ox, 8.0, 6.4, 0.9, false);
+        const written = Math.floor(tick / 5);
+        const codeCols = isDark ? ['#F4F4F5', '#A1A1AA', '#52525B', '#F4F4F5'] : ['#1E78FF', '#EF443A', '#4EC446', '#F8C618'];
+        for (let row = 0; row < 4; row++) {
+          const line = written - 3 + row;
+          if (line < 0) continue;
+          const seed = line * 7 + 3;
+          const indent = seed % 3 === 0 ? 1 : 0;
+          let lw = Math.min(1 + (seed % 3.5), 3.5 - indent);
+          if (row === 3 && wTyping) lw = Math.min(lw, 1 + ((tick % 4) % Math.max(1, Math.floor(lw))));
+          dot(codeCols[seed % codeCols.length], ox + 1.0 + indent * 0.8, 2.8 + row * 0.95, lw, 0.45, false);
+        }
+        if (wTyping && tick % 8 < 4) dot(isDark ? '#F4F4F5' : '#38BDF8', ox + 1.2, 6.3, 0.45, 0.45, false);
+        const tap = Math.floor(tick / 2) % 2;
+        dot(armLU, 0.4, 5.0, 2.0, 0.9, false);
+        dot(armLL, 0.4, 5.9, 0.9, (wTyping && tap === 0) ? 1.8 : 0.9, false);
+        dot(armLL, 1.4, 5.9, 0.9, (wTyping && tap === 1) ? 1.8 : 0.9, false);
         break;
+      }
       case 'Terminal': {
         if (!faceBlocked) {
           drawEyes(3.6, 3.4, 6.0, 3.4, false, -0.72 + Math.sin(tick * 0.22) * 0.28, Math.sin(tick * 0.11) * 0.45, true);
         }
         const tx = -4.3;
-        dot(isDark ? '#A1A1AA' : '#3F4A5C', tx, 1.7, 5.2, 6.2, false);
-        dot('#18181B', tx + 0.45, 2.2, 4.3, 5.2, false);
+        dot(isDark ? '#A1A1AA' : '#3F4A5C', tx, 1.7, 5.4, 6.4, false);
+        dot('#18181B', tx + 0.45, 2.2, 4.5, 5.4, false);
         dot(isDark ? '#F4F4F5' : '#EF443A', tx + 0.75, 2.45, 0.45, 0.45, false);
         dot(isDark ? '#A1A1AA' : '#F8C618', tx + 1.4, 2.45, 0.45, 0.45, false);
         dot(isDark ? '#52525B' : '#4EC446', tx + 2.05, 2.45, 0.45, 0.45, false);
         const prompt = isDark ? '#F4F4F5' : '#4EC446';
         dot(prompt, tx + 0.85, 3.5, 0.4, 0.4, false); dot(prompt, tx + 1.25, 3.85, 0.4, 0.4, false); dot(prompt, tx + 0.85, 4.2, 0.4, 0.4, false);
-        dot(isDark ? '#A1A1AA' : '#E2E8F0', tx + 1.9, 3.7, 1.2 + (Math.floor(tick / 4) % 3) * 0.55, 0.45, false);
-        dot(isDark ? '#71717A' : '#38BDF8', tx + 0.9, 5.0, 2.5, 0.42, false);
-        if (tick % 6 < 3) dot(prompt, tx + 3.5, 5.9, 0.6, 0.6, false);
-        dot(bodyColorAt(skin, 2.0, 5.0), 0.6, 5.0, 1.6, 0.85, false);
+        const step = Math.floor(tick / 4);
+        dot(isDark ? '#A1A1AA' : '#E2E8F0', tx + 1.9, 3.7, 1.2 + (step % 3) * 0.55, 0.45, false);
+        dot(isDark ? '#52525B' : '#2C86FF', tx + 0.9, 5.1, 2.6, 0.42, false);
+        dot(isDark ? '#A1A1AA' : '#F8C618', tx + 0.9, 6.0, 1.5 + ((step + 1) % 2) * 1.0, 0.42, false);
+        if (tick % 6 < 3) dot(prompt, tx + 3.6, 6.0, 0.6, 0.6, false);
+        dot(armLU, 0.6, 5.0, 1.6, 0.85, false);
         break;
       }
       case 'Browsing': {
@@ -489,6 +510,8 @@
         for (let i = 0; i < nOrbs; i++) {
           const a = tick * 0.24 + i * ((Math.PI * 2) / nOrbs);
           dot(orbs[i % orbs.length], 5.1 + Math.cos(a) * 3.9, -0.4 + Math.sin(a) * 1.55, orbSize, orbSize, false);
+          const pa = a - 0.36;
+          dot(isDark ? '#52525B' : '#94A3B8', 5.2 + Math.cos(pa) * 3.9, -0.32 + Math.sin(pa) * 1.55, 0.45, 0.45, false);
         }
         break;
       }
@@ -567,11 +590,21 @@
       case 'Done': {
         if (!faceBlocked) drawHappyEyes();
         dot(armRaisedL, 1.1, 3.7, 0.5, 1.0); dot(armRaisedR, 9.4, 3.7, 0.5, 1.0);
-        const lift = tick % 8 < 4 ? -0.25 : 0.15;
-        dot(isDark ? '#F4F4F5' : '#EF443A', 0.2, 1.2 + lift, 0.45, 0.85, false);
-        dot(isDark ? '#A1A1AA' : '#4EC446', 1.3, -0.7 - lift, 1.0, 0.36, false);
-        dot(isDark ? '#F4F4F5' : '#F8C618', 3.1, -1.4 + lift, 0.45, 0.45, false);
-        dot(isDark ? '#A1A1AA' : '#38BDF8', 8.7, -0.6 - lift, 0.9, 0.36, false);
+        dot('rgba(7, 7, 9, 0.53)', 2.5, 8.7, 6.0, 0.4, false);
+        const liftA = tick % 8 < 4 ? -0.25 : 0.15;
+        const liftB = tick % 8 < 4 ? 0.15 : -0.25;
+        const c1 = isDark ? '#F4F4F5' : '#EF443A';
+        const c2 = isDark ? '#A1A1AA' : '#4EC446';
+        const c3 = isDark ? '#F4F4F5' : '#F8C618';
+        const c4 = isDark ? '#A1A1AA' : '#38BDF8';
+        const c5 = isDark ? '#52525B' : '#1E78FF';
+        dot(c1, 0.2, 1.2 + liftA, 0.45, 0.85, false); dot(c1, 0.65, 1.6 + liftA, 0.45, 0.45, false);
+        dot(c2, 1.3, -0.7 + liftB, 1.0, 0.36, false); dot(c2, 1.6, -1.0 + liftB, 0.36, 1.0, false);
+        dot(c3, 3.1, -1.4 + liftA, 0.45, 0.45, false); dot(c3, 3.55, -1.0 + liftA, 0.45, 0.45, false);
+        dot(c4, 5.4, -1.6 + liftB, 0.55, 0.55, false);
+        dot(c5, 7.2, -1.1 + liftB, 0.45, 0.45, false); dot(c5, 7.65, -1.5 + liftB, 0.45, 0.45, false);
+        dot(c3, 8.7, -0.6 + liftA, 0.9, 0.36, false); dot(c3, 9.0, -0.9 + liftA, 0.36, 0.9, false);
+        dot(c1, 9.9, 0.8 + liftB, 0.45, 0.8, false); dot(c1, 10.3, 1.2 + liftB, 0.45, 0.45, false);
         break;
       }
     }
@@ -1319,6 +1352,15 @@
   window.addEventListener('resize', computeStageTarget);
   renderAllOnce();
   requestAnimationFrame(frame);
+
+  const brandHome = document.getElementById('brand-home');
+  if (brandHome) {
+    brandHome.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (window.location.hash) history.replaceState(null, '', window.location.pathname + window.location.search);
+      window.scrollTo({ top: 0, behavior: motionPaused ? 'auto' : 'smooth' });
+    });
+  }
 
   // ---- 3. Distortion-Free Fixed-Width Sliding Navbar Bar ----
   const navLinksWrap = document.getElementById('pill-nav-links');
