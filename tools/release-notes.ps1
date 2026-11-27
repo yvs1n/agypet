@@ -1,7 +1,7 @@
-﻿# Generates GitHub Release notes from CHANGELOG.md and appends SHA-256 + attestation verify command.
+﻿# Generates GitHub Release notes from CHANGELOG.md and appends SHA-256 checksums for Windows, macOS, and Linux assets.
 param(
     [Parameter(Mandatory = $true)][string]$Tag,
-    [Parameter(Mandatory = $true)][string]$Exe,
+    [Parameter(Mandatory = $true)][string[]]$Assets,
     [Parameter(Mandatory = $true)][string]$Out
 )
 $ErrorActionPreference = 'Stop'
@@ -23,20 +23,28 @@ if ($notes -eq '') {
     $notes = "Latest build of AgyPet ($Tag)."
 }
 
-$hash = (Get-FileHash $Exe -Algorithm SHA256).Hash.ToLower()
+$sums = New-Object System.Collections.Generic.List[string]
+foreach ($a in $Assets) {
+    if (-not (Test-Path $a)) { continue }
+    $hash = (Get-FileHash $a -Algorithm SHA256).Hash.ToLower()
+    $name = [IO.Path]::GetFileName($a)
+    $sums.Add("$hash  $name")
+}
+$checksumBlock = $sums -join "`n"
+
 $text = @"
 $notes
 
-## Install
+## One-File Install & Play
 
-Download ``AgyPet.exe`` below and run it. No installer or runtime required — AgyPet automatically checks GitHub Releases for updates.
+- **Windows**: Download ``AgyPet.exe`` and run it (no runtime or installer needed; if SmartScreen prompts on an unsigned binary, choose **More info -> Run anyway**).
+- **macOS (Apple Silicon & Intel Universal)**: Download ``AgyPet-macOS.dmg``, open it, and drag ``AgyPet.app`` to Applications or double-click to run directly.
+- **Linux (`x64` / `arm64`)**: Download ``AgyPet-linux-x64`` (or ``AgyPet-linux-arm64``), make it executable (`chmod +x AgyPet-linux-x64`), and run `./AgyPet-linux-x64` (zero extra dependencies or FUSE required).
 
-If Windows SmartScreen warns on an unsigned binary, choose **More info** -> **Run anyway**.
-
-## Verify Checksum
+## Verify Checksums (SHA-256)
 
 ``````text
-$hash  AgyPet.exe
+$checksumBlock
 ``````
 
 Built by GitHub Actions from ``$Tag``. Credits: [Yassin Ragab](https://yassinr.me) · Built for & with [Google Antigravity](https://antigravity.google).

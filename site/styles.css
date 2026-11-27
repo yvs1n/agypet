@@ -489,11 +489,30 @@ html.js .nav-bar {
   color: var(--ink-secondary);
 }
 
+.hero-actions-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
 .hero-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 12px;
+}
+
+.os-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 900px) {
+  .hero-actions-wrap {
+    align-items: flex-start;
+  }
 }
 
 .cmd-pill {

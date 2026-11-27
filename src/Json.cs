@@ -3,7 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
+#if NET8_0_OR_GREATER
+using System.Text.Json;
+#else
 using System.Web.Script.Serialization;
+#endif
 
 namespace AgyPet
 {
@@ -12,21 +16,65 @@ namespace AgyPet
         public static Dictionary<string, object> ParseObject(string json)
         {
             if (string.IsNullOrWhiteSpace(json)) return null;
+#if NET8_0_OR_GREATER
+            return Parse(json) as Dictionary<string, object>;
+#else
             var js = new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024 };
             return js.DeserializeObject(json) as Dictionary<string, object>;
+#endif
         }
 
         public static object Parse(string json)
         {
             if (string.IsNullOrWhiteSpace(json)) return null;
+#if NET8_0_OR_GREATER
+            using (var doc = JsonDocument.Parse(json))
+                return ToClrObject(doc.RootElement);
+#else
             var js = new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024 };
             return js.DeserializeObject(json);
+#endif
         }
+
+#if NET8_0_OR_GREATER
+        static object ToClrObject(JsonElement el)
+        {
+            switch (el.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    var d = new Dictionary<string, object>();
+                    foreach (var p in el.EnumerateObject())
+                        d[p.Name] = ToClrObject(p.Value);
+                    return d;
+                case JsonValueKind.Array:
+                    var arr = new List<object>();
+                    foreach (var item in el.EnumerateArray())
+                        arr.Add(ToClrObject(item));
+                    return arr.ToArray();
+                case JsonValueKind.String:
+                    return el.GetString();
+                case JsonValueKind.Number:
+                    long lv;
+                    if (el.TryGetInt64(out lv)) return lv;
+                    return el.GetDouble();
+                case JsonValueKind.True:
+                    return true;
+                case JsonValueKind.False:
+                    return false;
+                default:
+                    return null;
+            }
+        }
+#endif
 
         public static string Pretty(string compactJson)
         {
+#if NET8_0_OR_GREATER
+            return Write(Parse(compactJson));
+#else
             var js = new JavaScriptSerializer { MaxJsonLength = 16 * 1024 * 1024 };
             return Write(js.DeserializeObject(compactJson));
+#endif
         }
 
         public static string Write(object value)

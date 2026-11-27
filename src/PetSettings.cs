@@ -1,17 +1,32 @@
 using System;
 using System.IO;
+#if NET8_0_OR_GREATER
+using System.Diagnostics;
+using System.Text.Json;
+#else
 using System.Web.Script.Serialization;
 using Microsoft.Win32;
+#endif
 
 namespace AgyPet
 {
     public class PetSettings
     {
-        public static readonly string DataDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AgyPet");
+        public static readonly string DataDir = ResolveDataDir();
         static readonly string FilePath = Path.Combine(DataDir, "settings.json");
+
+        static string ResolveDataDir()
+        {
+#if NET8_0_OR_GREATER
+            if (OperatingSystem.IsMacOS())
+                return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AgyPet");
+#endif
+            return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AgyPet");
+        }
+#if !NET8_0_OR_GREATER
         const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
         const string RunValueName = "AgyPet";
+#endif
 
         // "classic" (Official Antigravity colors) | "dark" (New Dark Monochrome Remake)
         public string Skin { get; set; }
@@ -78,7 +93,7 @@ namespace AgyPet
 
         public PetSettings()
         {
-            Skin = Mascot.ClassicSkin;
+            Skin = MascotCore.ClassicSkin;
             PlacementMode = "pin-chat";
             MinimizedCorner = "top-right";
             CliPlacement = "bottom-right";
@@ -116,7 +131,12 @@ namespace AgyPet
             {
                 if (File.Exists(FilePath))
                 {
-                    var s = new JavaScriptSerializer().Deserialize<PetSettings>(File.ReadAllText(FilePath));
+                    string raw = File.ReadAllText(FilePath);
+#if NET8_0_OR_GREATER
+                    var s = JsonSerializer.Deserialize<PetSettings>(raw);
+#else
+                    var s = new JavaScriptSerializer().Deserialize<PetSettings>(raw);
+#endif
                     if (s != null) { s.Normalize(); return s; }
                 }
             }
@@ -131,7 +151,12 @@ namespace AgyPet
                 Normalize();
                 Directory.CreateDirectory(DataDir);
                 string tmp = FilePath + ".tmp";
-                File.WriteAllText(tmp, Json.Pretty(new JavaScriptSerializer().Serialize(this)));
+#if NET8_0_OR_GREATER
+                string text = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+#else
+                string text = Json.Pretty(new JavaScriptSerializer().Serialize(this));
+#endif
+                File.WriteAllText(tmp, text);
                 if (File.Exists(FilePath)) File.Replace(tmp, FilePath, null);
                 else File.Move(tmp, FilePath);
             }
@@ -177,7 +202,7 @@ namespace AgyPet
 
         public void Normalize()
         {
-            Skin = Mascot.NormalizeSkin(Skin);
+            Skin = MascotCore.NormalizeSkin(Skin);
             PlacementMode = PlacementMode == "free" ? "free" : "pin-chat";
             MinimizedCorner = NormalizeCorner(MinimizedCorner);
             CliPlacement = NormalizeCliPlacement(CliPlacement);
@@ -190,6 +215,58 @@ namespace AgyPet
         {
             try
             {
+#if NET8_0_OR_GREATER
+                if (OperatingSystem.IsMacOS())
+                {
+                    string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+                    string plist = Path.Combine(home, "Library", "LaunchAgents", "me.yassinr.agypet.plist");
+                    if (enable && !string.IsNullOrEmpty(exePath))
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(plist));
+                        string escaped = exePath.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+                        File.WriteAllText(plist,
+                            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                            "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n" +
+                            "<plist version=\"1.0\">\n<dict>\n" +
+                            "  <key>Label</key><string>me.yassinr.agypet</string>\n" +
+                            "  <key>ProgramArguments</key><array><string>" + escaped + "</string></array>\n" +
+                            "  <key>RunAtLoad</key><true/>\n" +
+                            "</dict>\n</plist>\n");
+                    }
+                    else if (File.Exists(plist))
+                    {
+                        File.Delete(plist);
+                    }
+                }
+                else if (OperatingSystem.IsLinux())
+                {
+                    string cfg = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                    string desktop = Path.Combine(cfg, "autostart", "agypet.desktop");
+                    if (enable && !string.IsNullOrEmpty(exePath))
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(desktop));
+                        File.WriteAllText(desktop,
+                            "[Desktop Entry]\n" +
+                            "Type=Application\n" +
+                            "Name=AgyPet\n" +
+                            "Comment=Desktop companion for Antigravity\n" +
+                            "Exec=\"" + exePath + "\"\n" +
+                            "Terminal=false\n" +
+                            "X-GNOME-Autostart-enabled=true\n");
+                    }
+                    else if (File.Exists(desktop))
+                    {
+                        File.Delete(desktop);
+                    }
+                }
+                else if (OperatingSystem.IsWindows())
+                {
+                    string args = enable && !string.IsNullOrEmpty(exePath)
+                        ? @"add ""HKCU\Software\Microsoft\Windows\CurrentVersion\Run"" /v AgyPet /t REG_SZ /d ""\""" + exePath + @"\"""" /f"
+                        : @"delete ""HKCU\Software\Microsoft\Windows\CurrentVersion\Run"" /v AgyPet /f";
+                    Process.Start(new ProcessStartInfo("reg.exe", args) { CreateNoWindow = true, UseShellExecute = false });
+                }
+#else
                 using (var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, true))
                 {
                     if (key == null) return;
@@ -198,6 +275,7 @@ namespace AgyPet
                     else
                         key.DeleteValue(RunValueName, false);
                 }
+#endif
             }
             catch { }
         }

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0 (2026-11-27)
+- **macOS & Linux Support (One-File Install & Play)**:
+  - Added cross-platform desktop companion (`cross/`) using `.NET 8` + Avalonia sharing 100% of `MascotCore`, `ActivityMonitor`, `PetSettings`, `Updater`, and `Json` across all OSes.
+  - **macOS Universal (`AgyPet-macOS.dmg`)**: Single disk image bundling both `osx-arm64` and `osx-x64` under a Universal Mach-O launcher inside `AgyPet.app` (`LSUIElement = true`, menu bar tray, CoreGraphics frontmost window & cursor tracking, `~/Library/LaunchAgents` startup).
+  - **Linux (`AgyPet-linux-x64` & `AgyPet-linux-arm64`)**: Single self-contained executable ELF binaries with embedded SQLite (`e_sqlite3`), `libX11` window/cursor tracking with Wayland process fallback, System Tray / StatusNotifierItem, and `~/.config/autostart` login support.
+  - **Website & Multi-OS Releases**: Added OS-aware single-file download buttons in [site/index.html](site/index.html) and parallel Windows, Linux (`x64`/`arm64`), and macOS (`arm64`+`x64`) release builds with SHA-256 checksums.
+
 ## 0.3.8 (2026-11-27)
 - **Website Design System Across Desktop UI**: Styled the right-click context menu (including nested submenus) and updated the hover progress card and feedback dialog to match the website's OKLCH hue-250 dark surfaces, alpha borders, concentric `14px`/`9px` radii, and `QuarticEase` hover scale + lift entrance/exit motion.
 - **Taskbar Auto-Sizing with Breathing Room & Empty-Space Placement**: Automatically sizes the mascot to fit the Windows taskbar height with `>= 6` DIP buffer (`large` on `>= 52.8`-DIP bars, `medium` on `48`-DIP Windows 11 bars, `small` on thinner bars) when outside the app and restores your saved size inside Antigravity. Scans `Shell_TrayWnd` so `taskbar-left`, `taskbar-center`, and `taskbar-right` sit in open taskbar space clear of Widgets, app icons, system tray icons, and the clock.

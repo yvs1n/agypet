@@ -5,18 +5,20 @@
 [![Latest Release](https://img.shields.io/github/v/release/yvs1n/agypet?label=Download)](https://github.com/yvs1n/agypet/releases/latest)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-A lightweight, zero-dependency Windows pixel-art mascot overlay for **Google Antigravity App**, **Antigravity IDE**, and **Antigravity CLI (`agy`)**.
+A lightweight, one-file install-and-play pixel companion overlay for **Google Antigravity App**, **Antigravity IDE**, and **Antigravity CLI (`agy`)** on **Windows**, **macOS**, and **Linux**.
 
 ![AgyPet Preview](docs/agypet-preview.gif)
 
 ---
 
-## Download & Install
+## Download & Install (One-File Run)
 
-**[Download latest `AgyPet.exe`](https://github.com/yvs1n/agypet/releases/latest/download/AgyPet.exe)** (single portable executable, ~150 KB, no installer or runtime needed).
+Download the single file for your OS from [`yvs1n/agypet` Latest Release](https://github.com/yvs1n/agypet/releases/latest) — no runtime installation required:
 
-- **Auto-Updates**: AgyPet automatically checks [`yvs1n/agypet` Releases](https://github.com/yvs1n/agypet/releases) and can update itself in-place from the right-click or system tray menu (**Check for Updates**).
-- **Windows SmartScreen**: Because the binary isn't EV code-signed yet, click **More info → Run anyway** on first launch (or verify the SHA-256 checksum listed in each release).
+- **Windows**: **[`AgyPet.exe`](https://github.com/yvs1n/agypet/releases/latest/download/AgyPet.exe)** — double-click to run (~150 KB portable WPF executable; if SmartScreen prompts on an unsigned build, click **More info → Run anyway**).
+- **macOS (Apple Silicon & Intel Universal)**: **[`AgyPet-macOS.dmg`](https://github.com/yvs1n/agypet/releases/latest/download/AgyPet-macOS.dmg)** — open the `.dmg` and drag `AgyPet.app` into **Applications** (or double-click right inside the disk image).
+- **Linux (`x64` / `arm64`)**: **[`AgyPet-linux-x64`](https://github.com/yvs1n/agypet/releases/latest/download/AgyPet-linux-x64)** or **[`AgyPet-linux-arm64`](https://github.com/yvs1n/agypet/releases/latest/download/AgyPet-linux-arm64)** — run `chmod +x AgyPet-linux-x64 && ./AgyPet-linux-x64` (zero extra dependencies or FUSE needed).
+- **Auto-Updates**: AgyPet checks [`yvs1n/agypet` Releases](https://github.com/yvs1n/agypet/releases) automatically from the right-click or menu-bar/tray menu (**Check for Updates**).
 
 ---
 

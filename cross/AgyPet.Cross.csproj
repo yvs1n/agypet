@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>AgyPet</AssemblyName>
+    <RootNamespace>AgyPet</RootNamespace>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\src\AssemblyInfo.cs" Link="Shared\AssemblyInfo.cs" />
+    <Compile Include="..\src\MascotCore.cs" Link="Shared\MascotCore.cs" />
+    <Compile Include="..\src\Json.cs" Link="Shared\Json.cs" />
+    <Compile Include="..\src\PetSettings.cs" Link="Shared\PetSettings.cs" />
+    <Compile Include="..\src\ActivityMonitor.cs" Link="Shared\ActivityMonitor.cs" />
+    <Compile Include="..\src\Updater.cs" Link="Shared\Updater.cs" />
+    <Compile Include="Theme.cs" />
+    <Compile Include="MascotView.cs" />
+    <Compile Include="PlatformWindowTracker.cs" />
+    <Compile Include="PetWindow.cs" />
+    <Compile Include="TrayMenu.cs" />
+    <Compile Include="FeedbackWindow.cs" />
+    <Compile Include="Program.cs" />
+  </ItemGroup>
+</Project>

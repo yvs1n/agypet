@@ -924,6 +924,52 @@ namespace AgyPet
         static List<SessionRow> QueryRecentSessions(string source, string dbPath, string brainRoot)
         {
             var list = new List<SessionRow>();
+#if NET8_0_OR_GREATER
+            try
+            {
+                using (var conn = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + dbPath + ";Mode=ReadOnly"))
+                {
+                    conn.Open();
+                    using (var cmd = conn.CreateCommand())
+                    {
+                        cmd.CommandText = "SELECT conversation_id, title, status, not_fully_idle, last_modified_time " +
+                                          "FROM conversation_summaries WHERE killed = 0 ORDER BY last_modified_time DESC LIMIT 40;";
+                        using (var reader = cmd.ExecuteReader())
+                        {
+                            while (reader.Read())
+                            {
+                                string id = reader.IsDBNull(0) ? "" : reader.GetString(0);
+                                if (string.IsNullOrEmpty(id)) continue;
+                                string title = reader.IsDBNull(1) ? "" : reader.GetString(1);
+                                string rawStatus = reader.IsDBNull(2) ? "" : reader.GetString(2);
+                                int notIdle = reader.IsDBNull(3) ? 0 : reader.GetInt32(3);
+                                string lastModStr = reader.IsDBNull(4) ? "" : reader.GetString(4);
+
+                                DateTime updated = DateTime.MinValue;
+                                if (!string.IsNullOrEmpty(lastModStr))
+                                {
+                                    DateTime parsed;
+                                    if (DateTime.TryParse(lastModStr, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out parsed))
+                                        updated = parsed.ToLocalTime();
+                                }
+
+                                list.Add(new SessionRow
+                                {
+                                    Source = source,
+                                    BrainRoot = brainRoot,
+                                    Id = id,
+                                    Title = title,
+                                    RawRunning = rawStatus == "CASCADE_RUN_STATUS_RUNNING",
+                                    NotFullyIdle = notIdle == 1,
+                                    Updated = updated
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+#else
             IntPtr db;
             byte[] pathBytes = Encoding.UTF8.GetBytes(dbPath + "\0");
             if (SqliteNative.Open(pathBytes, out db, SqliteNative.SQLITE_OPEN_READONLY, IntPtr.Zero) != SqliteNative.SQLITE_OK)
@@ -972,10 +1018,11 @@ namespace AgyPet
                 finally { SqliteNative.Finalize(stmt); }
             }
             finally { SqliteNative.Close(db); }
-
+#endif
             return list;
         }
 
+#if !NET8_0_OR_GREATER
         static class SqliteNative
         {
             [DllImport("winsqlite3.dll", EntryPoint = "sqlite3_open_v2", CallingConvention = CallingConvention.Cdecl)]
@@ -1008,5 +1055,6 @@ namespace AgyPet
                 return Encoding.UTF8.GetString(bytes);
             }
         }
+#endif
     }
 }

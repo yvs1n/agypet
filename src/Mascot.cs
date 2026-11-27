@@ -7,36 +7,14 @@ using System.Windows.Threading;
 
 namespace AgyPet
 {
-    public enum MascotMood
-    {
-        Idle,
-        Sleeping,
-        Listening,
-        Thinking,
-        Speaking,
-        Typing,
-        Searching,
-        Reading,
-        Working,
-        Terminal,
-        Browsing,
-        Delegating,
-        Multitasking,
-        Background,
-        Alert,
-        Question,
-        Done,
-        Error
-    }
-
     // Pixel-art Antigravity companion supporting two official skins:
     //  1) "classic" — refined CLI pixel-art arch in official Antigravity logo colors
     //                 (yellow-green upper-left, fiery orange-red upper-right, vivid blue core & legs, violet right shoulder)
     //  2) "dark"    — sleek new monochrome obsidian/graphite Antigravity remake with luminous white eyes
     public class Mascot : Canvas
     {
-        public const string ClassicSkin = "classic";
-        public const string DarkSkin = "dark";
+        public const string ClassicSkin = MascotCore.ClassicSkin;
+        public const string DarkSkin = MascotCore.DarkSkin;
 
         // Shared neutral & eye brushes
         static readonly Brush EyeDark = Frozen(Color.FromRgb(0x0B, 0x12, 0x20));
@@ -391,96 +369,16 @@ namespace AgyPet
             }
         }
 
-        // Spatial radial color model matching the official Antigravity logo:
-        // vivid royal blue core & legs, bright yellow-gold top-left, fresh green left shoulder,
-        // fiery orange-red top-right crest, and crisp violet-blue right shoulder — zero muddy center!
         public static Color OfficialArchPixelColor(double u, double v, bool compact, bool topEdge, bool innerArch)
         {
-            if (compact) v = Math.Max(0.04, Math.Min(0.96, (v - 0.16) / 0.68));
-
-            // Base luminous Google/Antigravity blue
-            Color c = LerpColor(AgyBlueCore, AgyBlueLeg, Math.Min(1.0, Math.Max(0.0, (v - 0.35) / 0.65)));
-
-            // 1. Lime/Emerald Green along upper-left shoulder
-            double wGreen = Gauss(u, v, 0.23, 0.34, 0.18, 0.22);
-            c = LerpColor(c, AgyLime, Math.Min(1.0, wGreen * 1.15));
-
-            // 2. Aqua-Teal transition along mid-left leg
-            double wTeal = Gauss(u, v, 0.20, 0.54, 0.14, 0.16);
-            c = LerpColor(c, AgyTeal, Math.Min(0.85, wTeal * 0.85));
-
-            // 3. Bright Yellow-Gold at top-left crest
-            double wGold = Gauss(u, v, 0.40, 0.06, 0.17, 0.17);
-            c = LerpColor(c, AgyGold, Math.Min(1.0, wGold * 1.25));
-
-            // 4. Warm Orange at top crest center-right
-            double wOrange = Gauss(u, v, 0.54, 0.08, 0.16, 0.16);
-            c = LerpColor(c, AgyOrange, Math.Min(1.0, wOrange * 1.2));
-
-            // 5. Vivid Coral-Red along upper-right crest & shoulder
-            double wCoral = Gauss(u, v, 0.65, 0.21, 0.16, 0.19);
-            c = LerpColor(c, AgyCoral, Math.Min(1.0, wCoral * 1.18));
-
-            // 6. Violet-Indigo bridge on right mid-shoulder
-            double wViolet = Gauss(u, v, 0.72, 0.44, 0.14, 0.16);
-            c = LerpColor(c, AgyViolet, Math.Min(0.85, wViolet * 0.90));
-
-            if (topEdge && u < 0.60) c = ShiftLight(c, 0.08);
-            else if (innerArch) c = ShiftLight(c, -0.14);
-            return c;
+            var r = MascotCore.OfficialArchPixel(u, v, compact, topEdge, innerArch);
+            return Color.FromRgb(r.R, r.G, r.B);
         }
 
-        // Sleek monochrome obsidian/graphite gradient inspired by the new Dark Remake logo,
-        // with a crisp subtle silver-graphite rim so it reads cleanly on both dark & light themes.
         public static Color DarkArchPixelColor(double u, double v, bool compact, bool topEdge, bool sideEdge, bool bottomEdge)
         {
-            if (compact) v = Math.Max(0.05, Math.Min(0.95, (v - 0.16) / 0.68));
-
-            // Soft directional sheen from top-center-right down into deep charcoal legs
-            Color c = v < 0.45
-                ? LerpColor(DarkTop, DarkMid, v / 0.45)
-                : LerpColor(DarkMid, DarkLeg, (v - 0.45) / 0.55);
-
-            // Subtle specular highlight on the upper arch crown
-            double crownGlow = Gauss(u, v, 0.52, 0.16, 0.22, 0.20);
-            c = ShiftLight(c, crownGlow * 0.14);
-
-            // Crisp rim edge so the monochrome silhouette stands out against dark IDE/chat backgrounds
-            if (topEdge) c = LerpColor(c, DarkRim, 0.58);
-            else if (sideEdge) c = LerpColor(c, DarkRim, 0.34);
-            else if (bottomEdge && v < 0.72) c = ShiftLight(c, -0.18);
-
-            return c;
-        }
-
-        static double Gauss(double u, double v, double mu, double mv, double su, double sv)
-        {
-            double du = (u - mu) / su;
-            double dv = (v - mv) / sv;
-            return Math.Exp(-0.5 * (du * du + dv * dv));
-        }
-
-        static Color LerpColor(Color a, Color b, double t)
-        {
-            t = Math.Max(0, Math.Min(1, t));
-            return Color.FromRgb(
-                (byte)Math.Round(a.R + (b.R - a.R) * t),
-                (byte)Math.Round(a.G + (b.G - a.G) * t),
-                (byte)Math.Round(a.B + (b.B - a.B) * t));
-        }
-
-        static Color ShiftLight(Color c, double delta)
-        {
-            if (delta >= 0)
-                return Color.FromRgb(
-                    (byte)Math.Min(255, Math.Round(c.R + (255 - c.R) * delta)),
-                    (byte)Math.Min(255, Math.Round(c.G + (255 - c.G) * delta)),
-                    (byte)Math.Min(255, Math.Round(c.B + (255 - c.B) * delta)));
-            double k = 1 + delta;
-            return Color.FromRgb(
-                (byte)Math.Max(0, Math.Round(c.R * k)),
-                (byte)Math.Max(0, Math.Round(c.G * k)),
-                (byte)Math.Max(0, Math.Round(c.B * k)));
+            var r = MascotCore.DarkArchPixel(u, v, compact, topEdge, sideEdge, bottomEdge);
+            return Color.FromRgb(r.R, r.G, r.B);
         }
 
         void Dot(Canvas layer, Brush fill, double x, double y, double w = 1, double h = 1)

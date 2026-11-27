@@ -9,17 +9,62 @@ permissions:
   contents: read
 
 jobs:
-  build-and-test:
+  windows:
     runs-on: windows-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Run unit tests
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run Windows WPF unit tests
         run: ./build.ps1 -Test
       - name: Build AgyPet.exe
         run: ./build.ps1
+      - name: Run cross-platform core tests on Windows
+        run: dotnet run --project cross/tests/AgyPet.Cross.Tests.csproj -c Release
       - uses: actions/upload-artifact@v4
         with:
-          name: AgyPet
+          name: AgyPet-windows
           path: bin/AgyPet.exe
+          retention-days: 14
+
+  linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run cross-platform tests on Linux
+        run: dotnet run --project cross/tests/AgyPet.Cross.Tests.csproj -c Release
+      - name: Build single-file AgyPet-linux-x64
+        run: dotnet publish cross/AgyPet.Cross.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o out/linux-x64 && mv out/linux-x64/AgyPet out/linux-x64/AgyPet-linux-x64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AgyPet-linux-x64
+          path: out/linux-x64/AgyPet-linux-x64
+          retention-days: 14
+
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run cross-platform tests on macOS
+        run: dotnet run --project cross/tests/AgyPet.Cross.Tests.csproj -c Release
+      - name: Build Universal macOS DMG
+        run: |
+          dotnet publish cross/AgyPet.Cross.csproj -c Release -r osx-arm64 --self-contained true -p:PublishSingleFile=true -o out/osx-arm64
+          dotnet publish cross/AgyPet.Cross.csproj -c Release -r osx-x64 --self-contained true -p:PublishSingleFile=true -o out/osx-x64
+          chmod +x tools/package-macos.sh
+          ./tools/package-macos.sh "0.0.0" out/osx-arm64/AgyPet out/osx-x64/AgyPet bin/AgyPet-macOS.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AgyPet-macOS
+          path: bin/AgyPet-macOS.dmg
           retention-days: 14

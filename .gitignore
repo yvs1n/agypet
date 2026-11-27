@@ -1,4 +1,8 @@
 bin/
+**/bin/
+**/obj/
+dist/
+out/
 *.tmp
 *.user
 .vs/

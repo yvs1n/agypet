@@ -1,8 +1,7 @@
 name: Release
 
-# Automatically builds, tests, attests, and publishes AgyPet.exe to GitHub Releases:
-#  - Push a tag like v0.1.0 -> creates release v0.1.0
-#  - Push to main -> publishes v<AssemblyVersion> if that release doesn't exist yet (or run manually anytime!)
+# Automatically builds, tests, attests, and publishes single-file installers for
+# Windows (AgyPet.exe), macOS Universal (AgyPet-macOS.dmg), and Linux (x64 & arm64):
 on:
   push:
     branches: [main]
@@ -20,9 +19,11 @@ permissions:
   attestations: write
 
 jobs:
-  release:
-    runs-on: windows-latest
-    timeout-minutes: 10
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ver.outputs.tag }}
+      version: ${{ steps.ver.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - name: Resolve version tag
@@ -45,27 +46,97 @@ jobs:
           "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Run unit tests
+  build-windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Windows WPF unit tests
         run: ./build.ps1 -Test
-
       - name: Build AgyPet.exe
         run: ./build.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: bin/AgyPet.exe
 
+  build-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run cross-platform tests on Linux
+        run: dotnet run --project cross/tests/AgyPet.Cross.Tests.csproj -c Release
+      - name: Publish single-file Linux x64 & arm64 binaries
+        run: |
+          dotnet publish cross/AgyPet.Cross.csproj -c Release -r linux-x64 --self-contained true -p:PublishSingleFile=true -o out/linux-x64
+          dotnet publish cross/AgyPet.Cross.csproj -c Release -r linux-arm64 --self-contained true -p:PublishSingleFile=true -o out/linux-arm64
+          mkdir -p dist
+          cp out/linux-x64/AgyPet dist/AgyPet-linux-x64
+          cp out/linux-arm64/AgyPet dist/AgyPet-linux-arm64
+          chmod +x dist/AgyPet-linux-x64 dist/AgyPet-linux-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux
+          path: |
+            dist/AgyPet-linux-x64
+            dist/AgyPet-linux-arm64
+
+  build-macos:
+    needs: version
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Run cross-platform tests on macOS
+        run: dotnet run --project cross/tests/AgyPet.Cross.Tests.csproj -c Release
+      - name: Publish Universal macOS DMG
+        run: |
+          dotnet publish cross/AgyPet.Cross.csproj -c Release -r osx-arm64 --self-contained true -p:PublishSingleFile=true -o out/osx-arm64
+          dotnet publish cross/AgyPet.Cross.csproj -c Release -r osx-x64 --self-contained true -p:PublishSingleFile=true -o out/osx-x64
+          chmod +x tools/package-macos.sh
+          ./tools/package-macos.sh "${{ needs.version.outputs.version }}" out/osx-arm64/AgyPet out/osx-x64/AgyPet dist/AgyPet-macOS.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-macos
+          path: dist/AgyPet-macOS.dmg
+
+  publish:
+    needs: [version, build-windows, build-linux, build-macos]
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: dist
       - name: Generate release notes
-        run: ./tools/release-notes.ps1 -Tag "${{ steps.ver.outputs.tag }}" -Exe bin/AgyPet.exe -Out bin/notes.md
-
+        run: |
+          ./tools/release-notes.ps1 -Tag "${{ needs.version.outputs.tag }}" -Assets dist/AgyPet.exe,dist/AgyPet-macOS.dmg,dist/AgyPet-linux-x64,dist/AgyPet-linux-arm64 -Out dist/notes.md
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: bin/AgyPet.exe
-
+          subject-path: |
+            dist/AgyPet.exe
+            dist/AgyPet-macOS.dmg
+            dist/AgyPet-linux-x64
+            dist/AgyPet-linux-arm64
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          $tag = "${{ steps.ver.outputs.tag }}"
+          $tag = "${{ needs.version.outputs.tag }}"
           $title = "AgyPet $($tag.TrimStart('v'))"
+          $files = @('dist/AgyPet.exe', 'dist/AgyPet-macOS.dmg', 'dist/AgyPet-linux-x64', 'dist/AgyPet-linux-arm64')
           $exists = $false
           try {
             gh release view $tag 2>$null | Out-Null
@@ -74,11 +145,11 @@ jobs:
 
           if ($exists) {
             if ($env:GITHUB_EVENT_NAME -eq 'workflow_dispatch' -or $env:GITHUB_REF_TYPE -eq 'tag') {
-              gh release upload $tag bin/AgyPet.exe --clobber
-              gh release edit $tag --title $title --notes-file bin/notes.md
+              gh release upload $tag @files --clobber
+              gh release edit $tag --title $title --notes-file dist/notes.md
             } else {
               Write-Host "Release $tag already exists on GitHub; skipping overwrite on regular main push."
             }
           } else {
-            gh release create $tag bin/AgyPet.exe --title $title --notes-file bin/notes.md
+            gh release create $tag @files --title $title --notes-file dist/notes.md
           }

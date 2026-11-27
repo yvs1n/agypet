@@ -1142,13 +1142,60 @@
   });
   syncThemeIcons();
 
-  // ---- 6. Copy Snippet with Optical Blur Swap ----
+  // ---- 6. OS-Smart Download Selector + Copy Snippet ----
+  const OS_BUILDS = {
+    'win': {
+      label: 'Download AgyPet.exe',
+      url: 'https://github.com/yvs1n/agypet/releases/latest/download/AgyPet.exe',
+      cmd: '.\\build.ps1',
+    },
+    'mac': {
+      label: 'Download AgyPet-macOS.dmg',
+      url: 'https://github.com/yvs1n/agypet/releases/latest/download/AgyPet-macOS.dmg',
+      cmd: 'open AgyPet-macOS.dmg',
+    },
+    'linux-x64': {
+      label: 'Download AgyPet-linux-x64',
+      url: 'https://github.com/yvs1n/agypet/releases/latest/download/AgyPet-linux-x64',
+      cmd: 'chmod +x AgyPet-linux-x64 && ./AgyPet-linux-x64',
+    },
+    'linux-arm64': {
+      label: 'Download AgyPet-linux-arm64',
+      url: 'https://github.com/yvs1n/agypet/releases/latest/download/AgyPet-linux-arm64',
+      cmd: 'chmod +x AgyPet-linux-arm64 && ./AgyPet-linux-arm64',
+    },
+  };
+  let activeOsCmd = '.\\build.ps1';
+  const heroDlBtn = document.getElementById('hero-download-btn');
+  const heroDlLabel = document.getElementById('hero-download-label');
+  const installCmdEl = document.getElementById('install-cmd');
+  const osBtns = Array.from(document.querySelectorAll('.os-btn'));
+
+  function selectOsBuild(osKey) {
+    const info = OS_BUILDS[osKey] || OS_BUILDS.win;
+    if (heroDlBtn) heroDlBtn.href = info.url;
+    if (heroDlLabel) heroDlLabel.textContent = info.label;
+    if (installCmdEl) installCmdEl.textContent = info.cmd;
+    activeOsCmd = info.cmd;
+    osBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.os === osKey)));
+  }
+
+  osBtns.forEach((b) => b.addEventListener('click', () => selectOsBuild(b.dataset.os)));
+  try {
+    const plat = ((navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || navigator.userAgent || '').toLowerCase();
+    const ua = (navigator.userAgent || '').toLowerCase();
+    if (plat.includes('mac')) selectOsBuild('mac');
+    else if (plat.includes('linux') && (ua.includes('aarch64') || ua.includes('arm64'))) selectOsBuild('linux-arm64');
+    else if (plat.includes('linux')) selectOsBuild('linux-x64');
+    else selectOsBuild('win');
+  } catch {}
+
   const copyBtn = document.getElementById('copy-cmd');
   const iconCopy = document.getElementById('icon-copy');
   const iconCheck = document.getElementById('icon-check');
   let copyReset = 0;
   copyBtn.addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText('.\\build.ps1'); } catch {}
+    try { await navigator.clipboard.writeText(activeOsCmd); } catch {}
     iconCopy.classList.add('is-hidden');
     iconCheck.classList.remove('is-hidden');
     clearTimeout(copyReset);
