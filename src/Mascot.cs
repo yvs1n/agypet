@@ -823,39 +823,15 @@ namespace AgyPet
 
         void DrawLaptop(bool typing)
         {
-            double ox = -4.2;
-            Dot(air, IsDark ? MonoMid : Steel, ox, 1.8, 5.2, 6.2);
-            Dot(air, IsDark ? DarkScreen : ScreenGlow, ox + 0.85, 2.5, 3.5, 4.5);
-            Dot(air, IsDark ? DarkCase : SteelDark, ox, 8.0, 6.4, 0.9);
+            double mx = -4.2;
+            Dot(air, IsDark ? MonoMid : Steel, mx, 1.8, 5.0, 6.0);
+            Dot(air, IsDark ? DarkScreen : ScreenGlow, mx + 0.8, 2.5, 3.4, 4.4);
+            Dot(air, IsDark ? DarkCase : SteelDark, mx, 7.8, 6.2, 0.9);
 
-            int written = tick / 5;
-            Brush[] colors = IsDark
-                ? new[] { MonoBright, MonoMid, MonoDim, MonoBright }
-                : new[] { AgyBlueBrush, AgyCoralBrush, AgyEmeraldBrush, AgyGoldBrush };
-            for (int row = 0; row < 4; row++)
-            {
-                int line = written - 3 + row;
-                if (line < 0) continue;
-                int seed = line * 7 + 3;
-                int indent = seed % 3 == 0 ? 1 : 0;
-                double width = Math.Min(1 + seed % 3.5, 3.5 - indent);
-                if (row == 3 && typing) width = Math.Min(width, 1 + tick % 4 % Math.Max(1, (int)width));
-                Dot(air, colors[seed % colors.Length], ox + 1.0 + indent * 0.8, 2.8 + row * 0.95, width, 0.45);
-            }
-            if (typing && tick % 8 < 4) Dot(air, IsDark ? MonoBright : GlassLit, ox + 1.2, 6.3, 0.45, 0.45);
-
-            if (typing)
-            {
-                Brush sp1 = IsDark ? MonoBright : (tick % 6 < 3 ? AgyGoldBrush : AgyCoralBrush);
-                Brush sp2 = IsDark ? MonoMid : AgyCoralBrush;
-                Dot(air, sp1, ox + 3.8, 0.4 - (tick % 4) * 0.3, 0.45, 0.45);
-                Dot(air, sp2, ox + 4.7, -0.2 + (tick % 4) * 0.2, 0.45, 0.45);
-            }
-
-            int tap = tick / 2 % 2;
-            Dot(air, ArmLeftUpper, 0.4, 5.0, 2.0, 0.9);
-            Dot(air, ArmLeftLower, 0.4, 5.9, 0.9, typing && tap == 0 ? 1.8 : 0.9);
-            Dot(air, ArmLeftLower, 1.4, 5.9, 0.9, typing && tap == 1 ? 1.8 : 0.9);
+            Dot(air, IsDark ? MonoBright : AgyBlueBrush, mx + 1.1, 3.0, 2.4, 0.45);
+            Dot(air, IsDark ? MonoMid : AgyCoralBrush, mx + 1.5, 4.0, 2.0, 0.45);
+            Dot(air, IsDark ? MonoBright : AgyEmeraldBrush, mx + 1.1, 5.0, 1.2 + (tick % 3) * 0.55, 0.45);
+            Dot(gear, BodyBrushAt(2.0, 5.0), 0.6, 5.0, 1.6, 0.85);
         }
 
         void DrawMagnifier()

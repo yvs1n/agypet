@@ -687,19 +687,12 @@ namespace AgyPet
         {
             double mx = -4.2;
             Dot(air, IsDark ? MonoMid : Steel, mx, 1.8, 5.0, 6.0);
-            Dot(air, DarkScreen, mx + 0.5, 2.2, 4.0, 5.2);
-            Dot(air, IsDark ? MonoDim : GlassLit, mx + 0.8, 2.5, 3.4, 4.4);
-            Dot(air, DarkCase, mx, 7.8, 6.2, 0.9);
+            Dot(air, IsDark ? DarkScreen : ScreenGlow, mx + 0.8, 2.5, 3.4, 4.4);
+            Dot(air, IsDark ? DarkCase : SteelDark, mx, 7.8, 6.2, 0.9);
 
-            int f = tick % 12;
-            IBrush bar1 = IsDark ? MonoBright : AgyBlueBrush;
-            IBrush bar2 = IsDark ? MonoMid : AgyCoralBrush;
-            IBrush bar3 = IsDark ? MonoBright : AgyEmeraldBrush;
-            IBrush bar4 = IsDark ? MonoDim : AgyGoldBrush;
-            Dot(air, bar1, mx + 1.1, 3.0, 2.4, 0.45);
-            Dot(air, bar2, mx + 1.5, 4.0, 2.0, 0.45);
-            Dot(air, bar3, mx + 1.1, 5.0, typing ? (1.2 + f % 3 * 0.6) : 2.1, 0.45);
-            if (tick % 6 < 3) Dot(air, bar4, mx + 1.1, 6.0, 0.9, 0.55);
+            Dot(air, IsDark ? MonoBright : AgyBlueBrush, mx + 1.1, 3.0, 2.4, 0.45);
+            Dot(air, IsDark ? MonoMid : AgyCoralBrush, mx + 1.5, 4.0, 2.0, 0.45);
+            Dot(air, IsDark ? MonoBright : AgyEmeraldBrush, mx + 1.1, 5.0, 1.2 + (tick % 3) * 0.55, 0.45);
             Dot(gear, BodyBrushAt(2.0, 5.0), 0.6, 5.0, 1.6, 0.85);
         }
 

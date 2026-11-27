@@ -4,7 +4,6 @@ name: Release
 # Windows (AgyPet.exe), macOS Universal (AgyPet-macOS.dmg), and Linux (x64 & arm64):
 on:
   push:
-    branches: [main]
     tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
@@ -12,6 +11,10 @@ on:
         description: 'Optional release tag override (defaults to v<AssemblyVersion>)'
         required: false
         default: ''
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: write

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.7 (2026-11-27)
+- **Website-Matched Working Animation**: Updated `DrawLaptop` across Windows (`src/Mascot.cs`) and macOS/Linux (`cross/MascotView.cs`) to match the clean laptop & typing arm on the landing page (`site/app.js`), removing the two floating orbs above the laptop.
+- **Release Workflow Race Fix (`.github/workflows/release.yml`)**: Trigger releases strictly on `v*.*.*` tags (and `workflow_dispatch`) with concurrency serialization instead of firing duplicate parallel builds for both `main` and the version tag (`HTTP 422: Release.tag_name already exists`).
+
 ## 0.4.6 (2026-11-27)
 - **Themed Headphones & Full Windows/macOS/Linux Audio Sync**: Added optional **Headphones (Music Notes)** toggle across Windows, macOS (`CoreAudio`), and Linux (`/proc/asound` + PulseAudio/PipeWire `pactl`), sharing `MascotCore.UpdateMusicPlaybackState` hysteresis and static cached brushes:
   - **Classic**: Metallic slate band, midnight cushions, sky-blue accent strips, and cyan/gold musical notes.
