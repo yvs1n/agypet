@@ -11,7 +11,7 @@
     } catch {}
   </script>
   <title>AgyPet: Live Pixel Companion for Google Antigravity</title>
-  <meta name="description" content="A lightweight Windows pixel-art companion by Yassin Ragab for Google Antigravity App, Antigravity IDE, and agy CLI that perches on your inner prompt box or terminal, reacts to 18 live states, and tracks multi-session progress when minimized." />
+  <meta name="description" content="A lightweight single-file pixel-art companion by Yassin Ragab for Google Antigravity App, Antigravity IDE, and agy CLI across Windows, macOS, and Linux. Features 18 live reactions, system-audio headphones, fullscreen auto-hide, and multi-session tracking." />
   <meta name="keywords" content="AgyPet, Google Antigravity, Antigravity IDE, Antigravity mascot, desktop pet, pixel companion, AI coding assistant overlay, Yassin Ragab" />
   <meta name="author" content="Yassin Ragab" />
   <meta name="creator" content="Yassin Ragab" />
@@ -54,7 +54,7 @@
         "name": "AgyPet",
         "applicationCategory": "DeveloperApplication",
         "operatingSystem": "Windows 10, Windows 11, macOS 11+, Linux",
-        "softwareVersion": "0.4.11",
+        "softwareVersion": "0.4.12",
         "license": "https://opensource.org/licenses/MIT",
         "description": "A single-file install-and-play pixel companion overlay for Google Antigravity App, Antigravity IDE, and Antigravity CLI across Windows, macOS, and Linux.",
         "featureList": [
@@ -64,8 +64,7 @@
           "Antigravity App and Antigravity IDE inner prompt box perch with side-by-side Z-order awareness",
           "Native agy CLI terminal perching across Windows Terminal, PowerShell, pwsh, CMD, Alacritty, WezTerm, Warp, Hyper, Tabby, iTerm2, and Ghostty",
           "Per-chat awareness matching the currently focused Antigravity App, IDE, or CLI conversation",
-          "macOS Universal Menu Bar template icon + right-click parity, Taskbar/Dock placement, Pin, Auto-Hide, and Wake-on-Nudge from Sleep"
-        ],
+          "macOS Universal Menu Bar template icon + right-click parity, Taskbar/Dock placement, Pin, Fullscreen Auto-Hide, and Wake-on-Nudge from Sleep",
           "Live Voice Mode and dictation sync (Listening vs Speaking) plus Classic Official and Dark Remake pixel skins"
         ],
         "screenshot": "./og-screen.png",
@@ -93,7 +92,7 @@
             "name": "What is AgyPet and how does it work with Google Antigravity?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "AgyPet is a lightweight native Windows WPF overlay that perches above the Google Antigravity chatbox and agy CLI terminals without modifying Antigravity files or using side-panel space. It reads local Antigravity SQLite session summaries and transcripts read-only to react to 18 live agent and user states."
+              "text": "AgyPet is a lightweight native companion for Windows (WPF), macOS (Universal AppKit/Avalonia), and Linux that perches above the Google Antigravity chatbox and agy CLI terminals without modifying Antigravity files or using side-panel space. It reads local Antigravity SQLite session summaries and transcripts read-only to react to 18 live agent and user states, and automatically hides when another app goes fullscreen."
             }
           },
           {
@@ -187,7 +186,7 @@
         <button type="button" class="skin-btn" data-skin="dark" aria-pressed="false">Dark</button>
       </div>
     </div>
-    <a class="btn-primary" href="https://github.com/yvs1n/agypet/releases/latest/download/AgyPet.exe" target="_blank" rel="noopener noreferrer">Download AgyPet.exe</a>
+    <a class="btn-primary mobile-dl-btn" href="https://github.com/yvs1n/agypet/releases/latest/download/AgyPet.exe" target="_blank" rel="noopener noreferrer">Download AgyPet.exe</a>
     <a class="btn-ghost" href="https://github.com/yvs1n/agypet" target="_blank" rel="noopener noreferrer">View on GitHub</a>
   </div>
 
@@ -196,8 +195,14 @@
       <div class="container">
         <div class="hero-top">
           <div class="hero-copy">
+            <div class="release-pill" id="release-pill">
+              <span class="release-dot" aria-hidden="true"></span>
+              <span id="release-version">v0.4.12</span>
+              <span class="release-sep" aria-hidden="true">·</span>
+              <span>Windows · macOS · Linux</span>
+            </div>
             <h1 class="hero-title">A live pixel companion inside Antigravity.</h1>
-            <p class="hero-sub">One-file install across Windows, macOS, and Linux for App, IDE, and CLI.</p>
+            <p class="hero-sub">One-file install for App, IDE, and <code class="inline-code">agy</code> CLI — zero Electron patches, fullscreen-smart.</p>
           </div>
           <div class="hero-actions-wrap" id="install">
             <div class="hero-actions">
@@ -231,16 +236,20 @@
         </div>
 
         <!-- Full-Width Interactive Antigravity 2.0 App Simulation -->
-        <div class="sim-frame">
+        <div class="sim-frame" id="sim-frame" data-mood-tone="coding">
           <div class="sim-controls">
             <div class="sim-group" role="group" aria-label="Simulate window state">
+              <button type="button" class="chip-btn chip-live" id="btn-live-story" aria-pressed="true"><span class="live-dot" aria-hidden="true"></span>Auto Demo</button>
               <button type="button" class="chip-btn" id="btn-in-app" aria-pressed="true">In Antigravity</button>
               <button type="button" class="chip-btn" id="btn-away-multi" aria-pressed="false">Minimized (3 sessions)</button>
               <button type="button" class="chip-btn" id="btn-away-one" aria-pressed="false">Minimized (1 session)</button>
             </div>
 
             <div class="sim-group" role="group" aria-label="Mascot size, headphones, and motion">
-              <button type="button" class="chip-btn" id="btn-headphones" aria-pressed="false">Headphones</button>
+              <button type="button" class="chip-btn chip-eq" id="btn-headphones" aria-pressed="false">
+                <span>Headphones</span>
+                <span class="eq-bars" aria-hidden="true"><i></i><i></i><i></i></span>
+              </button>
               <label class="size-slider-wrap" for="size-slider">
                 <span class="size-slider-label">Size</span>
                 <input type="range" class="size-slider" id="size-slider" min="2.4" max="7.2" step="0.1" value="4.2" aria-label="Mascot size" />
@@ -400,15 +409,15 @@
       </div>
     </section>
 
-    <!-- 18 Live Reactions Strip -->
+    <!-- 18 Live Reactions Gallery -->
     <section class="section" id="moods">
       <div class="container">
         <div class="section-head">
           <div>
             <h2 class="section-title">Eighteen live reactions for everything Antigravity does</h2>
-            <p class="section-desc">Drag sideways, use the arrows, or click any card to preview it above the chatbox.</p>
+            <p class="section-desc">Filter by category, drag sideways, or click any reaction card to preview it live above the chatbox.</p>
           </div>
-          <div class="carousel-controls">
+          <div class="carousel-controls" id="carousel-controls">
             <span class="carousel-hint">Drag or swipe</span>
             <button type="button" class="carousel-btn" id="mood-prev" aria-label="Previous reactions">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>
@@ -417,6 +426,13 @@
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
           </div>
+        </div>
+        <div class="mood-filters" role="group" aria-label="Filter reactions by category">
+          <button type="button" class="chip-btn mood-filter-btn" data-cat="all" aria-pressed="true">All (18)</button>
+          <button type="button" class="chip-btn mood-filter-btn" data-cat="coding" aria-pressed="false">Coding &amp; Tools</button>
+          <button type="button" class="chip-btn mood-filter-btn" data-cat="agent" aria-pressed="false">Agents &amp; Flow</button>
+          <button type="button" class="chip-btn mood-filter-btn" data-cat="voice" aria-pressed="false">Voice &amp; Audio</button>
+          <button type="button" class="chip-btn mood-filter-btn" data-cat="rest" aria-pressed="false">Alerts &amp; Rest</button>
         </div>
       </div>
       <div class="container carousel-frame">
@@ -468,7 +484,7 @@
       </div>
     </section>
 
-    <!-- Asymmetric Details Grid -->
+    <!-- Interactive Living Bento Details -->
     <section class="section" id="features">
       <div class="container">
         <div class="section-head">
@@ -482,9 +498,35 @@
           <article class="feature-card reveal-on-scroll">
             <div class="feature-head">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              <h3 class="feature-title">Per-chat sync across App, IDE, and CLI</h3>
+              <h3 class="feature-title">Smart perch &amp; fullscreen auto-hide</h3>
             </div>
-            <p class="feature-body">Matches your active chat across Antigravity App and IDE, plus isolated agy CLI sessions. Tracks typing, dictation, and live Listening vs Speaking in Voice Mode.</p>
+            <p class="feature-body">Stays perched above your active chatbox or docked on taskbar gaps, and hides cleanly whenever a game, movie, or presentation goes fullscreen.</p>
+            <div class="bento-widget" id="bento-visibility">
+              <div class="bento-vis-pills" role="group" aria-label="Preview overlay visibility">
+                <button type="button" class="chip-btn vis-btn" data-vis="perched" aria-pressed="true">Antigravity</button>
+                <button type="button" class="chip-btn vis-btn" data-vis="docked" aria-pressed="false">Taskbar</button>
+                <button type="button" class="chip-btn vis-btn" data-vis="fullscreen" aria-pressed="false">Other Fullscreen</button>
+              </div>
+              <div class="bento-vis-stage" id="bento-vis-stage">
+                <span class="bento-vis-label" id="bento-vis-label">Perched on prompt bar · visible</span>
+                <canvas class="bento-canvas" id="bento-vis-canvas" width="76" height="60" aria-hidden="true"></canvas>
+              </div>
+            </div>
+          </article>
+
+          <article class="feature-card reveal-on-scroll">
+            <div class="feature-head">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              <h3 class="feature-title">Headphones &amp; gaze sync</h3>
+            </div>
+            <p class="feature-body">Wears theme-matched headphones with floating notes whenever system audio plays, follows your cursor, and squishes gently when petted.</p>
+            <div class="bento-widget bento-audio-row">
+              <canvas class="bento-canvas" id="bento-audio-canvas" width="84" height="68" aria-hidden="true"></canvas>
+              <div class="bento-audio-meta">
+                <span class="bento-audio-tag">WASAPI · CoreAudio · ALSA</span>
+                <div class="bento-eq" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+              </div>
+            </div>
           </article>
 
           <article class="feature-card reveal-on-scroll">
@@ -493,22 +535,24 @@
               <h3 class="feature-title">Native agy CLI terminal perching</h3>
             </div>
             <p class="feature-body">Detects agy CLI across Windows Terminal, iTerm2, Ghostty, PowerShell, Alacritty, and Kitty with Bottom or Top placement.</p>
-          </article>
-
-          <article class="feature-card reveal-on-scroll">
-            <div class="feature-head">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-              <h3 class="feature-title">Headphones, anchored gaze &amp; smart perch</h3>
+            <div class="bento-term">
+              <code><span class="cli-sigil">&gt;</span> agy <span class="cli-dim">--model gemini</span><span class="term-caret" aria-hidden="true"></span></code>
+              <canvas class="bento-canvas" id="bento-cli-canvas" width="76" height="60" aria-hidden="true"></canvas>
             </div>
-            <p class="feature-body">Wears theme-matched pixel headphones to live music on Windows, macOS, and Linux, tracks your cursor with anchored pupils, and scales cleanly from 2.4 to 7.2 px.</p>
           </article>
 
           <article class="feature-card reveal-on-scroll">
             <div class="feature-head">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-              <h3 class="feature-title">One-file install across Windows, macOS &amp; Linux</h3>
+              <h3 class="feature-title">One-file footprint across 3 OSes</h3>
             </div>
-            <p class="feature-body">One download per OS: portable <code>AgyPet.exe</code>, Universal <code>AgyPet-macOS.dmg</code> with native Menu Bar controls + right-click, and trimmed Linux binaries.</p>
+            <p class="feature-body">Portable <code>AgyPet.exe</code> on Windows, Universal <code>AgyPet-macOS.dmg</code> with native Menu Bar controls, and trimmed Linux binaries.</p>
+            <div class="bento-stats">
+              <div class="stat-box"><strong>~160 KB</strong><span>Windows .exe</span></div>
+              <div class="stat-box"><strong>0</strong><span>App file patches</span></div>
+              <div class="stat-box"><strong>18</strong><span>Live states</span></div>
+              <div class="stat-box"><strong>100%</strong><span>Local &amp; private</span></div>
+            </div>
           </article>
         </div>
       </div>

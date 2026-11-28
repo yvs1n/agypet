@@ -118,7 +118,7 @@ namespace AgyPet.Tools
                 Margin = new Thickness(0, 0, 0, 20),
                 Child = new TextBlock
                 {
-                    Text = "AgyPet · Windows Companion for Google Antigravity",
+                    Text = "AgyPet · Windows, macOS & Linux Companion",
                     Foreground = BrushHex(0x93, 0xC5, 0xFD),
                     FontSize = 14,
                     FontWeight = FontWeights.SemiBold,
@@ -392,7 +392,7 @@ namespace AgyPet.Tools
                 Margin = new Thickness(0, 0, 0, 14),
                 Child = new TextBlock
                 {
-                    Text = "AgyPet · Windows Companion for Google Antigravity",
+                    Text = "AgyPet · Windows, macOS & Linux Companion",
                     Foreground = BrushHex(0x60, 0xA5, 0xFA),
                     FontSize = 12.5,
                     FontWeight = FontWeights.SemiBold,

@@ -66,25 +66,37 @@
   ];
 
   const MOODS = [
-    { id: "Typing", sub: "Agent or you typing" },
-    { id: "Thinking", sub: "Planning steps" },
-    { id: "Working", sub: "Editing files" },
-    { id: "Terminal", sub: "Running command" },
-    { id: "Browsing", sub: "Live browser agent" },
-    { id: "Delegating", sub: "Subagents & swarms" },
-    { id: "Reading", sub: "Scanning code" },
-    { id: "Searching", sub: "Looking up" },
-    { id: "Listening", sub: "Voice & dictation" },
-    { id: "Speaking", sub: "Voice reply" },
-    { id: "Multitasking", sub: "2+ active sessions" },
-    { id: "Background", sub: "Done, server active" },
-    { id: "Alert", sub: "Needs approval" },
-    { id: "Question", sub: "Asking a choice" },
-    { id: "Done", sub: "Task complete" },
-    { id: "Error", sub: "Step hit error" },
-    { id: "Idle", sub: "At rest" },
-    { id: "Sleeping", sub: "Quiet" },
+    { id: "Typing", sub: "Agent or you typing", cat: "coding", trig: "prompt / stream" },
+    { id: "Thinking", sub: "Planning steps", cat: "coding", trig: "planner" },
+    { id: "Working", sub: "Editing files", cat: "coding", trig: "edit_file" },
+    { id: "Terminal", sub: "Running command", cat: "coding", trig: "run_command" },
+    { id: "Browsing", sub: "Live browser agent", cat: "coding", trig: "browser" },
+    { id: "Delegating", sub: "Subagents & swarms", cat: "agent", trig: "invoke_subagent" },
+    { id: "Reading", sub: "Scanning code", cat: "coding", trig: "read_file" },
+    { id: "Searching", sub: "Looking up", cat: "coding", trig: "search_web" },
+    { id: "Listening", sub: "Voice & dictation", cat: "voice", trig: "mic / headphones" },
+    { id: "Speaking", sub: "Voice reply", cat: "voice", trig: "voice output" },
+    { id: "Multitasking", sub: "2+ active sessions", cat: "agent", trig: "2+ sessions" },
+    { id: "Background", sub: "Done, server active", cat: "agent", trig: "dev server" },
+    { id: "Alert", sub: "Needs approval", cat: "rest", trig: "permission" },
+    { id: "Question", sub: "Asking a choice", cat: "rest", trig: "ask_question" },
+    { id: "Done", sub: "Task complete", cat: "agent", trig: "turn complete" },
+    { id: "Error", sub: "Step hit error", cat: "rest", trig: "tool failure" },
+    { id: "Idle", sub: "At rest", cat: "rest", trig: "ready" },
+    { id: "Sleeping", sub: "Quiet", cat: "rest", trig: "extended idle" },
   ];
+
+  const MOOD_TONES = {
+    Done: 'done',
+    Background: 'done',
+    Alert: 'alert',
+    Question: 'alert',
+    Error: 'error',
+    Listening: 'voice',
+    Speaking: 'voice',
+    Delegating: 'agent',
+    Multitasking: 'agent',
+  };
 
   function gauss(u, v, mu, mv, su, sv) {
     const du = (u - mu) / su;
@@ -653,6 +665,17 @@
       const ey = compact ? 3.85 : 3.05;
       dot(eyeMain, 3.65, ey, 0.4, 0.35); dot(eyeMain, 4.05, ey + 0.32, 0.45, 0.35); dot(eyeMain, 3.65, ey + 0.64, 0.4, 0.35);
       dot(eyeMain, 6.75, ey, 0.4, 0.35); dot(eyeMain, 6.3, ey + 0.32, 0.45, 0.35); dot(eyeMain, 6.75, ey + 0.64, 0.4, 0.35);
+    } else if (pressed) {
+      const dy = (4 - Math.min(4, pressT)) * 0.22;
+      const heartCol = isDark ? '#F4F4F5' : '#FFF6D6';
+      const sparkCol = isDark ? '#A1A1AA' : '#F8C618';
+      dot(heartCol, 1.15, -1.05 - dy, 0.5, 0.45, false);
+      dot(heartCol, 1.95, -1.05 - dy, 0.5, 0.45, false);
+      dot(heartCol, 1.15, -0.60 - dy, 1.3, 0.45, false);
+      dot(heartCol, 1.55, -0.15 - dy, 0.5, 0.4, false);
+
+      dot(sparkCol, 8.95, -1.15 - dy, 0.4, 1.1, false);
+      dot(sparkCol, 8.60, -0.80 - dy, 1.1, 0.4, false);
     }
 
     ctx.restore();
@@ -743,8 +766,75 @@
 
   const navCanvas = document.getElementById('nav-mascot');
   const heroCanvas = document.getElementById('hero-mascot');
+  const simFrame = document.getElementById('sim-frame');
   const stagePet = document.getElementById('stage-pet');
   const stageViewport = document.getElementById('stage-viewport');
+  const simToastEl = (() => {
+    if (!stageViewport) return null;
+    const t = document.createElement('div');
+    t.className = 'sim-toast';
+    t.setAttribute('role', 'status');
+    stageViewport.appendChild(t);
+    return t;
+  })();
+  let simToastTimer = 0;
+  function showSimToast(text, durationMs = 2600) {
+    if (!simToastEl) return;
+    simToastEl.textContent = text;
+    simToastEl.classList.add('is-shown');
+    clearTimeout(simToastTimer);
+    simToastTimer = setTimeout(() => simToastEl.classList.remove('is-shown'), durationMs);
+  }
+  const btnLiveStory = document.getElementById('btn-live-story');
+  let autoStoryEnabled = !motionPaused;
+  let autoStoryStep = 0;
+  let autoStoryTimer = 0;
+  let celebrateUntilMs = 0;
+  const STORY_FRAMES = [
+    { mood: 'Thinking', msg: 'Planning fullscreen auto-hide & per-monitor perch bounds…', status: 'Auto demo: Planning steps' },
+    { mood: 'Reading', msg: 'Inspecting WindowTracker.cs and PlatformWindowTracker.cs…', status: 'Auto demo: Reading codebase' },
+    { mood: 'Working', msg: 'Writing monitor-aware fullscreen logic across Windows, macOS & Linux…', status: 'Auto demo: Editing files' },
+    { mood: 'Terminal', msg: 'Running .\\build.ps1 -Test && dotnet run CrossTests…', status: 'Auto demo: Executing test suite' },
+    { mood: 'Done', msg: 'All Windows & Cross tests passing cleanly — ready to ship!', status: 'Auto demo: Task complete (click anywhere to take over)' },
+  ];
+  function stopAutoStory() {
+    if (!autoStoryEnabled) return;
+    autoStoryEnabled = false;
+    clearTimeout(autoStoryTimer);
+    if (btnLiveStory) btnLiveStory.setAttribute('aria-pressed', 'false');
+  }
+  function scheduleNextStoryBeat() {
+    clearTimeout(autoStoryTimer);
+    if (!autoStoryEnabled || motionPaused) return;
+    autoStoryTimer = setTimeout(() => {
+      if (!autoStoryEnabled || motionPaused || awayMode !== 'none' || activeChat !== 'overlay') return;
+      const beat = STORY_FRAMES[autoStoryStep % STORY_FRAMES.length];
+      autoStoryStep++;
+      msgAgent.textContent = beat.msg;
+      chatStatus.textContent = beat.status;
+      setHeroMood(beat.mood);
+      scheduleNextStoryBeat();
+    }, 3100);
+  }
+  if (btnLiveStory) {
+    btnLiveStory.setAttribute('aria-pressed', String(autoStoryEnabled));
+    btnLiveStory.addEventListener('click', () => {
+      autoStoryEnabled = !autoStoryEnabled;
+      btnLiveStory.setAttribute('aria-pressed', String(autoStoryEnabled));
+      if (autoStoryEnabled) {
+        if (awayMode !== 'none') setAwayMode('none');
+        if (activeChat !== 'overlay') selectChat('overlay', true);
+        const beat = STORY_FRAMES[autoStoryStep % STORY_FRAMES.length];
+        autoStoryStep++;
+        msgAgent.textContent = beat.msg;
+        chatStatus.textContent = beat.status;
+        setHeroMood(beat.mood);
+        scheduleNextStoryBeat();
+      } else {
+        clearTimeout(autoStoryTimer);
+      }
+    });
+  }
   const composerCard = document.getElementById('composer-card');
   const mockApp = document.getElementById('mock-app');
   const awayBanner = document.getElementById('away-banner');
@@ -798,16 +888,35 @@
     const sub = document.createElement('span');
     sub.className = 'mood-sub';
     sub.textContent = m.sub;
-    btn.append(c, name, sub);
+    const trig = document.createElement('span');
+    trig.className = 'mood-trigger';
+    trig.textContent = m.trig;
+    btn.append(c, name, sub, trig);
     btn.addEventListener('click', () => {
       if (performance.now() < suppressTileClickUntil) return;
+      stopAutoStory();
       if (awayMode !== 'none') setAwayMode('none');
       if (activeChat === 'settings') selectChat('overlay');
       setHeroMood(m.id);
       document.getElementById('demo').scrollIntoView({ behavior: motionPaused ? 'auto' : 'smooth' });
     });
     stripEl.appendChild(btn);
-    moodTiles.push({ mood: m.id, canvas: c, ctx: setup.ctx, w: setup.w, h: setup.h, dpr: setup.dpr, btn });
+    moodTiles.push({ mood: m.id, cat: m.cat, canvas: c, ctx: setup.ctx, w: setup.w, h: setup.h, dpr: setup.dpr, btn });
+  });
+
+  // Category filter buttons for 18-reaction gallery
+  const carouselControls = document.getElementById('carousel-controls');
+  document.querySelectorAll('.mood-filter-btn').forEach((fBtn) => {
+    fBtn.addEventListener('click', () => {
+      const cat = fBtn.dataset.cat;
+      document.querySelectorAll('.mood-filter-btn').forEach((b) => b.setAttribute('aria-pressed', String(b === fBtn)));
+      const filtered = cat !== 'all';
+      stripEl.classList.toggle('is-filtered', filtered);
+      if (carouselControls) carouselControls.style.visibility = filtered ? 'hidden' : 'visible';
+      moodTiles.forEach((t) => { t.btn.hidden = filtered && t.cat !== cat; });
+      if (!filtered) syncCarouselArrows();
+      renderAllOnce();
+    });
   });
 
   // Mouse drag-to-scroll on 18-reaction strip
@@ -865,6 +974,7 @@
       clickStreak = 0;
       hurtTicks = 0;
     }
+    if (simFrame) simFrame.dataset.moodTone = MOOD_TONES[m] || 'coding';
     cycleMoodBtn.textContent = `Mood: ${heroMood}`;
     const info = MOODS.find((item) => item.id === m);
     const sub = info ? info.sub : '';
@@ -891,7 +1001,8 @@
   }
   renderHoverSessions(3);
 
-  function selectChat(id) {
+  function selectChat(id, keepAuto = false) {
+    if (!keepAuto) stopAutoStory();
     activeChat = id;
     dictationOn = false;
     clearTimeout(cliRunTimer);
@@ -1021,6 +1132,7 @@
   // Normal single press -> crisp tactile squish; 3 continuous rapid presses -> Dance in Idle or Annoyed (><) while busy;
   // Waking from Sleeping -> brief Annoyed wake poke into Idle. Multi-press resets streak immediately so next click is normal.
   stagePet.addEventListener('click', () => {
+    stopAutoStory();
     if (heroMood === 'Sleeping') {
       setHeroMood('Idle');
       clickStreak = 0;
@@ -1028,6 +1140,7 @@
       danceTicks = 0;
       hurtTicks = 6;
       chatStatus.textContent = 'Woke up (annoyed poke)';
+      showSimToast('Woke up from nap!');
       renderAllOnce();
       return;
     }
@@ -1041,6 +1154,7 @@
       if (heroMood === 'Idle') {
         hurtTicks = 0;
         danceTicks = 24;
+        showSimToast('Dancing!');
       } else {
         danceTicks = 0;
         hurtTicks = 6;
@@ -1048,6 +1162,7 @@
     } else {
       hurtTicks = 0;
       pressTicks = 4;
+      if (heroMood === 'Idle' && clickStreak === 1) showSimToast('Petting Agy (click 3× to dance)', 1800);
     }
     renderAllOnce();
   });
@@ -1081,6 +1196,7 @@
   const btnAwayOne = document.getElementById('btn-away-one');
 
   function setAwayMode(mode) {
+    stopAutoStory();
     awayMode = mode;
     btnInApp.setAttribute('aria-pressed', String(mode === 'none'));
     btnAwayMulti.setAttribute('aria-pressed', String(mode === 'multi'));
@@ -1281,6 +1397,7 @@
   });
 
   cycleMoodBtn.addEventListener('click', () => {
+    stopAutoStory();
     const idx = (MOODS.findIndex((m) => m.id === heroMood) + 1) % MOODS.length;
     setHeroMood(MOODS[idx].id);
   });
@@ -1322,13 +1439,49 @@
 
   const navMeta = setupHiDpiCanvas(navCanvas);
   const heroMeta = setupHiDpiCanvas(heroCanvas);
+  const bentoVisCanvas = document.getElementById('bento-vis-canvas');
+  const bentoAudioCanvas = document.getElementById('bento-audio-canvas');
+  const bentoCliCanvas = document.getElementById('bento-cli-canvas');
+  const bentoVisMeta = bentoVisCanvas ? setupHiDpiCanvas(bentoVisCanvas) : null;
+  const bentoAudioMeta = bentoAudioCanvas ? setupHiDpiCanvas(bentoAudioCanvas) : null;
+  const bentoCliMeta = bentoCliCanvas ? setupHiDpiCanvas(bentoCliCanvas) : null;
+  const bentoVisStage = document.getElementById('bento-vis-stage');
+  const bentoVisLabel = document.getElementById('bento-vis-label');
+  let bentoVisMode = 'perched';
+  document.querySelectorAll('.vis-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      bentoVisMode = btn.dataset.vis;
+      document.querySelectorAll('.vis-btn').forEach((b) => b.setAttribute('aria-pressed', String(b === btn)));
+      if (bentoVisStage) bentoVisStage.classList.toggle('is-fs', bentoVisMode === 'fullscreen');
+      if (bentoVisLabel) {
+        bentoVisLabel.textContent = bentoVisMode === 'fullscreen'
+          ? 'Another app fullscreen · AgyPet auto-hidden'
+          : (bentoVisMode === 'docked' ? 'Minimized · Glides to taskbar gap' : 'Perched on prompt bar · visible');
+      }
+      renderAllOnce();
+    });
+  });
+
   let lastTickAt = 0;
 
   function renderAllOnce() {
-    drawMascot(navMeta.ctx, navMeta.w, navMeta.h, 2.1, currentSkin, 'Idle', globalTick, 0, navMeta.dpr, 3, simLookX, simLookY);
+    const navMood = performance.now() < celebrateUntilMs ? 'Done' : 'Idle';
+    drawMascot(navMeta.ctx, navMeta.w, navMeta.h, 2.1, currentSkin, navMood, globalTick, 0, navMeta.dpr, 3, simLookX, simLookY);
     drawMascot(heroMeta.ctx, heroMeta.w, heroMeta.h, heroPx, currentSkin, heroMood, globalTick, { hurt: hurtTicks, press: pressTicks, dance: danceTicks, headphones: headphonesOn }, heroMeta.dpr, 3, simLookX, simLookY);
-    moodTiles.forEach((t, i) => drawMascot(t.ctx, t.w, t.h, 3.6, currentSkin, t.mood, globalTick + i * 3, 0, t.dpr, 3, t.mood === 'Idle' ? simLookX : 0, t.mood === 'Idle' ? simLookY : 0));
+    moodTiles.forEach((t, i) => {
+      if (!t.btn.hidden) drawMascot(t.ctx, t.w, t.h, 3.6, currentSkin, t.mood, globalTick + i * 3, 0, t.dpr, 3, t.mood === 'Idle' ? simLookX : 0, t.mood === 'Idle' ? simLookY : 0);
+    });
     skinSamples.forEach((s, i) => drawMascot(s.ctx, s.w, s.h, 4.2, s.skin, s.mood, globalTick + i * 5, 0, s.dpr));
+    if (bentoVisMeta) {
+      const bm = bentoVisMode === 'docked' ? 'Multitasking' : (bentoVisMode === 'fullscreen' ? 'Sleeping' : 'Working');
+      drawMascot(bentoVisMeta.ctx, bentoVisMeta.w, bentoVisMeta.h, 3.4, currentSkin, bm, globalTick, 0, bentoVisMeta.dpr);
+    }
+    if (bentoAudioMeta) {
+      drawMascot(bentoAudioMeta.ctx, bentoAudioMeta.w, bentoAudioMeta.h, 3.8, currentSkin, 'Listening', globalTick, { headphones: true }, bentoAudioMeta.dpr, 3, simLookX, simLookY);
+    }
+    if (bentoCliMeta) {
+      drawMascot(bentoCliMeta.ctx, bentoCliMeta.w, bentoCliMeta.h, 3.4, currentSkin, 'Terminal', globalTick + 7, 0, bentoCliMeta.dpr);
+    }
   }
 
   function frame(now) {
@@ -1356,6 +1509,7 @@
   window.addEventListener('resize', computeStageTarget);
   renderAllOnce();
   requestAnimationFrame(frame);
+  if (autoStoryEnabled && !motionPaused) scheduleNextStoryBeat();
 
   const brandHome = document.getElementById('brand-home');
   if (brandHome) {
@@ -1477,11 +1631,44 @@
   const heroDlLabel = document.getElementById('hero-download-label');
   const installCmdEl = document.getElementById('install-cmd');
   const osBtns = Array.from(document.querySelectorAll('.os-btn'));
+  const mobileDlBtn = document.querySelector('.mobile-dl-btn');
+
+  function triggerDownloadCelebration(fileName) {
+    stopAutoStory();
+    celebrateUntilMs = performance.now() + 3600;
+    const prevMood = heroMood;
+    if (awayMode !== 'none') setAwayMode('none');
+    if (activeChat === 'settings') selectChat('overlay');
+    setHeroMood('Done');
+    showSimToast(`Downloading ${fileName || 'AgyPet'} — see you above your prompt box!`, 3600);
+    setTimeout(() => {
+      if (performance.now() >= celebrateUntilMs && heroMood === 'Done' && prevMood && prevMood !== 'Done') {
+        setHeroMood(prevMood);
+      }
+      renderAllOnce();
+    }, 3650);
+  }
+
+  if (heroDlBtn) {
+    heroDlBtn.addEventListener('click', () => triggerDownloadCelebration(heroDlLabel ? heroDlLabel.textContent.replace('Download ', '') : 'AgyPet'));
+  }
+  if (mobileDlBtn) {
+    mobileDlBtn.addEventListener('click', () => triggerDownloadCelebration('AgyPet'));
+  }
+
+  const relVerEl = document.getElementById('release-version');
+  if (relVerEl && window.fetch) {
+    fetch('https://api.github.com/repos/yvs1n/agypet/releases/latest')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (data && data.tag_name) relVerEl.textContent = data.tag_name; })
+      .catch(() => {});
+  }
 
   function selectOsBuild(osKey) {
     const info = OS_BUILDS[osKey] || OS_BUILDS.win;
     if (heroDlBtn) heroDlBtn.href = info.url;
     if (heroDlLabel) heroDlLabel.textContent = info.label;
+    if (mobileDlBtn) { mobileDlBtn.href = info.url; mobileDlBtn.textContent = info.label; }
     if (installCmdEl) installCmdEl.textContent = info.cmd;
     activeOsCmd = info.cmd;
     osBtns.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.os === osKey)));

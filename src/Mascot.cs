@@ -622,9 +622,11 @@ namespace AgyPet
                     DrawMusicNotes();
             }
 
-            // Subtle "> <" wince eyes on rapid clicks
+            // Subtle "> <" wince eyes on rapid clicks; joyful mini heart & sparkle when gently petted
             if (hurt)
                 DrawHurtOverlay(compact);
+            else if (pressed)
+                DrawPressSparkle();
         }
 
         // Samples the exact pixel color of the Idle arch body at (x, y) so arms and moving limbs match seamlessly.
@@ -1111,6 +1113,20 @@ namespace AgyPet
                 ".##.",
                 ".#..");
             Dot(air, core, 5.2, -1.1, 0.45, 0.45);
+        }
+
+        void DrawPressSparkle()
+        {
+            double dy = (4 - Math.Min(4, pressTicks)) * 0.22;
+            Brush heartCol = IsDark ? MonoBright : Spark;
+            Brush sparkCol = IsDark ? MonoMid : AgyGoldBrush;
+            Dot(air, heartCol, 1.15, -1.05 - dy, 0.5, 0.45);
+            Dot(air, heartCol, 1.95, -1.05 - dy, 0.5, 0.45);
+            Dot(air, heartCol, 1.15, -0.60 - dy, 1.3, 0.45);
+            Dot(air, heartCol, 1.55, -0.15 - dy, 0.5, 0.4);
+
+            Dot(air, sparkCol, 8.95, -1.15 - dy, 0.4, 1.1);
+            Dot(air, sparkCol, 8.60, -0.80 - dy, 1.1, 0.4);
         }
 
         void DrawEighthNote(Canvas layer, Brush fill, double x, double y)

@@ -196,6 +196,7 @@ namespace AgyPet.CrossTests
 
                 mv.Press();
                 AssertTrue(mv.IsPressed, "Press should activate press state");
+                AssertTrue(mv.AirLayer.Children.Count > 0, "Pressing should render joyful petting sparkle & heart on air layer");
                 AssertTrue(mv.RecoilTransform.ScaleY < 1.0 && mv.RecoilTransform.ScaleX > 1.0,
                     "Press should squish vertically and widen slightly horizontally");
                 AssertTrue(Math.Abs(Avalonia.Controls.Canvas.GetTop(mv.SpriteLayer)) < 0.001,

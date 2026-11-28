@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.12 (2026-11-28)
+- **Petting Pixel Heart & Sparkle Across All OSes & Website**: Added a subtle floating pixel heart & sparkle burst during gentle single-click petting (`Press()` / `DrawPressSparkle()`) identically across Windows ([src/Mascot.cs](src/Mascot.cs)), macOS/Linux ([cross/MascotView.cs](cross/MascotView.cs)), and [site/app.js](site/app.js).
+- **Living Website Overhaul**: Added Auto Demo hero story loop, mood-reactive OKLCH glow, download celebration (`Done` reaction + status toast), filterable 18-reaction gallery with trigger tags, interactive living Bento widgets, OS auto-detection + live release pill, and JSON-LD/meta fixes.
+- **Showcase GIFs & README Refresh**: Regenerated `docs/agypet-preview.gif`, `docs/showcase-classic.gif`, `docs/showcase-dark.gif`, and `site/og-screen.png`, and rebuilt [README.md](README.md) with centered hero showcase, 3-OS download table, side-by-side skin previews, and architecture diagram.
+
 ## 0.4.11 (2026-11-27)
 - **Fullscreen Awareness Across All OSes**: Added automatic fullscreen detection across Windows (`WindowTracker`, `SHQueryUserNotificationState`, DWM monitor bounds), macOS (`CGWindowListCopyWindowInfo`), and Linux (`_NET_WM_STATE_FULLSCREEN` + desktop/dock filtering).
 - **Smart Auto-Hide Toggle (`Hide When Other App Is Fullscreen`)**: Defaults to enabled so AgyPet automatically hides behind fullscreen videos, games, and presentations on the same monitor, while staying visible and perched cleanly across full screen bounds whenever Antigravity App or `agy` CLI itself goes fullscreen.

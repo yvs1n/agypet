@@ -667,6 +667,7 @@ namespace AgyPet.Tests
 
                 m.Press();
                 AssertTrue(m.IsPressed, "Press should activate press state");
+                AssertTrue(m.AirLayer.Children.Count > 0, "Pressing should render joyful petting sparkle & heart on air layer");
                 AssertTrue(m.RecoilTransform.ScaleY < 1.0 && m.RecoilTransform.ScaleX > 1.0,
                     "Press should squish vertically and widen slightly horizontally");
                 AssertTrue(Math.Abs(System.Windows.Controls.Canvas.GetTop(m.SpriteLayer)) < 0.001,
